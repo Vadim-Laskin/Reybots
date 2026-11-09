@@ -10,6 +10,8 @@ exports.handler = async (event) => {
   console.log("UPDATE:", JSON.stringify(update));
 
   const msg = update.message;
+  if (msg?.audio) console.log("AUDIO ID:", msg.audio.file_id);
+if (msg?.document) console.log("DOC ID:", msg.document.file_id);
   if (msg?.sticker) {
     console.log("STICKER ID:", msg.sticker.file_unique_id);
 

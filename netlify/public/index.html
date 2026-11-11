@@ -79,8 +79,12 @@ const el = (tag, cls, text) => {
 };
 const toMin = (s) => { const [a, b] = s.split(":").map(Number); return a * 60 + b; };
 const fmt = (m) => (m < 60 ? `${m} мин` : `${Math.floor(m / 60)} ч ${m % 60} мин`);
+const Q = new URLSearchParams(location.search);
 function nskNow() {
   const d = new Date(Date.now() + 7 * 3600e3);
+  if (Q.get("t")) {
+    return { date: Q.get("d") || d.toISOString().slice(0, 10), min: toMin(Q.get("t")) };
+  }
   return { date: d.toISOString().slice(0, 10), min: d.getUTCHours() * 60 + d.getUTCMinutes() };
 }
 
@@ -201,6 +205,7 @@ async function load() {
     const r = await fetch("/.netlify/functions/schedule-data", { cache: "no-store" });
     if (!r.ok) throw new Error("HTTP " + r.status);
     DATA = await r.json();
+    if (Q.has("stale")) { DATA.stale = true; DATA.fetchedAt = Date.now() - 3600e3; }
     if (!DATA.days || !DATA.days.length) throw new Error("расписание пустое");
     const y = window.scrollY;
     build();

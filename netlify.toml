@@ -1,5 +1,10 @@
 [build]
+  publish = "public"
   functions = "netlify/functions"
+
+[functions]
+  included_files = ["fonts/**"]
+  external_node_modules = ["@resvg/resvg-js"]
 
 [functions."schedule"]
   schedule = "*/5 * * * *"

@@ -1,5 +1,38 @@
+const https = require("https");
+
 const TG = `https://api.telegram.org/bot${process.env.BOT_TOKEN}`;
-const URL = "https://natk.ru/stud-grad/schedule/187?gid=386";
+const SCHEDULE_URL = "https://natk.ru/stud-grad/schedule/187?gid=386";
+
+function getPage(url, redirects = 3) {
+  return new Promise((resolve, reject) => {
+    https
+      .get(url, { rejectUnauthorized: false, headers: { "User-Agent": "Mozilla/5.0" } }, (res) => {
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && redirects > 0) {
+          res.resume();
+          return resolve(getPage(new URL(res.headers.location, url).href, redirects - 1));
+        }
+        const chunks = [];
+        res.on("data", (c) => chunks.push(c));
+        res.on("end", () => {
+          const buf = Buffer.concat(chunks);
+          const head = buf.toString("latin1", 0, 2000);
+          const cs = (
+            /charset=([\w-]+)/i.exec(res.headers["content-type"] || "")?.[1] ||
+            /charset=["']?([\w-]+)/i.exec(head)?.[1] ||
+            "utf-8"
+          ).toLowerCase();
+          let html;
+          try {
+            html = new TextDecoder(cs).decode(buf);
+          } catch {
+            html = buf.toString("utf8");
+          }
+          resolve({ status: res.statusCode, html });
+        });
+      })
+      .on("error", reject);
+  });
+}
 
 async function send(text) {
   try {
@@ -15,6 +48,7 @@ async function send(text) {
 }
 
 exports.handler = async () => {
+  // завтрашняя дата по Новосибирску (UTC+7)
   const t = new Date(Date.now() + 7 * 3600e3 + 24 * 3600e3);
   const date = [
     String(t.getUTCDate()).padStart(2, "0"),
@@ -24,9 +58,8 @@ exports.handler = async () => {
 
   let out;
   try {
-    const res = await fetch(URL);
-    const html = await res.text();
-    const text = html
+    const res = await getPage(SCHEDULE_URL);
+    const text = res.html
       .replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, "")
       .replace(/<br\s*\/?>|<\/(p|div|tr|li|h\d)>/gi, "\n")
       .replace(/<[^>]+>/g, " ")
@@ -44,7 +77,7 @@ exports.handler = async () => {
       out = `DEBUG: даты ${date} нет. HTTP ${res.status}, длина ${text.length}.\n\n${text.slice(0, 3000)}`;
     }
   } catch (e) {
-    out = `DEBUG: сайт не открылся: ${e.message}; причина: ${e.cause?.code || e.cause?.message}`;
+    out = `DEBUG: сайт не открылся: ${e.message}; причина: ${e.code || e.cause?.code}`;
   }
 
   await send(out);

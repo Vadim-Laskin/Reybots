@@ -32,8 +32,8 @@ exports.handler = async () => {
     } else {
       out = `DEBUG: даты ${date} нет. HTTP ${res.status}, длина текста ${text.length}.\n\n${text.slice(0, 3000)}`;
     }
-  } catch (e) {
-    out = `DEBUG: ошибка запроса к сайту: ${e.message}`;
+    } catch (e) {
+    out = `DEBUG: ${e.message}; причина: ${e.cause?.code || e.cause?.message}`;
   }
 
   const r = await fetch(`${API}/sendMessage`, {

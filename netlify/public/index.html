@@ -115,8 +115,8 @@ function build() {
       const info = el("div", "info");
       p.entries.forEach((e, i) => {
         const b = el("div", "entry");
-        if (p.entries.length > 1) b.append(el("div", "sg", `${i + 1} подгруппа`));
-        else if (p.sub) b.append(el("div", "sg", "по подгруппам"));
+        const lab = e.sg ? `${e.sg} подгруппа` : p.sub ? "по подгруппам" : "";
+        if (lab) b.append(el("div", "sg", lab));
         b.append(el("div", e.cancelled ? "s red" : "s", e.subject));
         if (e.teacher) b.append(el("div", "t", e.teacher));
         if (e.room) b.append(el("div", "r", e.room));

@@ -232,6 +232,12 @@ async function sendPhoto(png, caption) {
   const fd = new FormData();
   fd.append("chat_id", process.env.CHAT_ID);
   fd.append("caption", caption);
+  if (process.env.APP_LINK) {
+    fd.append(
+      "reply_markup",
+      JSON.stringify({ inline_keyboard: [[{ text: "📅 Всё расписание", url: process.env.APP_LINK }]] })
+    );
+  }
   fd.append("photo", new Blob([png], { type: "image/png" }), "schedule.png");
   const r = await fetch(`${TG}/sendPhoto`, { method: "POST", body: fd });
   console.log("sendPhoto:", await r.text());

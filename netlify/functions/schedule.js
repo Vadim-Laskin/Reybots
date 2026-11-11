@@ -165,9 +165,12 @@ p.entries.forEach((e, i) => {
   if (i > 0) rows.push({ t: "gap", h: 16 });
   const lab = e.sg ? `${e.sg} подгруппа` : p.sub ? "по подгруппам" : "";
   if (lab) rows.push({ t: "label", h: 30, b: 22, s: lab });
-        if (e.teacher) rows.push({ t: "teacher", h: 32, b: 24, s: e.teacher });
-        if (e.room) rows.push({ t: "room", h: 32, b: 24, s: e.room });
-      });
+  wrap(e.subject, 30).forEach((l) =>
+    rows.push({ t: e.cancelled ? "cancel" : "subj", h: 38, b: 30, s: l })
+  );
+  if (e.teacher) rows.push({ t: "teacher", h: 32, b: 24, s: e.teacher });
+  if (e.room) rows.push({ t: "room", h: 32, b: 24, s: e.room });
+});
 
       const h = Math.max(130, 52 + rows.reduce((a, r) => a + r.h, 0));
       const red = p.entries.every((e) => e.cancelled);

@@ -48,18 +48,33 @@ function mk(before, room) {
 }
 
 function parseEntries(body) {
-  let b = body.replace(/\s*по адресу проспект Дзержинского 26/g, "").replace(/\s+/g, " ").trim();
-  let sub = false;
-  if (/^1 подгруппа 2 подгруппа/.test(b)) {
-    sub = true;
-    b = b.replace(/^1 подгруппа 2 подгруппа\s*/, "");
+  const clean = (s) =>
+    s
+      .replace(/\s*по адресу проспект Дзержинского 26/g, "")
+      .replace(/‖/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const split = (b) => {
+    const re = new RegExp(`(.+?)\\s*(${ROOM})`, "g");
+    const out = [];
+    let m;
+    while ((m = re.exec(b))) out.push(mk(m[1], m[2]));
+    if (!out.length) out.push(mk(b, ""));
+    return out;
+  };
+
+  const sg = /^[\s‖]*1 подгруппа[\s‖]*2 подгруппа[\s‖]*/.exec(body);
+  if (sg) {
+    const parts = body.slice(sg[0].length).split("‖").map(clean);
+    const entries = [];
+    [0, 1].forEach((i) => {
+      if (parts[i]) split(parts[i]).forEach((e) => entries.push({ ...e, sg: i + 1 }));
+    });
+    if (entries.length) return { entries, sub: false };
+    return { entries: split(clean(body.slice(sg[0].length))), sub: true };
   }
-  const re = new RegExp(`(.+?)\\s*(${ROOM})`, "g");
-  const entries = [];
-  let m;
-  while ((m = re.exec(b))) entries.push(mk(m[1], m[2]));
-  if (!entries.length) entries.push(mk(b, ""));
-  return { entries, sub };
+  return { entries: split(clean(body)), sub: false };
 }
 
 exports.handler = async () => {
@@ -67,6 +82,7 @@ exports.handler = async () => {
     const html = await getPage(URL_);
     const flat = html
       .replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, "")
+      .replace(/<\/t[dh]>/gi, " ‖ ")
       .replace(/<[^>]+>/g, " ")
       .replace(/&nbsp;/g, " ")
       .replace(/\s+/g, " ")
@@ -93,7 +109,7 @@ exports.handler = async () => {
         pairs: [],
         empty: false,
       };
-      const marks = [...sec.matchAll(/(\d)\s+(\d{2}:\d{2})\s*[-–—]\s*(\d{2}:\d{2})\s+/g)];
+      const marks = [...sec.matchAll(/(\d)\s*‖?\s*(\d{2}:\d{2})\s*[-–—]\s*(\d{2}:\d{2})\s*‖?\s*/g)];
       if (!marks.length) {
         day.empty = true;
         return day;

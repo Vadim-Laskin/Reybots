@@ -54,23 +54,39 @@ function mk(before, room) {
 }
 
 function parseEntries(body) {
-  let b = body.replace(/\s*по адресу проспект Дзержинского 26/g, "").replace(/\s+/g, " ").trim();
-  let sub = false;
-  if (/^1 подгруппа 2 подгруппа/.test(b)) {
-    sub = true;
-    b = b.replace(/^1 подгруппа 2 подгруппа\s*/, "");
+  const clean = (s) =>
+    s
+      .replace(/\s*по адресу проспект Дзержинского 26/g, "")
+      .replace(/‖/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const split = (b) => {
+    const re = new RegExp(`(.+?)\\s*(${ROOM})`, "g");
+    const out = [];
+    let m;
+    while ((m = re.exec(b))) out.push(mk(m[1], m[2]));
+    if (!out.length) out.push(mk(b, ""));
+    return out;
+  };
+
+  const sg = /^[\s‖]*1 подгруппа[\s‖]*2 подгруппа[\s‖]*/.exec(body);
+  if (sg) {
+    const parts = body.slice(sg[0].length).split("‖").map(clean);
+    const entries = [];
+    [0, 1].forEach((i) => {
+      if (parts[i]) split(parts[i]).forEach((e) => entries.push({ ...e, sg: i + 1 }));
+    });
+    if (entries.length) return { entries, sub: false };
+    return { entries: split(clean(body.slice(sg[0].length))), sub: true };
   }
-  const re = new RegExp(`(.+?)\\s*(${ROOM})`, "g");
-  const entries = [];
-  let m;
-  while ((m = re.exec(b))) entries.push(mk(m[1], m[2]));
-  if (!entries.length) entries.push(mk(b, ""));
-  return { entries, sub };
+  return { entries: split(clean(body)), sub: false };
 }
 
 function parseSchedule(res, day, month, year) {
   const flat = res.html
     .replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<\/t[dh]>/gi, " ‖ ")
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/g, " ")
     .replace(/\s+/g, " ")
@@ -99,7 +115,7 @@ function parseSchedule(res, day, month, year) {
     return d;
   }
 
-  const marks = [...sec.matchAll(/(\d)\s+(\d{2}:\d{2})\s*[-–—]\s*(\d{2}:\d{2})\s+/g)];
+  const marks = [...sec.matchAll(/(\d)\s*‖?\s*(\d{2}:\d{2})\s*[-–—]\s*(\d{2}:\d{2})\s*‖?\s*/g)];
   marks.forEach((mk2, i) => {
     const bodyEnd = i + 1 < marks.length ? marks[i + 1].index : sec.length;
     const { entries, sub } = parseEntries(sec.slice(mk2.index + mk2[0].length, bodyEnd));
@@ -145,13 +161,10 @@ function buildSvg(d) {
   } else {
     for (const p of d.pairs) {
       const rows = [];
-      if (p.sub && p.entries.length === 1) rows.push({ t: "label", h: 30, b: 22, s: "по подгруппам" });
-      p.entries.forEach((e, i) => {
-        if (i > 0) rows.push({ t: "gap", h: 16 });
-        if (p.entries.length > 1) rows.push({ t: "label", h: 30, b: 22, s: `${i + 1} подгруппа` });
-        wrap(e.subject, 30).forEach((l) =>
-          rows.push({ t: e.cancelled ? "cancel" : "subj", h: 38, b: 30, s: l })
-        );
+p.entries.forEach((e, i) => {
+  if (i > 0) rows.push({ t: "gap", h: 16 });
+  const lab = e.sg ? `${e.sg} подгруппа` : p.sub ? "по подгруппам" : "";
+  if (lab) rows.push({ t: "label", h: 30, b: 22, s: lab });
         if (e.teacher) rows.push({ t: "teacher", h: 32, b: 24, s: e.teacher });
         if (e.room) rows.push({ t: "room", h: 32, b: 24, s: e.room });
       });
@@ -247,7 +260,7 @@ function toText(d) {
   if (d.empty) return `${d.title}\n\nЗанятий нет 🎉`;
   const pairs = d.pairs.map((p) => {
     const e = p.entries
-      .map((x) => [x.subject, x.teacher, x.room].filter(Boolean).join("\n"))
+      .map((x) => [x.sg ? `${x.sg} подгруппа` : "", x.subject, x.teacher, x.room].filter(Boolean).join("\n"))
       .join("\n— — —\n");
     return `${p.num}. ${p.start}–${p.end}\n${e}`;
   });

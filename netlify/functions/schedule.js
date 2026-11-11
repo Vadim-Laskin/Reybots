@@ -249,15 +249,37 @@ function toText(d) {
 }
 
 /* ---------- запуск ---------- */
+const toMin = (s) => {
+  const [h, m] = s.split(":").map(Number);
+  return h * 60 + m;
+};
+
 exports.handler = async () => {
-  const t = new Date(Date.now() + 7 * 3600e3 + 24 * 3600e3); // завтра по НСК
-  const day = t.getUTCDate();
-  const month = MONTHS[t.getUTCMonth()];
-  const year = t.getUTCFullYear();
+  const nsk = new Date(Date.now() + 7 * 3600e3); // сейчас по НСК
+  const nowMin = nsk.getUTCHours() * 60 + nsk.getUTCMinutes();
+  const tom = new Date(nsk.getTime() + 24 * 3600e3);
+  const T = { day: nsk.getUTCDate(), month: MONTHS[nsk.getUTCMonth()], year: nsk.getUTCFullYear() };
+  const N = { day: tom.getUTCDate(), month: MONTHS[tom.getUTCMonth()], year: tom.getUTCFullYear() };
 
   let d;
   try {
-    d = parseSchedule(await getPage(SCHEDULE_URL), day, month, year);
+    const res = await getPage(SCHEDULE_URL);
+    const today = parseSchedule(res, T.day, T.month, T.year);
+
+    const stillActual =
+      !today.error &&
+      !today.empty &&
+      today.pairs.some(
+        (p) => !p.entries.every((e) => e.cancelled) && toMin(p.end) > nowMin
+      );
+
+    if (stillActual) {
+      d = today;
+      d.title = `Сегодня, ${T.day} ${T.month}`;
+    } else {
+      d = parseSchedule(res, N.day, N.month, N.year);
+      if (!d.error) d.title = `Завтра, ${N.day} ${N.month}`;
+    }
   } catch (e) {
     d = { error: `DEBUG: сайт не открылся: ${e.message}; причина: ${e.code || e.cause?.code}` };
   }

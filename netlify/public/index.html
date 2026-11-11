@@ -46,12 +46,14 @@ main{padding:0 16px}
 .bar{height:4px;border-radius:2px;background:var(--line);margin-top:6px}
 .bar i{display:block;height:100%;background:var(--green);border-radius:2px}
 #msg{padding:40px 16px;text-align:center;color:var(--muted)}
+#warn{display:none;margin-top:6px;padding:10px 12px;border-radius:12px;background:var(--redbg);color:var(--red);font-size:13px;line-height:1.35}
 </style>
 </head>
 <body>
 <header>
   <div class="top"><h1>Расписание</h1><button id="refresh" aria-label="Обновить">↻</button></div>
   <div id="upd"></div>
+  <div id="warn"></div>
   <div id="tabs"></div>
 </header>
 <main id="list"><div id="msg">Загрузка…</div></main>
@@ -89,6 +91,15 @@ function build() {
   tabs.replaceChildren();
   list.replaceChildren();
   $("#upd").textContent = DATA.updated ? `Обновлено на сайте: ${DATA.updated}` : "";
+  const warn = $("#warn");
+if (DATA.stale) {
+  const d = new Date((DATA.fetchedAt || 0) + 7 * 3600e3);
+  const p = (n) => String(n).padStart(2, "0");
+  warn.textContent =
+    `⚠️ Сайт natk.ru недоступен, поэтому расписание не обновляется автоматически, пока он не восстановится. ` +
+    `Показано сохранённое: ${p(d.getUTCDate())}.${p(d.getUTCMonth() + 1)} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())} (НСК).`;
+  warn.style.display = "block";
+} else warn.style.display = "none";
   for (const d of DATA.days) {
     const tab = el("div", "tab");
     tab.dataset.date = d.date;
@@ -200,8 +211,11 @@ async function load() {
       jump(d.date, false);
     } else window.scrollTo(0, y);
   } catch (e) {
-    if (!DATA) $("#list").replaceChildren(el("div", null, "Не удалось загрузить: " + e.message));
-    $("#list").firstChild.id = "msg";
+    if (!DATA) {
+  const m = el("div", null, "Не удалось загрузить: " + e.message);
+  m.id = "msg";
+  $("#list").replaceChildren(m);
+}
   }
 }
 

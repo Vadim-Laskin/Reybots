@@ -2,6 +2,10 @@ const https = require("https");
 
 const TG = `https://api.telegram.org/bot${process.env.BOT_TOKEN}`;
 const SCHEDULE_URL = "https://natk.ru/stud-grad/schedule/187?gid=386";
+const MONTHS = [
+  "января", "февраля", "марта", "апреля", "мая", "июня",
+  "июля", "августа", "сентября", "октября", "ноября", "декабря",
+];
 
 function getPage(url, redirects = 3) {
   return new Promise((resolve, reject) => {
@@ -47,34 +51,61 @@ async function send(text) {
   }
 }
 
+function formatBody(body) {
+  let b = body
+    .replace(/\s*по адресу проспект Дзержинского 26/g, "")
+    .replace(/^1 подгруппа 2 подгруппа\s*/, "(по подгруппам) ")
+    .replace(/\s+([А-ЯЁ][а-яё-]+ [А-ЯЁ][а-яё]+ [А-ЯЁ][а-яё]+)/g, "\n$1")
+    .replace(/\s+(Кабинет|Лаборатория|Спортивный комплекс|Дистанционные технологии)/g, "\n$1")
+    .trim();
+  if (/^отмена/i.test(b)) b = "❌ " + b;
+  return b;
+}
+
 exports.handler = async () => {
-  // завтрашняя дата по Новосибирску (UTC+7)
+  // завтра по Новосибирску (UTC+7)
   const t = new Date(Date.now() + 7 * 3600e3 + 24 * 3600e3);
-  const date = [
-    String(t.getUTCDate()).padStart(2, "0"),
-    String(t.getUTCMonth() + 1).padStart(2, "0"),
-    t.getUTCFullYear(),
-  ].join(".");
+  const day = t.getUTCDate();
+  const month = MONTHS[t.getUTCMonth()];
+  const year = t.getUTCFullYear();
 
   let out;
   try {
     const res = await getPage(SCHEDULE_URL);
-    const text = res.html
+    const flat = res.html
       .replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, "")
-      .replace(/<br\s*\/?>|<\/(p|div|tr|li|h\d)>/gi, "\n")
       .replace(/<[^>]+>/g, " ")
       .replace(/&nbsp;/g, " ")
-      .replace(/[ \t]+/g, " ")
-      .replace(/\n\s*\n+/g, "\n")
+      .replace(/\s+/g, " ")
       .trim();
 
-    const i = text.indexOf(date);
-    if (i !== -1) {
-      const rest = text.slice(i + date.length);
-      const next = rest.search(/\d{2}\.\d{2}\.\d{4}/);
-      out = text.slice(i, next === -1 ? undefined : i + date.length + next).trim();
+    const m = new RegExp(`(?<!\\d)${day} ${month} ${year}`).exec(flat);
+    if (!m) {
+      out =
+        flat.length < 500
+          ? `DEBUG: страница пустая. HTTP ${res.status}, текст: ${flat}`
+          : `Расписание на ${day} ${month} пока не опубликовано на сайте.`;
     } else {
-      out = `DEBUG: даты ${date} нет. HTTP ${res.status}, длина ${text.length}.\n\n${text.slice(0, 3000)}`;
+      let sec = flat.slice(m.index + m[0].length);
+      const end = sec.search(new RegExp(`(?<!\\d)\\d{1,2} (?:${MONTHS.join("|")}) \\d{4} г\\.`));
+      if (end !== -1) sec = sec.slice(0, end);
+
+      const wd = /^\s*г\.\s*[-–—]\s*([А-Яа-яЁё]+)/.exec(sec)?.[1];
+      sec = sec.replace(/^\s*г\.\s*[-–—]\s*[А-Яа-яЁё]+/, "").trim();
+
+      const head = `📅 Расписание на ${day} ${month}${wd ? ` (${wd})` : ""}`;
+      if (!sec || /информация отсутствует/i.test(sec)) {
+        out = `${head}\n\nЗанятий нет 🎉`;
+      } else {
+        const re = /(\d)\s+(\d{2}:\d{2})\s*[-–—]\s*(\d{2}:\d{2})\s+/g;
+        const marks = [...sec.matchAll(re)];
+        const pairs = marks.map((mk, i) => {
+          const bodyEnd = i + 1 < marks.length ? marks[i + 1].index : sec.length;
+          const body = sec.slice(mk.index + mk[0].length, bodyEnd);
+          return `${mk[1]}. ${mk[2]}–${mk[3]}\n${formatBody(body)}`;
+        });
+        out = `${head}\n\n${pairs.join("\n\n")}`;
+      }
     }
   } catch (e) {
     out = `DEBUG: сайт не открылся: ${e.message}; причина: ${e.code || e.cause?.code}`;

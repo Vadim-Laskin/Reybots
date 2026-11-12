@@ -17,18 +17,15 @@ h1{font-size:26px}
 .item .ic{font-size:30px}
 .item b{display:block;font-size:18px}
 .item span{font-size:13px;color:var(--muted)}
-.card{background:var(--card);border-radius:20px;padding:18px;margin-bottom:12px}
+.card{background:var(--card);border-radius:20px;padding:16px;margin-bottom:12px}
 .row{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .row b{display:block;font-size:16px}
-.sw{flex:none;width:54px;height:32px;border-radius:16px;border:0;background:var(--line);position:relative}
-.sw::after{content:"";position:absolute;top:4px;left:4px;width:24px;height:24px;border-radius:50%;background:#fff;transition:.2s}
-.sw.on{background:var(--green)}
-.sw.on::after{left:26px}
-.sw:disabled{opacity:.5}
-.btn{width:100%;border:0;border-radius:16px;padding:14px;font:inherit;font-weight:700;background:var(--accent);color:#fff}
-.btn:disabled{opacity:.5}
+.btns{display:flex;gap:8px;flex:none}
+.sq{width:42px;height:42px;border-radius:12px;border:0;background:var(--line);color:var(--text);font-size:18px}
+.btn{width:100%;border:0;border-radius:16px;padding:14px;font:inherit;font-weight:700;background:var(--accent);color:#fff;margin-top:12px}
 .link{background:none;border:0;color:var(--accent);font:inherit;margin-bottom:14px;padding:0}
-.muted{color:var(--muted);font-size:13px;margin-top:8px;line-height:1.4}
+.muted{color:var(--muted);font-size:13px;margin-top:4px;line-height:1.4}
+.steps{font-size:14px;line-height:1.5;padding-left:18px;margin-top:6px}
 #err{display:none;background:#2a1a20;color:var(--red);border-radius:14px;padding:12px;margin-bottom:12px;font-size:14px}
 </style>
 </head>
@@ -40,25 +37,31 @@ h1{font-size:26px}
   <div class="hi" id="hi">Загрузка…</div>
   <div class="menu">
     <button class="item" id="go-schedule"><div class="ic">📅</div><div><b>Расписание</b><span>Открыть приложение с расписанием</span></div></button>
-    <button class="item" id="go-sounds"><div class="ic">🎧</div><div><b>Звуки</b><span>Голосовая реакция бота на стикер</span></div></button>
+    <button class="item" id="go-mine"><div class="ic">🎧</div><div><b>Мои звуки</b><span>Звуки на стикеры, которые добавил ты</span></div></button>
+    <button class="item" id="go-admin" hidden><div class="ic">🛠</div><div><b>Админка</b><span>Все звуки, удаление</span></div></button>
   </div>
 </div>
 
-<div id="sounds" class="screen" hidden>
-  <button class="link" id="back">← Назад</button>
-  <h1>Звуки</h1>
-  <div class="hi">Голосовое, которое бот отправляет в ответ на стикер</div>
+<div id="mine" class="screen" hidden>
+  <button class="link" data-back>← Назад</button>
+  <h1>Мои звуки</h1>
   <div class="card">
-    <div class="row">
-      <div><b>Отвечать голосовым</b><div class="muted" id="state"></div></div>
-      <button class="sw" id="sw" aria-label="Переключить"></button>
-    </div>
-    <div class="muted" id="note"></div>
+    <b>Как добавить звук</b>
+    <ol class="steps">
+      <li>Закрой кабинет и пришли боту в личку стикер.</li>
+      <li>Потом пришли голосовое сообщение (или mp3, до 30 секунд).</li>
+    </ol>
+    <div class="muted">Чтобы заменить звук своего стикера, пришли стикер и новое голосовое ещё раз. Чужой стикер перезаписать нельзя.</div>
+    <button class="btn" id="close-app">Закрыть и добавить</button>
   </div>
-  <div class="card">
-    <button class="btn" id="play">▶ Прослушать</button>
-    <div class="muted" id="play-note">Бот пришлёт голосовое тебе в личку.</div>
-  </div>
+  <div id="mine-list"></div>
+</div>
+
+<div id="admin" class="screen" hidden>
+  <button class="link" data-back>← Назад</button>
+  <h1>Админка</h1>
+  <div class="hi">Все звуки. Удалить можно любой.</div>
+  <div id="admin-list"></div>
 </div>
 
 <script>
@@ -72,13 +75,19 @@ if (tg) {
   try { if (tg.isVersionAtLeast?.("8.0")) tg.requestFullscreen?.(); } catch {}
 }
 const $ = (s) => document.querySelector(s);
-let INFO = null;
+const el = (tag, cls, text) => {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+};
+let INFO = null, ITEMS = [];
 
-async function api(action) {
+async function api(action, extra = {}) {
   const r = await fetch("/.netlify/functions/cabinet", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action, initData: tg?.initData || "" }),
+    body: JSON.stringify({ action, initData: tg?.initData || "", ...extra }),
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error || "HTTP " + r.status);
@@ -90,49 +99,76 @@ function fail(e) {
   box.style.display = "block";
   setTimeout(() => (box.style.display = "none"), 5000);
 }
+function ask(text, cb) {
+  if (tg?.showConfirm) tg.showConfirm(text, (yes) => yes && cb());
+  else if (confirm(text)) cb();
+}
 function show(id) {
   document.querySelectorAll(".screen").forEach((s) => (s.hidden = s.id !== id));
   if (tg) id === "home" ? tg.BackButton.hide() : tg.BackButton.show();
   window.scrollTo(0, 0);
 }
-function paint() {
-  $("#sw").classList.toggle("on", INFO.enabled);
-  $("#sw").disabled = !INFO.isAdmin;
-  $("#state").textContent = INFO.enabled ? "Включено" : "Выключено";
-  $("#note").textContent = INFO.isAdmin ? "" : "Менять настройку может только администратор.";
-  $("#play").disabled = !INFO.hasVoice;
-  if (!INFO.hasVoice) $("#play-note").textContent = "Голосовое пока не задано в боте.";
+
+function card(it, showOwner) {
+  const c = el("div", "card");
+  const row = el("div", "row");
+  const left = el("div");
+  left.append(
+    el("b", null, `${it.emoji || "🎭"} ${it.set || "стикер"}`),
+    el("div", "muted", showOwner ? `Добавил: ${it.ownerName}${it.mine ? " (ты)" : ""}` : it.kind === "audio" ? "Аудиофайл" : "Голосовое")
+  );
+  const btns = el("div", "btns");
+  const play = el("button", "sq", "▶");
+  play.onclick = async () => {
+    try { await api("play", { id: it.id }); } catch (e) { fail(e); }
+  };
+  const del = el("button", "sq", "🗑");
+  del.onclick = () =>
+    ask("Удалить этот звук?", async () => {
+      try { await api("delete", { id: it.id }); await refresh(); } catch (e) { fail(e); }
+    });
+  btns.append(play, del);
+  row.append(left, btns);
+  c.append(row);
+  return c;
+}
+function renderLists() {
+  const mine = $("#mine-list"), all = $("#admin-list");
+  mine.replaceChildren();
+  all.replaceChildren();
+  const my = ITEMS.filter((i) => i.mine);
+  if (!my.length) mine.append(el("div", "muted", "Пока нет ни одного звука."));
+  my.forEach((i) => mine.append(card(i, false)));
+  if (INFO.isAdmin) {
+    if (!ITEMS.length) all.append(el("div", "muted", "Звуков пока нет."));
+    ITEMS.forEach((i) => all.append(card(i, true)));
+  }
+}
+async function refresh() {
+  ITEMS = (await api("list")).items;
+  renderLists();
 }
 
 tg?.BackButton.onClick(() => show("home"));
-$("#back").onclick = () => show("home");
-$("#go-sounds").onclick = () => show("sounds");
+document.querySelectorAll("[data-back]").forEach((b) => (b.onclick = () => show("home")));
+$("#go-mine").onclick = () => show("mine");
+$("#go-admin").onclick = () => show("admin");
+$("#close-app").onclick = () => (tg ? tg.close() : fail(new Error("Закрой это окно и напиши боту")));
 
 $("#go-schedule").onclick = () => {
   if (!INFO?.appLink) return fail(new Error("Не задана ссылка на расписание (APP_LINK)"));
   if (tg) {
-    tg.openTelegramLink(INFO.appLink); // откроет другое мини-приложение
-    setTimeout(() => tg.close(), 400); // и закроет кабинет
+    tg.openTelegramLink(INFO.appLink);
+    setTimeout(() => tg.close(), 400);
   } else location.href = INFO.appLink;
 };
 
-$("#sw").onclick = async () => {
-  try { INFO.enabled = (await api("toggle")).enabled; paint(); } catch (e) { fail(e); }
-};
-$("#play").onclick = async () => {
-  $("#play").disabled = true;
-  try {
-    await api("preview");
-    $("#play-note").textContent = "Отправил! Посмотри в чате с ботом.";
-  } catch (e) { fail(e); }
-  $("#play").disabled = !INFO.hasVoice;
-};
-
 api("info")
-  .then((j) => {
+  .then(async (j) => {
     INFO = j;
     $("#hi").textContent = j.name ? `Привет, ${j.name}!` : "Привет!";
-    paint();
+    $("#go-admin").hidden = !j.isAdmin;
+    await refresh();
   })
   .catch((e) => { $("#hi").textContent = ""; fail(e); });
 </script>

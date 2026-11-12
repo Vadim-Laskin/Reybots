@@ -101,9 +101,26 @@ async function privateChat(st, msg) {
   }
 }
 
+async function rememberSticker(st, s) {
+  let seen = [];
+  try {
+    seen = (await st.get("seen", { type: "json" })) || [];
+  } catch {}
+  seen = [
+    { uid: s.file_unique_id, thumb: s.thumbnail?.file_id || s.file_id, emoji: s.emoji || "", set: s.set_name || "", ts: Date.now() },
+    ...seen.filter((x) => x.uid !== s.file_unique_id),
+  ].slice(0, 30);
+  try {
+    await st.setJSON("seen", seen);
+  } catch (e) {
+    console.log("seen save failed:", e.message);
+  }
+}
+
 async function groupSticker(st, msg) {
   console.log("STICKER ID:", msg.sticker.file_unique_id);
   if (String(msg.chat.id) !== String(process.env.CHAT_ID)) return;
+  await rememberSticker(st, msg.sticker);
   const s = (await load(st))[msg.sticker.file_unique_id];
   if (!s) return;
   const method = s.kind === "audio" ? "sendAudio" : "sendVoice";

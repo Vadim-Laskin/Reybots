@@ -8,6 +8,7 @@
 <style>
 :root{--bg:#0e1014;--card:#1a1d26;--accent:#8b7bff;--red:#ff5d6c;--green:#4ade80;--text:#eceef5;--muted:#8b90a0;--line:#2a2e3a}
 *{box-sizing:border-box;margin:0}
+[hidden]{display:none !important}
 html,body{background:var(--bg);color:var(--text);font-family:-apple-system,"Segoe UI",Roboto,sans-serif}
 body{padding:calc(var(--tg-safe-area-inset-top,0px) + var(--tg-content-safe-area-inset-top,0px) + 16px) 16px calc(env(safe-area-inset-bottom,0px) + 28px)}
 h1{font-size:26px}
@@ -23,15 +24,28 @@ h1{font-size:26px}
 .btns{display:flex;gap:8px;flex:none}
 .sq{width:42px;height:42px;border-radius:12px;border:0;background:var(--line);color:var(--text);font-size:18px}
 .btn{width:100%;border:0;border-radius:16px;padding:14px;font:inherit;font-weight:700;background:var(--accent);color:#fff;margin-top:12px}
+.btn:disabled{opacity:.45}
+.btn.ghost{background:var(--line);color:var(--text)}
 .link{background:none;border:0;color:var(--accent);font:inherit;margin-bottom:14px;padding:0}
 .muted{color:var(--muted);font-size:13px;margin-top:4px;line-height:1.4}
-.steps{font-size:14px;line-height:1.5;padding-left:18px;margin-top:6px}
+.h3{font-weight:700;margin:16px 0 8px}
+.tabs{display:flex;gap:8px;margin-bottom:12px}
+.tabs button{flex:1;border:0;border-radius:12px;padding:10px;font:inherit;background:var(--card);color:var(--muted)}
+.tabs button.on{background:var(--accent);color:#fff}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.st{aspect-ratio:1;background:var(--card);border:2px solid transparent;border-radius:14px;padding:6px}
+.st.sel{border-color:var(--accent)}
+.st img{width:100%;height:100%;object-fit:contain}
+input[type=text]{width:100%;background:var(--card);border:0;border-radius:12px;padding:12px;color:var(--text);font:inherit;margin-bottom:8px}
+input[type=file]{display:none}
+.file{display:block;text-align:center;background:var(--card);border:1px dashed var(--line);border-radius:14px;padding:16px;color:var(--text)}
 #err{display:none;background:#2a1a20;color:var(--red);border-radius:14px;padding:12px;margin-bottom:12px;font-size:14px}
-[hidden]{display:none !important}
+#ok{display:none;background:#14251c;color:var(--green);border-radius:14px;padding:12px;margin-bottom:12px;font-size:14px}
 </style>
 </head>
 <body>
 <div id="err"></div>
+<div id="ok"></div>
 
 <div id="home" class="screen">
   <h1>Личный кабинет</h1>
@@ -46,16 +60,31 @@ h1{font-size:26px}
 <div id="mine" class="screen" hidden>
   <button class="link" data-back>← Назад</button>
   <h1>Мои звуки</h1>
-  <div class="card">
-    <b>Как добавить звук</b>
-    <ol class="steps">
-      <li>Закрой кабинет и пришли боту в личку стикер.</li>
-      <li>Потом пришли голосовое сообщение (или mp3, до 30 секунд).</li>
-    </ol>
-    <div class="muted">Чтобы заменить звук своего стикера, пришли стикер и новое голосовое ещё раз. Чужой стикер перезаписать нельзя.</div>
-    <button class="btn" id="close-app">Закрыть и добавить</button>
-  </div>
+  <button class="btn" id="go-add">➕ Добавить звук</button>
+  <div class="h3">Добавленные</div>
   <div id="mine-list"></div>
+  <div class="muted">Чужой стикер перезаписать нельзя. Заменить свой звук можно, добавив его заново.</div>
+</div>
+
+<div id="add" class="screen" hidden>
+  <button class="link" data-back>← Назад</button>
+  <h1>Новый звук</h1>
+  <div class="h3">1. Выбери стикер</div>
+  <div class="tabs">
+    <button id="tab-seen" class="on">Из группы</button>
+    <button id="tab-pack">По набору</button>
+  </div>
+  <div id="pane-pack" hidden>
+    <input type="text" id="pack-name" placeholder="Название или ссылка набора">
+    <button class="btn ghost" id="pack-find" style="margin-top:0;margin-bottom:12px">Найти</button>
+  </div>
+  <div class="grid" id="grid"></div>
+  <div class="muted" id="grid-note"></div>
+
+  <div class="h3">2. Выбери аудио</div>
+  <label class="file" for="file" id="file-label">Выбрать файл (mp3, m4a, ogg, до 30 сек)</label>
+  <input type="file" id="file" accept="audio/*,.mp3,.m4a,.ogg,.oga,.opus,.wav">
+  <button class="btn" id="upload" disabled>Загрузить</button>
 </div>
 
 <div id="admin" class="screen" hidden>
@@ -82,7 +111,7 @@ const el = (tag, cls, text) => {
   if (text != null) e.textContent = text;
   return e;
 };
-let INFO = null, ITEMS = [];
+let INFO = null, ITEMS = [], STICKERS = [], PICK = null, FILE = null, TAB = "seen";
 
 async function api(action, extra = {}) {
   const r = await fetch("/.netlify/functions/cabinet", {
@@ -94,12 +123,13 @@ async function api(action, extra = {}) {
   if (!r.ok) throw new Error(j.error || "HTTP " + r.status);
   return j;
 }
-function fail(e) {
-  const box = $("#err");
-  box.textContent = e.message;
+function note(id, text, ms) {
+  const box = $(id);
+  box.textContent = text;
   box.style.display = "block";
-  setTimeout(() => (box.style.display = "none"), 5000);
+  setTimeout(() => (box.style.display = "none"), ms);
 }
+const fail = (e) => note("#err", e.message, 5000);
 function ask(text, cb) {
   if (tg?.showConfirm) tg.showConfirm(text, (yes) => yes && cb());
   else if (confirm(text)) cb();
@@ -109,7 +139,12 @@ function show(id) {
   if (tg) id === "home" ? tg.BackButton.hide() : tg.BackButton.show();
   window.scrollTo(0, 0);
 }
+function back() {
+  const cur = document.querySelector(".screen:not([hidden])")?.id;
+  show(cur === "add" ? "mine" : "home");
+}
 
+/* ---------- списки звуков ---------- */
 function card(it, showOwner) {
   const c = el("div", "card");
   const row = el("div", "row");
@@ -120,9 +155,7 @@ function card(it, showOwner) {
   );
   const btns = el("div", "btns");
   const play = el("button", "sq", "▶");
-  play.onclick = async () => {
-    try { await api("play", { id: it.id }); } catch (e) { fail(e); }
-  };
+  play.onclick = async () => { try { await api("play", { id: it.id }); } catch (e) { fail(e); } };
   const del = el("button", "sq", "🗑");
   del.onclick = () =>
     ask("Удалить этот звук?", async () => {
@@ -150,11 +183,104 @@ async function refresh() {
   renderLists();
 }
 
-tg?.BackButton.onClick(() => show("home"));
-document.querySelectorAll("[data-back]").forEach((b) => (b.onclick = () => show("home")));
+/* ---------- добавление ---------- */
+function updateUpload() { $("#upload").disabled = !(PICK && FILE); }
+
+function renderGrid() {
+  const g = $("#grid");
+  g.replaceChildren();
+  STICKERS.forEach((s) => {
+    const b = el("button", "st" + (PICK?.uid === s.uid ? " sel" : ""));
+    const img = el("img");
+    img.loading = "lazy";
+    img.alt = s.emoji || "";
+    img.src = "/.netlify/functions/sticker-img?f=" + encodeURIComponent(s.thumb);
+    b.append(img);
+    b.onclick = () => { PICK = s; renderGrid(); updateUpload(); };
+    g.append(b);
+  });
+}
+async function loadSeen() {
+  TAB = "seen";
+  $("#tab-seen").classList.add("on");
+  $("#tab-pack").classList.remove("on");
+  $("#pane-pack").hidden = true;
+  try {
+    STICKERS = (await api("seen")).stickers;
+    $("#grid-note").textContent = STICKERS.length ? "" : "Пока пусто: отправь нужный стикер в группу, и он появится здесь.";
+    renderGrid();
+  } catch (e) { fail(e); }
+}
+function openAdd() {
+  PICK = null; FILE = null;
+  $("#file").value = "";
+  $("#file-label").textContent = "Выбрать файл (mp3, m4a, ogg, до 30 сек)";
+  updateUpload();
+  show("add");
+  loadSeen();
+}
+
+$("#tab-seen").onclick = loadSeen;
+$("#tab-pack").onclick = () => {
+  TAB = "pack";
+  $("#tab-pack").classList.add("on");
+  $("#tab-seen").classList.remove("on");
+  $("#pane-pack").hidden = false;
+  STICKERS = [];
+  renderGrid();
+  $("#grid-note").textContent = "";
+};
+$("#pack-find").onclick = async () => {
+  try {
+    STICKERS = (await api("pack", { name: $("#pack-name").value })).stickers;
+    $("#grid-note").textContent = "";
+    renderGrid();
+  } catch (e) { fail(e); }
+};
+
+$("#file").onchange = (ev) => {
+  const f = ev.target.files[0];
+  FILE = null;
+  if (!f) return updateUpload();
+  if (f.size > 4 * 1024 * 1024) { fail(new Error("Файл больше 4 МБ")); return updateUpload(); }
+  const a = new Audio(URL.createObjectURL(f));
+  const accept = () => {
+    FILE = f;
+    $("#file-label").textContent = `✓ ${f.name}`;
+    updateUpload();
+  };
+  a.onloadedmetadata = () => {
+    if (a.duration > 30) { fail(new Error("Длиннее 30 секунд")); $("#file").value = ""; updateUpload(); }
+    else accept();
+  };
+  a.onerror = accept; // формат не читается в браузере, проверит сервер
+};
+
+$("#upload").onclick = async () => {
+  $("#upload").disabled = true;
+  $("#upload").textContent = "Загружаю…";
+  try {
+    const audio = await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(String(r.result).split(",")[1]);
+      r.onerror = () => rej(new Error("Не удалось прочитать файл"));
+      r.readAsDataURL(FILE);
+    });
+    await api("upload", { id: PICK.uid, emoji: PICK.emoji, set: PICK.set, audio, filename: FILE.name });
+    await refresh();
+    show("mine");
+    note("#ok", "Готово! Звук добавлен. Бот прислал его тебе в личку для проверки.", 5000);
+  } catch (e) { fail(e); }
+  $("#upload").textContent = "Загрузить";
+  updateUpload();
+};
+
+/* ---------- навигация ---------- */
+tg?.BackButton.onClick(back);
+document.querySelectorAll("[data-back]").forEach((b) => (b.onclick = back));
 $("#go-mine").onclick = () => show("mine");
+$("#go-add").onclick = openAdd;
 $("#go-admin").onclick = () => INFO?.isAdmin && show("admin");
-$("#close-app").onclick = () => (tg ? tg.close() : fail(new Error("Закрой это окно и напиши боту")));
 
 $("#go-schedule").onclick = () => {
   if (!INFO?.appLink) return fail(new Error("Не задана ссылка на расписание (APP_LINK)"));

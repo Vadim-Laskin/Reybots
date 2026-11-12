@@ -23,7 +23,7 @@ h1{font-size:26px}
 .item .ic .i{width:26px;height:26px}
 .item b{display:block;font-size:18px}
 .item span{font-size:13px;color:var(--muted)}
-.card{background:var(--card);border-radius:20px;padding:16px;margin-bottom:12px}
+/*.card{background:var(--card);border-radius:20px;padding:16px;margin-bottom:12px}*/
 .row{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .row b{display:block;font-size:16px}
 .row b.ttl{display:flex;align-items:center;gap:8px}
@@ -47,6 +47,16 @@ input[type=file]{display:none}
 .file{display:flex;align-items:center;justify-content:center;gap:8px;background:var(--card);border:1px dashed var(--line);border-radius:14px;padding:16px;color:var(--text)}
 #err{display:none;background:#2a1a20;color:var(--red);border-radius:14px;padding:12px;margin-bottom:12px;font-size:14px}
 #ok{display:none;background:#14251c;color:var(--green);border-radius:14px;padding:12px;margin-bottom:12px;font-size:14px}
+.card{cursor:pointer}
+#modal{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;justify-content:center}
+.sheet{position:relative;width:100%;max-width:480px;background:var(--card);border-radius:24px 24px 0 0;padding:24px 20px calc(env(safe-area-inset-bottom,0px) + 20px);text-align:center}
+.x{position:absolute;top:12px;right:12px;width:36px;height:36px;border-radius:12px;border:0;background:var(--line);color:var(--text);display:flex;align-items:center;justify-content:center}
+.pic{width:200px;height:200px;margin:8px auto 12px;display:flex;align-items:center;justify-content:center;color:var(--muted)}
+.pic img{width:100%;height:100%;object-fit:contain}
+.pic .i{width:64px;height:64px}
+.m-title{font-size:20px;font-weight:700}
+.m-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
+.m-btns .btn{margin-top:0}
 </style>
 </head>
 <body>
@@ -94,6 +104,19 @@ input[type=file]{display:none}
   <div id="admin-list"></div>
 </div>
 
+<div id="modal" hidden>
+  <div class="sheet">
+    <button class="x" id="modal-x" aria-label="Закрыть"><span class="i" data-i="close"></span></button>
+    <div class="pic" id="m-pic"></div>
+    <div class="m-title" id="m-title"></div>
+    <div class="muted" id="m-sub"></div>
+    <div class="m-btns">
+      <button class="btn play" id="m-play"><span class="i" data-i="play"></span>Слушать</button>
+      <button class="btn ghost" id="m-del"><span class="i" data-i="trash"></span>Удалить</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const tg = window.Telegram?.WebApp;
 if (tg) {
@@ -127,10 +150,15 @@ const ICONS = {
   music: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
   upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>',
   sticker: '<path d="M15.5 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3Z"/><path d="M15 3v6h6"/><path d="M8 13h.01"/><path d="M16 13h.01"/><path d="M10 16s.8 1 2 1c1.3 0 2-1 2-1"/>',
+  close: '<path d="M18 6 6 18M6 6l12 12"/>',
 };
 const svg = (n) =>
   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]}</svg>`;
-const setIcon = (b, n) => { b.innerHTML = svg(n); };
+const setIcon = (b, n) => {
+  const t = b.querySelector(":scope > .i");
+  if (t) t.innerHTML = svg(n);
+  else b.innerHTML = svg(n);
+};
 const ico = (n) => { const s = el("span", "i"); setIcon(s, n); return s; };
 document.querySelectorAll("[data-i]").forEach((e) => setIcon(e, e.dataset.i));
 
@@ -210,13 +238,28 @@ function show(id) {
   window.scrollTo(0, 0);
 }
 function back() {
+  if (!$("#modal").hidden) return closeModal();
   const cur = document.querySelector(".screen:not([hidden])")?.id;
   show(cur === "add" ? "mine" : "home");
 }
 
 /* ---------- списки звуков ---------- */
+function askDelete(it, after) {
+  ask("Удалить этот звук?", async () => {
+    try {
+      await api("delete", { id: it.id });
+      if (PLAYING === it.id) stopAudio();
+      delete URLS[it.id];
+      ITEMS = ITEMS.filter((x) => x.id !== it.id);
+      renderLists();
+      after?.();
+    } catch (e) { fail(e); }
+  });
+}
+
 function card(it, showOwner) {
   const c = el("div", "card");
+  c.onclick = () => openSticker(it);
   const row = el("div", "row");
   const left = el("div");
   const ttl = el("b", "ttl");
@@ -228,19 +271,10 @@ function card(it, showOwner) {
   const btns = el("div", "btns");
   const play = el("button", "sq play");
   setIcon(play, "play");
-  play.onclick = () => togglePlay(it.id, play);
+  play.onclick = (e) => { e.stopPropagation(); togglePlay(it.id, play); };
   const del = el("button", "sq");
   setIcon(del, "trash");
-  del.onclick = () =>
-    ask("Удалить этот звук?", async () => {
-      try {
-        await api("delete", { id: it.id });
-        if (PLAYING === it.id) stopAudio();
-        delete URLS[it.id];
-        ITEMS = ITEMS.filter((x) => x.id !== it.id);
-        renderLists();
-      } catch (e) { fail(e); }
-    });
+  del.onclick = (e) => { e.stopPropagation(); askDelete(it); };
   btns.append(play, del);
   row.append(left, btns);
   c.append(row);
@@ -329,7 +363,7 @@ $("#upload").onclick = async () => {
       r.readAsDataURL(FILE);
     });
     const r = await api("upload", {
-      id: PICK.uid, emoji: PICK.emoji, set: PICK.set,
+            id: PICK.uid, emoji: PICK.emoji, set: PICK.set, thumb: PICK.thumb,
       audio, filename: FILE.name, mime: FILE.type || "audio/mpeg",
     });
     delete URLS[r.item.id];
@@ -341,6 +375,45 @@ $("#upload").onclick = async () => {
   $("#up-t").textContent = "Загрузить";
   updateUpload();
 };
+
+/* ---------- окошко со стикером ---------- */
+let CUR = null;
+async function openSticker(it) {
+  CUR = it;
+  $("#m-title").textContent = it.set || "Стикер";
+  $("#m-sub").textContent = `Добавил: ${it.ownerName}${it.mine ? " (ты)" : ""}`;
+  const pic = $("#m-pic");
+  $("#modal").hidden = false;
+  let thumb = it.thumb || "";
+  if (!thumb) {
+    pic.replaceChildren(ico("loader"));
+    pic.classList.add("spin");
+    try {
+      thumb = (await api("sticker", { id: it.id })).thumb || "";
+      if (thumb) it.thumb = thumb;
+    } catch (e) { fail(e); }
+    pic.classList.remove("spin");
+    if (CUR !== it) return;
+  }
+  if (thumb) {
+    const img = el("img");
+    img.alt = "";
+    img.src = "/.netlify/functions/sticker-img?f=" + encodeURIComponent(thumb);
+    pic.replaceChildren(img);
+  } else {
+    pic.replaceChildren(ico("sticker"));
+    $("#m-sub").textContent += ". Картинка недоступна: звук добавлен без привязки к набору.";
+  }
+}
+function closeModal() {
+  $("#modal").hidden = true;
+  stopAudio();
+  CUR = null;
+}
+$("#modal-x").onclick = closeModal;
+$("#modal").onclick = (e) => { if (e.target === $("#modal")) closeModal(); };
+$("#m-play").onclick = () => CUR && togglePlay(CUR.id, $("#m-play"));
+$("#m-del").onclick = () => CUR && askDelete(CUR, closeModal);
 
 /* ---------- запуск ---------- */
 tg?.BackButton.onClick(back);

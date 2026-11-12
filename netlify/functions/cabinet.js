@@ -88,10 +88,11 @@ async function main(event) {
   if (body.action === "list") {
     const items = Object.entries(sounds)
       .filter(([, s]) => admin || s.owner === user.id)
-      .map(([id, s]) => ({
+            .map(([id, s]) => ({
         id,
         emoji: s.emoji,
         set: s.set,
+        thumb: s.thumb || "",
         kind: s.kind,
         ownerName: s.ownerName,
         mine: s.owner === user.id,
@@ -150,6 +151,7 @@ async function main(event) {
       ownerName: user.first_name || "?",
       emoji: String(body.emoji || "").slice(0, 8),
       set: String(body.set || "").slice(0, 64),
+      thumb: String(body.thumb || "").slice(0, 200),
       ts: Date.now(),
     };
     sounds[id] = entry;
@@ -168,7 +170,7 @@ async function main(event) {
     return out(200, {
       ok: true,
       item: {
-        id, emoji: entry.emoji, set: entry.set, kind: entry.kind,
+        id, emoji: entry.emoji, set: entry.set, thumb: entry.thumb, kind: entry.kind,
         ownerName: entry.ownerName, mine: true, ts: entry.ts,
       },
     });
@@ -178,6 +180,25 @@ async function main(event) {
   if (!s) return out(404, { error: "Звук не найден" });
   if (!admin && s.owner !== user.id) return out(403, { error: "Это не твой звук" });
 
+  if (body.action === "sticker") {
+    let thumb = s.thumb || "";
+    if (!thumb && s.set) {
+      try {
+        const j = await (await fetch(tgUrl("getStickerSet") + `?name=${encodeURIComponent(s.set)}`)).json();
+        const found = j.ok && j.result.stickers.find((x) => x.file_unique_id === body.id);
+        if (found) {
+          thumb = found.thumbnail?.file_id || found.file_id;
+          s.thumb = thumb;
+          sounds[body.id] = s;
+          await save(st, sounds);
+        }
+      } catch (e) {
+        console.log("sticker lookup failed:", e.message);
+      }
+    }
+    return out(200, { thumb });
+  }
+  
   if (body.action === "audio") {
     let copy = null;
     try {

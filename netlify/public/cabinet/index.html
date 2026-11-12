@@ -27,6 +27,7 @@ h1{font-size:26px}
 .muted{color:var(--muted);font-size:13px;margin-top:4px;line-height:1.4}
 .steps{font-size:14px;line-height:1.5;padding-left:18px;margin-top:6px}
 #err{display:none;background:#2a1a20;color:var(--red);border-radius:14px;padding:12px;margin-bottom:12px;font-size:14px}
+[hidden]{display:none !important}
 </style>
 </head>
 <body>
@@ -152,7 +153,7 @@ async function refresh() {
 tg?.BackButton.onClick(() => show("home"));
 document.querySelectorAll("[data-back]").forEach((b) => (b.onclick = () => show("home")));
 $("#go-mine").onclick = () => show("mine");
-$("#go-admin").onclick = () => show("admin");
+$("#go-admin").onclick = () => INFO?.isAdmin && show("admin");
 $("#close-app").onclick = () => (tg ? tg.close() : fail(new Error("Закрой это окно и напиши боту")));
 
 $("#go-schedule").onclick = () => {

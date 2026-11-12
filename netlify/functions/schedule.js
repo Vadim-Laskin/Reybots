@@ -25,6 +25,7 @@ exports.handler = async (event) => {
     await send(`Расписание на ${prefix.toLowerCase()} пока не опубликовано на сайте.`);
     return { statusCode: 200 };
   }
+  if (!actual && /воскресенье/i.test(day.weekday)) return { statusCode: 200 };
 
   let caption = `${prefix}, ${day.label}`;
   if (s.stale) {

@@ -70,11 +70,7 @@ input[type=file]{display:none}
   <button class="link" data-back>← Назад</button>
   <h1>Новый звук</h1>
   <div class="h3">1. Выбери стикер</div>
-  <div class="tabs">
-    <button id="tab-seen" class="on">Из группы</button>
-    <button id="tab-pack">По набору</button>
-  </div>
-  <div id="pane-pack" hidden>
+  <div id="pane-pack">
     <input type="text" id="pack-name" placeholder="Название или ссылка набора">
     <button class="btn ghost" id="pack-find" style="margin-top:0;margin-bottom:12px">Найти</button>
   </div>
@@ -200,36 +196,17 @@ function renderGrid() {
     g.append(b);
   });
 }
-async function loadSeen() {
-  TAB = "seen";
-  $("#tab-seen").classList.add("on");
-  $("#tab-pack").classList.remove("on");
-  $("#pane-pack").hidden = true;
-  try {
-    STICKERS = (await api("seen")).stickers;
-    $("#grid-note").textContent = STICKERS.length ? "" : "Пока пусто: отправь нужный стикер в группу, и он появится здесь.";
-    renderGrid();
-  } catch (e) { fail(e); }
-}
 function openAdd() {
-  PICK = null; FILE = null;
+  PICK = null; FILE = null; STICKERS = [];
   $("#file").value = "";
   $("#file-label").textContent = "Выбрать файл (mp3, m4a, ogg, до 30 сек)";
+  $("#pack-name").value = "";
+  $("#grid-note").textContent = "Вставь название или ссылку набора стикеров (t.me/addstickers/…) и нажми «Найти».";
+  renderGrid();
   updateUpload();
   show("add");
-  loadSeen();
 }
 
-$("#tab-seen").onclick = loadSeen;
-$("#tab-pack").onclick = () => {
-  TAB = "pack";
-  $("#tab-pack").classList.add("on");
-  $("#tab-seen").classList.remove("on");
-  $("#pane-pack").hidden = false;
-  STICKERS = [];
-  renderGrid();
-  $("#grid-note").textContent = "";
-};
 $("#pack-find").onclick = async () => {
   try {
     STICKERS = (await api("pack", { name: $("#pack-name").value })).stickers;

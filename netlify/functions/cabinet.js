@@ -181,7 +181,7 @@ async function main(event) {
   if (body.action === "audio") {
     let copy = null;
     try {
-      copy = await st.get("audio-" + body.id, { type: "json", consistency: "strong" });
+      copy = await st.get("audio-" + body.id, { type: "json" });
     } catch (e) {
       console.log("audio read failed:", e.message);
     }

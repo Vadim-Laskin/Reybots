@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Личный кабинет</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{--bg:#0e1014;--card:#1a1d26;--accent:#8b7bff;--red:#ff5d6c;--green:#4ade80;--text:#eceef5;--muted:#8b90a0;--line:#2a2e3a}
+*{box-sizing:border-box;margin:0}
+html,body{background:var(--bg);color:var(--text);font-family:-apple-system,"Segoe UI",Roboto,sans-serif}
+body{padding:calc(var(--tg-safe-area-inset-top,0px) + var(--tg-content-safe-area-inset-top,0px) + 16px) 16px calc(env(safe-area-inset-bottom,0px) + 28px)}
+h1{font-size:26px}
+.hi{color:var(--muted);margin:4px 0 20px}
+.menu{display:grid;gap:12px}
+.item{display:flex;align-items:center;gap:14px;width:100%;text-align:left;background:var(--card);color:var(--text);border:0;border-radius:20px;padding:18px;font:inherit}
+.item .ic{font-size:30px}
+.item b{display:block;font-size:18px}
+.item span{font-size:13px;color:var(--muted)}
+.card{background:var(--card);border-radius:20px;padding:18px;margin-bottom:12px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.row b{display:block;font-size:16px}
+.sw{flex:none;width:54px;height:32px;border-radius:16px;border:0;background:var(--line);position:relative}
+.sw::after{content:"";position:absolute;top:4px;left:4px;width:24px;height:24px;border-radius:50%;background:#fff;transition:.2s}
+.sw.on{background:var(--green)}
+.sw.on::after{left:26px}
+.sw:disabled{opacity:.5}
+.btn{width:100%;border:0;border-radius:16px;padding:14px;font:inherit;font-weight:700;background:var(--accent);color:#fff}
+.btn:disabled{opacity:.5}
+.link{background:none;border:0;color:var(--accent);font:inherit;margin-bottom:14px;padding:0}
+.muted{color:var(--muted);font-size:13px;margin-top:8px;line-height:1.4}
+#err{display:none;background:#2a1a20;color:var(--red);border-radius:14px;padding:12px;margin-bottom:12px;font-size:14px}
+</style>
+</head>
+<body>
+<div id="err"></div>
+
+<div id="home" class="screen">
+  <h1>Личный кабинет</h1>
+  <div class="hi" id="hi">Загрузка…</div>
+  <div class="menu">
+    <button class="item" id="go-schedule"><div class="ic">📅</div><div><b>Расписание</b><span>Открыть приложение с расписанием</span></div></button>
+    <button class="item" id="go-sounds"><div class="ic">🎧</div><div><b>Звуки</b><span>Голосовая реакция бота на стикер</span></div></button>
+  </div>
+</div>
+
+<div id="sounds" class="screen" hidden>
+  <button class="link" id="back">← Назад</button>
+  <h1>Звуки</h1>
+  <div class="hi">Голосовое, которое бот отправляет в ответ на стикер</div>
+  <div class="card">
+    <div class="row">
+      <div><b>Отвечать голосовым</b><div class="muted" id="state"></div></div>
+      <button class="sw" id="sw" aria-label="Переключить"></button>
+    </div>
+    <div class="muted" id="note"></div>
+  </div>
+  <div class="card">
+    <button class="btn" id="play">▶ Прослушать</button>
+    <div class="muted" id="play-note">Бот пришлёт голосовое тебе в личку.</div>
+  </div>
+</div>
+
+<script>
+const tg = window.Telegram?.WebApp;
+if (tg) {
+  tg.ready();
+  tg.expand();
+  tg.setHeaderColor?.("#0e1014");
+  tg.setBackgroundColor?.("#0e1014");
+  tg.disableVerticalSwipes?.();
+  try { if (tg.isVersionAtLeast?.("8.0")) tg.requestFullscreen?.(); } catch {}
+}
+const $ = (s) => document.querySelector(s);
+let INFO = null;
+
+async function api(action) {
+  const r = await fetch("/.netlify/functions/cabinet", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action, initData: tg?.initData || "" }),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || "HTTP " + r.status);
+  return j;
+}
+function fail(e) {
+  const box = $("#err");
+  box.textContent = e.message;
+  box.style.display = "block";
+  setTimeout(() => (box.style.display = "none"), 5000);
+}
+function show(id) {
+  document.querySelectorAll(".screen").forEach((s) => (s.hidden = s.id !== id));
+  if (tg) id === "home" ? tg.BackButton.hide() : tg.BackButton.show();
+  window.scrollTo(0, 0);
+}
+function paint() {
+  $("#sw").classList.toggle("on", INFO.enabled);
+  $("#sw").disabled = !INFO.isAdmin;
+  $("#state").textContent = INFO.enabled ? "Включено" : "Выключено";
+  $("#note").textContent = INFO.isAdmin ? "" : "Менять настройку может только администратор.";
+  $("#play").disabled = !INFO.hasVoice;
+  if (!INFO.hasVoice) $("#play-note").textContent = "Голосовое пока не задано в боте.";
+}
+
+tg?.BackButton.onClick(() => show("home"));
+$("#back").onclick = () => show("home");
+$("#go-sounds").onclick = () => show("sounds");
+
+$("#go-schedule").onclick = () => {
+  if (!INFO?.appLink) return fail(new Error("Не задана ссылка на расписание (APP_LINK)"));
+  if (tg) {
+    tg.openTelegramLink(INFO.appLink); // откроет другое мини-приложение
+    setTimeout(() => tg.close(), 400); // и закроет кабинет
+  } else location.href = INFO.appLink;
+};
+
+$("#sw").onclick = async () => {
+  try { INFO.enabled = (await api("toggle")).enabled; paint(); } catch (e) { fail(e); }
+};
+$("#play").onclick = async () => {
+  $("#play").disabled = true;
+  try {
+    await api("preview");
+    $("#play-note").textContent = "Отправил! Посмотри в чате с ботом.";
+  } catch (e) { fail(e); }
+  $("#play").disabled = !INFO.hasVoice;
+};
+
+api("info")
+  .then((j) => {
+    INFO = j;
+    $("#hi").textContent = j.name ? `Привет, ${j.name}!` : "Привет!";
+    paint();
+  })
+  .catch((e) => { $("#hi").textContent = ""; fail(e); });
+</script>
+</body>
+</html>

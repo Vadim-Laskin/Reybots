@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const { store } = require("../../lib/natk");
+const { isAdmin, load, save } = require("../../lib/sounds");
 
 const H = { "Content-Type": "application/json" };
 const out = (code, obj) => ({ statusCode: code, headers: H, body: JSON.stringify(obj) });
@@ -38,44 +39,56 @@ exports.handler = async (event) => {
   if (!user) return out(401, { error: "Открой кабинет из Telegram" });
 
   const st = store(event);
-  const admins = (process.env.ADMIN_IDS || "").split(",").map((s) => s.trim()).filter(Boolean);
-  const isAdmin = admins.includes(String(user.id));
-
-  let settings = {};
-  try {
-    settings = (await st.get("settings", { type: "json" })) || {};
-  } catch (e) {
-    console.log("settings read failed:", e.message);
-  }
-  const enabled = () => settings.voiceReply !== false;
+  const admin = isAdmin(user.id);
 
   if (body.action === "info") {
     return out(200, {
       name: user.first_name || "",
-      isAdmin,
-      enabled: enabled(),
+      isAdmin: admin,
       appLink: process.env.APP_LINK || "",
-      hasVoice: !!process.env.VOICE,
     });
   }
 
-  if (body.action === "toggle") {
-    if (!isAdmin) return out(403, { error: "Менять может только админ" });
-    settings.voiceReply = !enabled();
-    await st.setJSON("settings", settings);
-    return out(200, { enabled: enabled() });
+  const sounds = await load(st);
+
+  if (body.action === "list") {
+    const items = Object.entries(sounds)
+      .filter(([, s]) => admin || s.owner === user.id)
+      .map(([id, s]) => ({
+        id,
+        emoji: s.emoji,
+        set: s.set,
+        kind: s.kind,
+        ownerName: s.ownerName,
+        mine: s.owner === user.id,
+        ts: s.ts,
+      }))
+      .sort((a, b) => b.ts - a.ts);
+    return out(200, { items });
   }
 
-  if (body.action === "preview") {
-    if (!process.env.VOICE) return out(400, { error: "Голосовое не задано в боте" });
-    const r = await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendVoice`, {
+  const s = sounds[body.id];
+  if (!s) return out(404, { error: "Звук не найден" });
+  if (!admin && s.owner !== user.id) return out(403, { error: "Это не твой звук" });
+
+  if (body.action === "play") {
+    const method = s.kind === "audio" ? "sendAudio" : "sendVoice";
+    const r = await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/${method}`, {
       method: "POST",
       headers: H,
-      body: JSON.stringify({ chat_id: user.id, voice: process.env.VOICE }),
+      body: JSON.stringify({
+        chat_id: user.id,
+        [s.kind === "audio" ? "audio" : "voice"]: s.file_id,
+      }),
     });
     const j = await r.json();
-    console.log("preview sendVoice:", JSON.stringify(j));
     if (!j.ok) return out(502, { error: j.description });
+    return out(200, { ok: true });
+  }
+
+  if (body.action === "delete") {
+    delete sounds[body.id];
+    await save(st, sounds);
     return out(200, { ok: true });
   }
 

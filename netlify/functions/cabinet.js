@@ -143,7 +143,7 @@ async function main(event) {
     const sent = await sendFile(user.id, buf, String(body.filename || "sound.mp3").slice(0, 80));
     if (sent.error) return out(400, { error: sent.error });
 
-    sounds[id] = {
+    const entry = {
       file_id: sent.file_id,
       kind: sent.kind,
       owner: user.id,
@@ -152,13 +152,53 @@ async function main(event) {
       set: String(body.set || "").slice(0, 64),
       ts: Date.now(),
     };
+    sounds[id] = entry;
     await save(st, sounds);
-    return out(200, { ok: true });
+
+    // копия исходного файла для проигрывания в приложении
+    try {
+      await st.setJSON("audio-" + id, {
+        mime: String(body.mime || "audio/mpeg").slice(0, 40),
+        data: String(body.audio),
+      });
+    } catch (e) {
+      console.log("audio copy failed:", e.message);
+    }
+
+    return out(200, {
+      ok: true,
+      item: {
+        id, emoji: entry.emoji, set: entry.set, kind: entry.kind,
+        ownerName: entry.ownerName, mine: true, ts: entry.ts,
+      },
+    });
   }
 
   const s = sounds[body.id];
   if (!s) return out(404, { error: "Звук не найден" });
   if (!admin && s.owner !== user.id) return out(403, { error: "Это не твой звук" });
+
+  if (body.action === "audio") {
+    let copy = null;
+    try {
+      copy = await st.get("audio-" + body.id, { type: "json", consistency: "strong" });
+    } catch (e) {
+      console.log("audio read failed:", e.message);
+    }
+    if (copy?.data) return out(200, { mime: copy.mime, data: copy.data });
+
+    // запасной вариант: файл из Telegram
+    const g = await (await fetch(tgUrl("getFile") + `?file_id=${encodeURIComponent(s.file_id)}`)).json();
+    if (!g.ok) return out(502, { error: g.description || "Файл недоступен" });
+    const r = await fetch(`https://api.telegram.org/file/bot${process.env.BOT_TOKEN}/${g.result.file_path}`);
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (buf.length > MAX_BYTES) return out(400, { error: "Файл слишком большой" });
+    const ext = g.result.file_path.split(".").pop().toLowerCase();
+    const mime =
+      { mp3: "audio/mpeg", m4a: "audio/mp4", oga: "audio/ogg", ogg: "audio/ogg", opus: "audio/ogg", wav: "audio/wav" }[ext] ||
+      "audio/ogg";
+    return out(200, { mime, data: buf.toString("base64") });
+  }
 
   if (body.action === "play") {
     const method = s.kind === "audio" ? "sendAudio" : "sendVoice";
@@ -178,6 +218,9 @@ async function main(event) {
   if (body.action === "delete") {
     delete sounds[body.id];
     await save(st, sounds);
+    try {
+      await st.delete("audio-" + body.id);
+    } catch {}
     return out(200, { ok: true });
   }
 

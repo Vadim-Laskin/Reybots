@@ -31,6 +31,6 @@ exports.handler = async (event) => {
   if (s.stale) {
     caption += `\n⚠️ natk.ru недоступен, показано сохранённое расписание (${fmtTime(s.fetchedAt)} НСК)`;
   }
-  await sendDay({ ...day, title: `${prefix}, ${day.label}` }, caption);
+  await sendDay({ ...day, title: `${prefix}, ${day.label}` }, caption, event);
   return { statusCode: 200 };
 };

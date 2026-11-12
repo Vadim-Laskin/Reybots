@@ -37,9 +37,10 @@ exports.handler = async (event) => {
     if (!d || prev[date] === next[date]) continue;
     if (date === n.date && !d.pairs.some((p) => toMin(p.end) > n.min)) continue; // день уже прошёл
     await sendDay(
-      { ...d, title: `${prefix}, ${d.label}` },
-      `⚠️ Изменение в расписании: ${prefix.toLowerCase()}, ${d.label}`
-    );
+  { ...d, title: `${prefix}, ${d.label}` },
+  `⚠️ Изменение в расписании: ${prefix.toLowerCase()}, ${d.label}`,
+  event
+);
   }
   return { statusCode: 200 };
 };

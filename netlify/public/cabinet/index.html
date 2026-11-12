@@ -12,22 +12,30 @@
 html,body{background:var(--bg);color:var(--text);font-family:-apple-system,"Segoe UI",Roboto,sans-serif}
 body{padding:calc(var(--tg-safe-area-inset-top,0px) + var(--tg-content-safe-area-inset-top,0px) + 16px) 16px calc(env(safe-area-inset-bottom,0px) + 28px)}
 h1{font-size:26px}
+.i{display:inline-flex;width:1.2em;height:1.2em;flex:none}
+.i svg{width:100%;height:100%}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin svg{animation:spin 1s linear infinite}
 .hi{color:var(--muted);margin:4px 0 20px}
 .menu{display:grid;gap:12px}
-.item{display:flex;align-items:center;gap:14px;width:100%;text-align:left;background:var(--card);color:var(--text);border:0;border-radius:20px;padding:18px;font:inherit}
-.item .ic{font-size:30px}
+.item{display:flex;align-items:center;gap:14px;width:100%;text-align:left;background:var(--card);color:var(--text);border:0;border-radius:20px;padding:16px;font:inherit}
+.item .ic{width:48px;height:48px;flex:none;border-radius:14px;background:rgba(139,123,255,.15);color:var(--accent);display:flex;align-items:center;justify-content:center}
+.item .ic .i{width:26px;height:26px}
 .item b{display:block;font-size:18px}
 .item span{font-size:13px;color:var(--muted)}
 .card{background:var(--card);border-radius:20px;padding:16px;margin-bottom:12px}
 .row{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .row b{display:block;font-size:16px}
+.row b.ttl{display:flex;align-items:center;gap:8px}
+.ttl .i{color:var(--accent)}
 .btns{display:flex;gap:8px;flex:none}
-.sq{width:42px;height:42px;border-radius:12px;border:0;background:var(--line);color:var(--text);font-size:18px}
+.sq{width:42px;height:42px;border-radius:12px;border:0;background:var(--line);color:var(--text);display:flex;align-items:center;justify-content:center}
+.sq .i{width:20px;height:20px}
 .sq.play{background:var(--accent);color:#fff}
-.btn{width:100%;border:0;border-radius:16px;padding:14px;font:inherit;font-weight:700;background:var(--accent);color:#fff;margin-top:12px}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;border:0;border-radius:16px;padding:14px;font:inherit;font-weight:700;background:var(--accent);color:#fff;margin-top:12px}
 .btn:disabled{opacity:.45}
 .btn.ghost{background:var(--line);color:var(--text)}
-.link{background:none;border:0;color:var(--accent);font:inherit;margin-bottom:14px;padding:0}
+.link{display:inline-flex;align-items:center;gap:6px;background:none;border:0;color:var(--accent);font:inherit;margin-bottom:14px;padding:0}
 .muted{color:var(--muted);font-size:13px;margin-top:4px;line-height:1.4}
 .h3{font-weight:700;margin:16px 0 8px}
 .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
@@ -36,7 +44,7 @@ h1{font-size:26px}
 .st img{width:100%;height:100%;object-fit:contain}
 input[type=text]{width:100%;background:var(--card);border:0;border-radius:12px;padding:12px;color:var(--text);font:inherit;margin-bottom:8px}
 input[type=file]{display:none}
-.file{display:block;text-align:center;background:var(--card);border:1px dashed var(--line);border-radius:14px;padding:16px;color:var(--text)}
+.file{display:flex;align-items:center;justify-content:center;gap:8px;background:var(--card);border:1px dashed var(--line);border-radius:14px;padding:16px;color:var(--text)}
 #err{display:none;background:#2a1a20;color:var(--red);border-radius:14px;padding:12px;margin-bottom:12px;font-size:14px}
 #ok{display:none;background:#14251c;color:var(--green);border-radius:14px;padding:12px;margin-bottom:12px;font-size:14px}
 </style>
@@ -49,23 +57,23 @@ input[type=file]{display:none}
   <h1>Личный кабинет</h1>
   <div class="hi" id="hi">Загрузка…</div>
   <div class="menu">
-    <button class="item" id="go-schedule"><div class="ic">📅</div><div><b>Расписание</b><span>Открыть приложение с расписанием</span></div></button>
-    <button class="item" id="go-mine"><div class="ic">🎧</div><div><b>Мои звуки</b><span>Звуки на стикеры, которые добавил ты</span></div></button>
-    <button class="item" id="go-admin" hidden><div class="ic">🛠</div><div><b>Админка</b><span>Все звуки, удаление</span></div></button>
+    <button class="item" id="go-schedule"><div class="ic"><span class="i" data-i="calendar"></span></div><div><b>Расписание</b><span>Открыть приложение с расписанием</span></div></button>
+    <button class="item" id="go-mine"><div class="ic"><span class="i" data-i="headphones"></span></div><div><b>Мои звуки</b><span>Звуки на стикеры, которые добавил ты</span></div></button>
+    <button class="item" id="go-admin" hidden><div class="ic"><span class="i" data-i="shield"></span></div><div><b>Админка</b><span>Все звуки, удаление</span></div></button>
   </div>
 </div>
 
 <div id="mine" class="screen" hidden>
-  <button class="link" data-back>← Назад</button>
+  <button class="link" data-back><span class="i" data-i="back"></span>Назад</button>
   <h1>Мои звуки</h1>
-  <button class="btn" id="go-add">➕ Добавить звук</button>
+  <button class="btn" id="go-add"><span class="i" data-i="plus"></span>Добавить звук</button>
   <div class="h3">Добавленные</div>
   <div id="mine-list"></div>
   <div class="muted">Чужой стикер перезаписать нельзя. Заменить свой звук можно, добавив его заново.</div>
 </div>
 
 <div id="add" class="screen" hidden>
-  <button class="link" data-back>← Назад</button>
+  <button class="link" data-back><span class="i" data-i="back"></span>Назад</button>
   <h1>Новый звук</h1>
   <div class="h3">1. Выбери стикер</div>
   <input type="text" id="pack-name" placeholder="Название или ссылка набора">
@@ -74,13 +82,13 @@ input[type=file]{display:none}
   <div class="muted" id="grid-note"></div>
 
   <div class="h3">2. Выбери аудио</div>
-  <label class="file" for="file" id="file-label">Выбрать файл (mp3, m4a, ogg, до 30 сек)</label>
+  <label class="file" for="file" id="file-label"><span class="i" data-i="music"></span>Выбрать файл (mp3, m4a, ogg, до 30 сек)</label>
   <input type="file" id="file" accept="audio/*,.mp3,.m4a,.ogg,.oga,.opus,.wav">
-  <button class="btn" id="upload" disabled>Загрузить</button>
+  <button class="btn" id="upload" disabled><span class="i" data-i="upload"></span><span id="up-t">Загрузить</span></button>
 </div>
 
 <div id="admin" class="screen" hidden>
-  <button class="link" data-back>← Назад</button>
+  <button class="link" data-back><span class="i" data-i="back"></span>Назад</button>
   <h1>Админка</h1>
   <div class="hi">Все звуки. Удалить можно любой.</div>
   <div id="admin-list"></div>
@@ -103,6 +111,29 @@ const el = (tag, cls, text) => {
   if (text != null) e.textContent = text;
   return e;
 };
+
+/* ---------- иконки ---------- */
+const ICONS = {
+  calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+  headphones: '<path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/>',
+  shield: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/>',
+  plus: '<path d="M5 12h14M12 5v14"/>',
+  play: '<polygon points="6 3 20 12 6 21 6 3" fill="currentColor"/>',
+  pause: '<rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor"/><rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor"/>',
+  trash: '<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/>',
+  back: '<path d="m12 19-7-7 7-7M19 12H5"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  loader: '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>',
+  music: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+  upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>',
+  sticker: '<path d="M15.5 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3Z"/><path d="M15 3v6h6"/><path d="M8 13h.01"/><path d="M16 13h.01"/><path d="M10 16s.8 1 2 1c1.3 0 2-1 2-1"/>',
+};
+const svg = (n) =>
+  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]}</svg>`;
+const setIcon = (b, n) => { b.innerHTML = svg(n); };
+const ico = (n) => { const s = el("span", "i"); setIcon(s, n); return s; };
+document.querySelectorAll("[data-i]").forEach((e) => setIcon(e, e.dataset.i));
+
 let INFO = null, ITEMS = [], STICKERS = [], PICK = null, FILE = null;
 
 async function api(action, extra = {}) {
@@ -126,6 +157,9 @@ function ask(text, cb) {
   if (tg?.showConfirm) tg.showConfirm(text, (yes) => yes && cb());
   else if (confirm(text)) cb();
 }
+function setLabel(icon, text) {
+  $("#file-label").replaceChildren(ico(icon), document.createTextNode(text));
+}
 
 /* ---------- плеер ---------- */
 let AUD = null, PLAYING = null;
@@ -141,19 +175,24 @@ async function audioUrl(id) {
 function stopAudio() {
   if (AUD) { AUD.pause(); AUD = null; }
   PLAYING = null;
-  document.querySelectorAll(".play").forEach((b) => (b.textContent = "▶"));
+  document.querySelectorAll(".play").forEach((b) => {
+    b.classList.remove("spin");
+    setIcon(b, "play");
+  });
 }
 async function togglePlay(id, btn) {
   if (PLAYING === id) return stopAudio();
   stopAudio();
-  btn.textContent = "…";
+  setIcon(btn, "loader");
+  btn.classList.add("spin");
   try {
     const a = new Audio(await audioUrl(id));
     a.onended = stopAudio;
     AUD = a;
     PLAYING = id;
     await a.play();
-    btn.textContent = "⏸";
+    btn.classList.remove("spin");
+    setIcon(btn, "pause");
   } catch (e) {
     stopAudio();
     try {
@@ -180,14 +219,18 @@ function card(it, showOwner) {
   const c = el("div", "card");
   const row = el("div", "row");
   const left = el("div");
+  const ttl = el("b", "ttl");
+  ttl.append(ico("sticker"), el("span", null, it.set || "стикер"));
   left.append(
-    el("b", null, `${it.emoji || "🎭"} ${it.set || "стикер"}`),
+    ttl,
     el("div", "muted", showOwner ? `Добавил: ${it.ownerName}${it.mine ? " (ты)" : ""}` : it.kind === "audio" ? "Аудиофайл" : "Голосовое")
   );
   const btns = el("div", "btns");
-  const play = el("button", "sq play", "▶");
+  const play = el("button", "sq play");
+  setIcon(play, "play");
   play.onclick = () => togglePlay(it.id, play);
-  const del = el("button", "sq", "🗑");
+  const del = el("button", "sq");
+  setIcon(del, "trash");
   del.onclick = () =>
     ask("Удалить этот звук?", async () => {
       try {
@@ -231,7 +274,7 @@ function renderGrid() {
     const b = el("button", "st" + (PICK?.uid === s.uid ? " sel" : ""));
     const img = el("img");
     img.loading = "lazy";
-    img.alt = s.emoji || "";
+    img.alt = "";
     img.src = "/.netlify/functions/sticker-img?f=" + encodeURIComponent(s.thumb);
     b.append(img);
     b.onclick = () => { PICK = s; renderGrid(); updateUpload(); };
@@ -241,7 +284,7 @@ function renderGrid() {
 function openAdd() {
   PICK = null; FILE = null; STICKERS = [];
   $("#file").value = "";
-  $("#file-label").textContent = "Выбрать файл (mp3, m4a, ogg, до 30 сек)";
+  setLabel("music", "Выбрать файл (mp3, m4a, ogg, до 30 сек)");
   $("#pack-name").value = "";
   $("#grid-note").textContent = "Вставь название или ссылку набора стикеров (t.me/addstickers/…) и нажми «Найти».";
   renderGrid();
@@ -265,7 +308,7 @@ $("#file").onchange = (ev) => {
   const a = new Audio(URL.createObjectURL(f));
   const accept = () => {
     FILE = f;
-    $("#file-label").textContent = `✓ ${f.name}`;
+    setLabel("check", f.name);
     updateUpload();
   };
   a.onloadedmetadata = () => {
@@ -277,7 +320,7 @@ $("#file").onchange = (ev) => {
 
 $("#upload").onclick = async () => {
   $("#upload").disabled = true;
-  $("#upload").textContent = "Загружаю…";
+  $("#up-t").textContent = "Загружаю…";
   try {
     const audio = await new Promise((res, rej) => {
       const r = new FileReader();
@@ -295,7 +338,7 @@ $("#upload").onclick = async () => {
     show("mine");
     note("#ok", "Готово! Звук добавлен. Бот прислал его тебе в личку для проверки.", 5000);
   } catch (e) { fail(e); }
-  $("#upload").textContent = "Загрузить";
+  $("#up-t").textContent = "Загрузить";
   updateUpload();
 };
 

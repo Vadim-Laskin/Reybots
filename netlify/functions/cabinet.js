@@ -55,10 +55,12 @@ async function sendFile(chat, buf, filename) {
       return { file_id: f.file_id, kind };
     }
   }
-  return { error: "Не удалось отправить файл в Telegram. Пришли боту /start в личку и попробуй другой файл" };
+  return {
+    error: "Не удалось отправить файл в Telegram. Напиши боту /start в личку и попробуй другой файл",
+  };
 }
 
-exports.handler = async (event) => {
+async function main(event) {
   if (event.httpMethod !== "POST") return out(405, { error: "Только POST" });
   let body;
   try {
@@ -87,19 +89,16 @@ exports.handler = async (event) => {
     const items = Object.entries(sounds)
       .filter(([, s]) => admin || s.owner === user.id)
       .map(([id, s]) => ({
-        id, emoji: s.emoji, set: s.set, kind: s.kind,
-        ownerName: s.ownerName, mine: s.owner === user.id, ts: s.ts,
+        id,
+        emoji: s.emoji,
+        set: s.set,
+        kind: s.kind,
+        ownerName: s.ownerName,
+        mine: s.owner === user.id,
+        ts: s.ts,
       }))
       .sort((a, b) => b.ts - a.ts);
     return out(200, { items });
-  }
-
-  if (body.action === "seen") {
-    let seen = [];
-    try {
-      seen = (await st.get("seen", { type: "json" })) || [];
-    } catch {}
-    return out(200, { stickers: seen.map(({ uid, thumb, emoji, set }) => ({ uid, thumb, emoji, set })) });
   }
 
   if (body.action === "pack") {
@@ -121,7 +120,9 @@ exports.handler = async (event) => {
   }
 
   if (body.action === "upload") {
-    if (!(await isMember(user.id))) return out(403, { error: "Добавлять звуки могут только участники группы" });
+    if (!(await isMember(user.id))) {
+      return out(403, { error: "Добавлять звуки могут только участники группы" });
+    }
     const id = String(body.id || "");
     if (!/^[\w-]{1,100}$/.test(id)) return out(400, { error: "Не выбран стикер" });
 
@@ -135,7 +136,9 @@ exports.handler = async (event) => {
     }
 
     const buf = Buffer.from(String(body.audio || ""), "base64");
-    if (!buf.length || buf.length > MAX_BYTES) return out(400, { error: "Файл пустой или больше 4 МБ" });
+    if (!buf.length || buf.length > MAX_BYTES) {
+      return out(400, { error: "Файл пустой или больше 4 МБ" });
+    }
 
     const sent = await sendFile(user.id, buf, String(body.filename || "sound.mp3").slice(0, 80));
     if (sent.error) return out(400, { error: sent.error });
@@ -162,7 +165,10 @@ exports.handler = async (event) => {
     const r = await fetch(tgUrl(method), {
       method: "POST",
       headers: H,
-      body: JSON.stringify({ chat_id: user.id, [s.kind === "audio" ? "audio" : "voice"]: s.file_id }),
+      body: JSON.stringify({
+        chat_id: user.id,
+        [s.kind === "audio" ? "audio" : "voice"]: s.file_id,
+      }),
     });
     const j = await r.json();
     if (!j.ok) return out(502, { error: j.description });
@@ -176,4 +182,13 @@ exports.handler = async (event) => {
   }
 
   return out(400, { error: "Неизвестное действие" });
+}
+
+exports.handler = async (event) => {
+  try {
+    return await main(event);
+  } catch (e) {
+    console.log("cabinet error:", e.stack);
+    return out(500, { error: "Ошибка сервера: " + e.message });
+  }
 };

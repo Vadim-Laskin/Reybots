@@ -23,15 +23,13 @@ h1{font-size:26px}
 .row b{display:block;font-size:16px}
 .btns{display:flex;gap:8px;flex:none}
 .sq{width:42px;height:42px;border-radius:12px;border:0;background:var(--line);color:var(--text);font-size:18px}
+.sq.play{background:var(--accent);color:#fff}
 .btn{width:100%;border:0;border-radius:16px;padding:14px;font:inherit;font-weight:700;background:var(--accent);color:#fff;margin-top:12px}
 .btn:disabled{opacity:.45}
 .btn.ghost{background:var(--line);color:var(--text)}
 .link{background:none;border:0;color:var(--accent);font:inherit;margin-bottom:14px;padding:0}
 .muted{color:var(--muted);font-size:13px;margin-top:4px;line-height:1.4}
 .h3{font-weight:700;margin:16px 0 8px}
-.tabs{display:flex;gap:8px;margin-bottom:12px}
-.tabs button{flex:1;border:0;border-radius:12px;padding:10px;font:inherit;background:var(--card);color:var(--muted)}
-.tabs button.on{background:var(--accent);color:#fff}
 .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .st{aspect-ratio:1;background:var(--card);border:2px solid transparent;border-radius:14px;padding:6px}
 .st.sel{border-color:var(--accent)}
@@ -70,10 +68,8 @@ input[type=file]{display:none}
   <button class="link" data-back>← Назад</button>
   <h1>Новый звук</h1>
   <div class="h3">1. Выбери стикер</div>
-  <div id="pane-pack">
-    <input type="text" id="pack-name" placeholder="Название или ссылка набора">
-    <button class="btn ghost" id="pack-find" style="margin-top:0;margin-bottom:12px">Найти</button>
-  </div>
+  <input type="text" id="pack-name" placeholder="Название или ссылка набора">
+  <button class="btn ghost" id="pack-find" style="margin-top:0;margin-bottom:12px">Найти</button>
   <div class="grid" id="grid"></div>
   <div class="muted" id="grid-note"></div>
 
@@ -107,7 +103,7 @@ const el = (tag, cls, text) => {
   if (text != null) e.textContent = text;
   return e;
 };
-let INFO = null, ITEMS = [], STICKERS = [], PICK = null, FILE = null, TAB = "seen";
+let INFO = null, ITEMS = [], STICKERS = [], PICK = null, FILE = null;
 
 async function api(action, extra = {}) {
   const r = await fetch("/.netlify/functions/cabinet", {
@@ -130,7 +126,46 @@ function ask(text, cb) {
   if (tg?.showConfirm) tg.showConfirm(text, (yes) => yes && cb());
   else if (confirm(text)) cb();
 }
+
+/* ---------- плеер ---------- */
+let AUD = null, PLAYING = null;
+const URLS = {};
+async function audioUrl(id) {
+  if (URLS[id]) return URLS[id];
+  const j = await api("audio", { id });
+  const bin = atob(j.data);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return (URLS[id] = URL.createObjectURL(new Blob([bytes], { type: j.mime })));
+}
+function stopAudio() {
+  if (AUD) { AUD.pause(); AUD = null; }
+  PLAYING = null;
+  document.querySelectorAll(".play").forEach((b) => (b.textContent = "▶"));
+}
+async function togglePlay(id, btn) {
+  if (PLAYING === id) return stopAudio();
+  stopAudio();
+  btn.textContent = "…";
+  try {
+    const a = new Audio(await audioUrl(id));
+    a.onended = stopAudio;
+    AUD = a;
+    PLAYING = id;
+    await a.play();
+    btn.textContent = "⏸";
+  } catch (e) {
+    stopAudio();
+    try {
+      await api("play", { id });
+      note("#ok", "Здесь звук не воспроизводится, отправил его в чат с ботом", 4000);
+    } catch (e2) { fail(e2); }
+  }
+}
+
+/* ---------- навигация ---------- */
 function show(id) {
+  stopAudio();
   document.querySelectorAll(".screen").forEach((s) => (s.hidden = s.id !== id));
   if (tg) id === "home" ? tg.BackButton.hide() : tg.BackButton.show();
   window.scrollTo(0, 0);
@@ -150,12 +185,18 @@ function card(it, showOwner) {
     el("div", "muted", showOwner ? `Добавил: ${it.ownerName}${it.mine ? " (ты)" : ""}` : it.kind === "audio" ? "Аудиофайл" : "Голосовое")
   );
   const btns = el("div", "btns");
-  const play = el("button", "sq", "▶");
-  play.onclick = async () => { try { await api("play", { id: it.id }); } catch (e) { fail(e); } };
+  const play = el("button", "sq play", "▶");
+  play.onclick = () => togglePlay(it.id, play);
   const del = el("button", "sq", "🗑");
   del.onclick = () =>
     ask("Удалить этот звук?", async () => {
-      try { await api("delete", { id: it.id }); await refresh(); } catch (e) { fail(e); }
+      try {
+        await api("delete", { id: it.id });
+        if (PLAYING === it.id) stopAudio();
+        delete URLS[it.id];
+        ITEMS = ITEMS.filter((x) => x.id !== it.id);
+        renderLists();
+      } catch (e) { fail(e); }
     });
   btns.append(play, del);
   row.append(left, btns);
@@ -163,6 +204,7 @@ function card(it, showOwner) {
   return c;
 }
 function renderLists() {
+  stopAudio();
   const mine = $("#mine-list"), all = $("#admin-list");
   mine.replaceChildren();
   all.replaceChildren();
@@ -243,8 +285,13 @@ $("#upload").onclick = async () => {
       r.onerror = () => rej(new Error("Не удалось прочитать файл"));
       r.readAsDataURL(FILE);
     });
-    await api("upload", { id: PICK.uid, emoji: PICK.emoji, set: PICK.set, audio, filename: FILE.name });
-    await refresh();
+    const r = await api("upload", {
+      id: PICK.uid, emoji: PICK.emoji, set: PICK.set,
+      audio, filename: FILE.name, mime: FILE.type || "audio/mpeg",
+    });
+    delete URLS[r.item.id];
+    ITEMS = [r.item, ...ITEMS.filter((x) => x.id !== r.item.id)];
+    renderLists();
     show("mine");
     note("#ok", "Готово! Звук добавлен. Бот прислал его тебе в личку для проверки.", 5000);
   } catch (e) { fail(e); }
@@ -252,7 +299,7 @@ $("#upload").onclick = async () => {
   updateUpload();
 };
 
-/* ---------- навигация ---------- */
+/* ---------- запуск ---------- */
 tg?.BackButton.onClick(back);
 document.querySelectorAll("[data-back]").forEach((b) => (b.onclick = back));
 $("#go-mine").onclick = () => show("mine");

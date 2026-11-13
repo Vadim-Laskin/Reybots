@@ -17,12 +17,14 @@ h1{font-size:26px}
 @keyframes spin{to{transform:rotate(360deg)}}
 .spin svg{animation:spin 1s linear infinite}
 .hi{color:var(--muted);margin:4px 0 20px}
+
 .menu{display:grid;gap:12px}
 .item{display:flex;align-items:center;gap:14px;width:100%;text-align:left;background:var(--card);color:var(--text);border:0;border-radius:20px;padding:16px;font:inherit}
 .item .ic{width:48px;height:48px;flex:none;border-radius:14px;background:rgba(139,123,255,.15);color:var(--accent);display:flex;align-items:center;justify-content:center}
 .item .ic .i{width:26px;height:26px}
 .item b{display:block;font-size:18px}
-.item span{font-size:13px;color:var(--muted)}
+.item b+span{font-size:13px;color:var(--muted)}
+
 .card{background:var(--card);border-radius:20px;padding:16px;margin-bottom:12px;cursor:pointer}
 .row{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .row b{display:block;font-size:16px}
@@ -38,6 +40,7 @@ h1{font-size:26px}
 .link{display:inline-flex;align-items:center;gap:6px;background:none;border:0;color:var(--accent);font:inherit;margin-bottom:14px;padding:0}
 .muted{color:var(--muted);font-size:13px;margin-top:4px;line-height:1.4}
 .h3{font-weight:700;margin:16px 0 8px}
+
 .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .st{aspect-ratio:1;background:var(--card);border:2px solid transparent;border-radius:14px;padding:6px}
 .st.sel{border-color:var(--accent)}
@@ -47,6 +50,23 @@ input[type=file]{display:none}
 .file{display:flex;align-items:center;justify-content:center;gap:8px;background:var(--card);border:1px dashed var(--line);border-radius:14px;padding:16px;color:var(--text)}
 #err{display:none;background:#2a1a20;color:var(--red);border-radius:14px;padding:12px;margin-bottom:12px;font-size:14px}
 #ok{display:none;background:#14251c;color:var(--green);border-radius:14px;padding:12px;margin-bottom:12px;font-size:14px}
+
+.now{background:var(--card);border:1.5px solid var(--line);border-radius:20px;padding:16px;margin-bottom:14px;cursor:pointer}
+.now.live{border-color:var(--green)}
+.now-h{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.now.live .now-h{color:var(--green)}
+.now-s{font-size:18px;font-weight:700;margin-top:10px}
+.now-m{color:var(--muted);font-size:14px;margin-top:2px}
+.now-x{color:var(--text);font-weight:600;margin-top:10px}
+.bar{height:4px;border-radius:2px;background:var(--line);margin-top:12px}
+.bar i{display:block;height:100%;background:var(--green);border-radius:2px}
+.card.bell{display:flex;gap:14px;align-items:center;cursor:default}
+.bell-n{width:44px;height:44px;flex:none;border-radius:12px;background:rgba(139,123,255,.15);color:var(--accent);font-size:22px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.bell-t{flex:1}
+.bell-r{display:flex;justify-content:space-between;gap:12px;padding:3px 0}
+.bell-r b{font-size:16px}
+.bell-r span{font-size:13px;color:var(--muted)}
+
 #modal{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;justify-content:center}
 .sheet{position:relative;width:100%;max-width:480px;background:var(--card);border-radius:24px 24px 0 0;padding:24px 20px calc(env(safe-area-inset-bottom,0px) + 20px);text-align:center}
 .x{position:absolute;top:12px;right:12px;width:36px;height:36px;border-radius:12px;border:0;background:var(--line);color:var(--text);display:flex;align-items:center;justify-content:center}
@@ -65,8 +85,16 @@ input[type=file]{display:none}
 <div id="home" class="screen">
   <h1>Личный кабинет</h1>
   <div class="hi" id="hi">Загрузка…</div>
+
+  <div class="now" id="now" hidden>
+    <div class="now-h"><span class="i" data-i="clock"></span><span id="now-t"></span></div>
+    <div id="now-b"></div>
+    <div class="bar" id="now-bar" hidden><i></i></div>
+  </div>
+
   <div class="menu">
     <button class="item" id="go-schedule"><div class="ic"><span class="i" data-i="calendar"></span></div><div><b>Расписание</b><span>Открыть приложение с расписанием</span></div></button>
+    <button class="item" id="go-bells"><div class="ic"><span class="i" data-i="bell"></span></div><div><b>Расписание звонков</b><span>Время начала и конца пар</span></div></button>
     <button class="item" id="go-mine"><div class="ic"><span class="i" data-i="headphones"></span></div><div><b>Мои звуки</b><span>Звуки на стикеры, которые добавил ты</span></div></button>
     <button class="item" id="go-admin" hidden><div class="ic"><span class="i" data-i="shield"></span></div><div><b>Админка</b><span>Все звуки, удаление</span></div></button>
   </div>
@@ -78,7 +106,7 @@ input[type=file]{display:none}
   <button class="btn" id="go-add"><span class="i" data-i="plus"></span>Добавить звук</button>
   <div class="h3">Добавленные</div>
   <div id="mine-list"></div>
-  <div class="muted">Чужой стикер перезаписать нельзя. Заменить свой звук можно, добавив его заново.</div>
+  <div class="muted">Нажми на звук, чтобы увидеть его стикер. Чужой стикер перезаписать нельзя. Заменить свой звук можно, добавив его заново.</div>
 </div>
 
 <div id="add" class="screen" hidden>
@@ -94,6 +122,13 @@ input[type=file]{display:none}
   <label class="file" for="file" id="file-label"><span class="i" data-i="music"></span>Выбрать файл (mp3, m4a, ogg, до 30 сек)</label>
   <input type="file" id="file" accept="audio/*,.mp3,.m4a,.ogg,.oga,.opus,.wav">
   <button class="btn" id="upload" disabled><span class="i" data-i="upload"></span><span id="up-t">Загрузить</span></button>
+</div>
+
+<div id="bells" class="screen" hidden>
+  <button class="link" data-back><span class="i" data-i="back"></span>Назад</button>
+  <h1>Расписание звонков</h1>
+  <div class="hi">Время пар по данным расписания на сайте</div>
+  <div id="bells-list"></div>
 </div>
 
 <div id="admin" class="screen" hidden>
@@ -150,6 +185,8 @@ const ICONS = {
   upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>',
   sticker: '<path d="M15.5 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3Z"/><path d="M15 3v6h6"/><path d="M8 13h.01"/><path d="M16 13h.01"/><path d="M10 16s.8 1 2 1c1.3 0 2-1 2-1"/>',
   close: '<path d="M18 6 6 18M6 6l12 12"/>',
+  bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+  clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
 };
 const svg = (n) =>
   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]}</svg>`;
@@ -279,6 +316,7 @@ function card(it, showOwner) {
   c.append(row);
   return c;
 }
+
 function renderLists() {
   stopAudio();
   const mine = $("#mine-list"), all = $("#admin-list");
@@ -362,7 +400,7 @@ $("#upload").onclick = async () => {
       r.readAsDataURL(FILE);
     });
     const r = await api("upload", {
-            id: PICK.uid, emoji: PICK.emoji, set: PICK.set, thumb: PICK.thumb,
+      id: PICK.uid, emoji: PICK.emoji, set: PICK.set, thumb: PICK.thumb,
       audio, filename: FILE.name, mime: FILE.type || "audio/mpeg",
     });
     delete URLS[r.item.id];
@@ -414,12 +452,122 @@ $("#modal").onclick = (e) => { if (e.target === $("#modal")) closeModal(); };
 $("#m-play").onclick = () => CUR && togglePlay(CUR.id, $("#m-play"));
 $("#m-del").onclick = () => CUR && askDelete(CUR, closeModal);
 
+/* ---------- «Сейчас» и звонки ---------- */
+let SCH = null;
+const toMin = (s) => { const [a, b] = s.split(":").map(Number); return a * 60 + b; };
+const fmtMin = (m) => (m < 60 ? `${m} мин` : `${Math.floor(m / 60)} ч${m % 60 ? ` ${m % 60} мин` : ""}`);
+function nsk() {
+  const d = new Date(Date.now() + 7 * 3600e3);
+  return { date: d.toISOString().slice(0, 10), min: d.getUTCHours() * 60 + d.getUTCMinutes() };
+}
+const activePairs = (day) => day.pairs.filter((p) => !p.entries.every((e) => e.cancelled));
+
+function pairLines(p) {
+  const frag = document.createDocumentFragment();
+  p.entries.forEach((e) => {
+    if (e.cancelled) return;
+    frag.append(
+      el("div", "now-s", (e.sg ? `${e.sg} подгр. · ` : "") + e.subject),
+      el("div", "now-m", [e.teacher, e.room].filter(Boolean).join(" · "))
+    );
+  });
+  return frag;
+}
+
+function renderNow() {
+  const box = $("#now");
+  if (!SCH?.days?.length) { box.hidden = true; return; }
+  const n = nsk();
+  const today = SCH.days.find((d) => d.date === n.date);
+  const list = today ? activePairs(today) : [];
+  const live = list.find((p) => toMin(p.start) <= n.min && n.min < toMin(p.end));
+  const next = list.find((p) => toMin(p.start) > n.min);
+
+  let title, pair = null, extra, pct = null;
+  if (live) {
+    const s = toMin(live.start), e = toMin(live.end);
+    title = `Идёт ${live.num}-я пара`;
+    pair = live;
+    extra = `Осталось ${e - n.min} мин (до ${live.end})`;
+    pct = Math.round(((n.min - s) / (e - s)) * 100);
+  } else if (next) {
+    title = `Следующая: ${next.num}-я пара`;
+    pair = next;
+    extra = `Начало в ${next.start}, через ${fmtMin(toMin(next.start) - n.min)}`;
+  } else {
+    const nd = SCH.days.find((d) => d.date > n.date && activePairs(d).length);
+    title = list.length ? "На сегодня всё" : "Сегодня занятий нет";
+    if (nd) {
+      pair = activePairs(nd)[0];
+      extra = `Ближайшая пара: ${nd.weekday.toLowerCase()}, ${nd.label}, в ${pair.start}`;
+    } else extra = "Ближайших занятий в расписании нет";
+  }
+
+  box.classList.toggle("live", !!live);
+  $("#now-t").textContent = title;
+  const b = $("#now-b");
+  b.replaceChildren();
+  if (pair) b.append(pairLines(pair));
+  b.append(el("div", "now-x", extra));
+  if (SCH.stale) b.append(el("div", "now-m", "Сайт natk.ru недоступен, данные могут быть устаревшими"));
+  const bar = $("#now-bar");
+  bar.hidden = pct == null;
+  if (pct != null) bar.firstElementChild.style.width = pct + "%";
+  box.hidden = false;
+}
+
+const WD_ORDER = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
+const WD_SHORT = { Понедельник: "Пн", Вторник: "Вт", Среда: "Ср", Четверг: "Чт", Пятница: "Пт", Суббота: "Сб", Воскресенье: "Вс" };
+function renderBells() {
+  const box = $("#bells-list");
+  box.replaceChildren();
+  const grid = {};
+  (SCH?.days || []).forEach((d) =>
+    d.pairs.forEach((p) => {
+      const key = `${p.start}–${p.end}`;
+      grid[p.num] = grid[p.num] || {};
+      grid[p.num][key] = grid[p.num][key] || new Set();
+      grid[p.num][key].add(d.weekday);
+    })
+  );
+  const nums = Object.keys(grid).sort();
+  if (!nums.length) {
+    box.append(el("div", "muted", "Данных пока нет, попробуй позже."));
+    return;
+  }
+  nums.forEach((num) => {
+    const c = el("div", "card bell");
+    const right = el("div", "bell-t");
+    Object.entries(grid[num]).sort().forEach(([time, set]) => {
+      const days = WD_ORDER.filter((w) => set.has(w)).map((w) => WD_SHORT[w] || w.slice(0, 2)).join(", ");
+      const row = el("div", "bell-r");
+      row.append(el("b", null, time), el("span", null, days));
+      right.append(row);
+    });
+    c.append(el("div", "bell-n", num), right);
+    box.append(c);
+  });
+}
+
+async function loadSchedule() {
+  try {
+    const r = await fetch("/.netlify/functions/schedule-data", { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    SCH = await r.json();
+  } catch (e) {
+    console.log("schedule load failed:", e.message);
+  }
+  renderNow();
+  renderBells();
+}
+
 /* ---------- запуск ---------- */
 tg?.BackButton.onClick(back);
 document.querySelectorAll("[data-back]").forEach((b) => (b.onclick = back));
 $("#go-mine").onclick = () => show("mine");
 $("#go-add").onclick = openAdd;
 $("#go-admin").onclick = () => INFO?.isAdmin && show("admin");
+$("#go-bells").onclick = () => show("bells");
 
 $("#go-schedule").onclick = () => {
   if (!INFO?.appLink) return fail(new Error("Не задана ссылка на расписание (APP_LINK)"));
@@ -428,6 +576,7 @@ $("#go-schedule").onclick = () => {
     setTimeout(() => tg.close(), 400);
   } else location.href = INFO.appLink;
 };
+$("#now").onclick = () => $("#go-schedule").click();
 
 api("info")
   .then(async (j) => {
@@ -437,6 +586,11 @@ api("info")
     await refresh();
   })
   .catch((e) => { $("#hi").textContent = ""; fail(e); });
+
+loadSchedule();
+setInterval(renderNow, 30000);
+setInterval(loadSchedule, 5 * 60000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) loadSchedule(); });
 </script>
 </body>
 </html>

@@ -26,6 +26,7 @@ h1{font-size:26px}
 .item b+span{font-size:13px;color:var(--muted)}
 
 .card{background:var(--card);border-radius:20px;padding:16px;margin-bottom:12px;cursor:pointer}
+.card.person{cursor:default}
 .row{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .row b{display:block;font-size:16px}
 .row b.ttl{display:flex;align-items:center;gap:8px}
@@ -40,6 +41,10 @@ h1{font-size:26px}
 .link{display:inline-flex;align-items:center;gap:6px;background:none;border:0;color:var(--accent);font:inherit;margin-bottom:14px;padding:0}
 .muted{color:var(--muted);font-size:13px;margin-top:4px;line-height:1.4}
 .h3{font-weight:700;margin:16px 0 8px}
+
+.seg{display:flex;gap:6px;margin-top:10px}
+.seg button{flex:1;border:0;border-radius:10px;padding:10px 0;background:var(--line);color:var(--text);font:inherit;font-weight:700}
+.seg button.on{background:var(--accent);color:#fff}
 
 .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .st{aspect-ratio:1;background:var(--card);border:2px solid transparent;border-radius:14px;padding:6px}
@@ -97,6 +102,7 @@ input[type=file]{display:none}
     <button class="item" id="go-bells"><div class="ic"><span class="i" data-i="bell"></span></div><div><b>Расписание звонков</b><span>Время начала и конца пар</span></div></button>
     <button class="item" id="go-mine"><div class="ic"><span class="i" data-i="headphones"></span></div><div><b>Мои звуки</b><span>Звуки на стикеры, которые добавил ты</span></div></button>
     <button class="item" id="go-admin" hidden><div class="ic"><span class="i" data-i="shield"></span></div><div><b>Админка</b><span>Все звуки, удаление</span></div></button>
+    <button class="item" id="go-people" hidden><div class="ic"><span class="i" data-i="users"></span></div><div><b>Подгруппы</b><span>Кто в какой подгруппе</span></div></button>
   </div>
 </div>
 
@@ -138,6 +144,14 @@ input[type=file]{display:none}
   <div id="admin-list"></div>
 </div>
 
+<div id="people" class="screen" hidden>
+  <button class="link" data-back><span class="i" data-i="back"></span>Назад</button>
+  <h1>Подгруппы</h1>
+  <div class="hi">Подгруппа влияет только на карточку «Что сейчас» в кабинете. Без подгруппы («Все») человек видит все пары. В самом расписании всегда показаны все подгруппы.</div>
+  <div id="people-list"></div>
+  <div class="muted">Здесь только те, кто хотя бы раз открывал кабинет.</div>
+</div>
+
 <div id="modal" hidden>
   <div class="sheet">
     <button class="x" id="modal-x" aria-label="Закрыть"><span class="i" data-i="close"></span></button>
@@ -174,6 +188,7 @@ const ICONS = {
   calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
   headphones: '<path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/>',
   shield: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/>',
+  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
   plus: '<path d="M5 12h14M12 5v14"/>',
   play: '<polygon points="6 3 20 12 6 21 6 3" fill="currentColor"/>',
   pause: '<rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor"/><rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor"/>',
@@ -198,7 +213,7 @@ const setIcon = (b, n) => {
 const ico = (n) => { const s = el("span", "i"); setIcon(s, n); return s; };
 document.querySelectorAll("[data-i]").forEach((e) => setIcon(e, e.dataset.i));
 
-let INFO = null, ITEMS = [], STICKERS = [], PICK = null, FILE = null;
+let INFO = null, ITEMS = [], STICKERS = [], PICK = null, FILE = null, PEOPLE = [];
 
 async function api(action, extra = {}) {
   const r = await fetch("/.netlify/functions/cabinet", {
@@ -223,6 +238,11 @@ function ask(text, cb) {
 }
 function setLabel(icon, text) {
   $("#file-label").replaceChildren(ico(icon), document.createTextNode(text));
+}
+function updateHi() {
+  if (!INFO) return;
+  $("#hi").textContent =
+    (INFO.name ? `Привет, ${INFO.name}!` : "Привет!") + (INFO.sg ? ` Подгруппа ${INFO.sg}.` : "");
 }
 
 /* ---------- плеер ---------- */
@@ -452,6 +472,50 @@ $("#modal").onclick = (e) => { if (e.target === $("#modal")) closeModal(); };
 $("#m-play").onclick = () => CUR && togglePlay(CUR.id, $("#m-play"));
 $("#m-del").onclick = () => CUR && askDelete(CUR, closeModal);
 
+/* ---------- подгруппы (только админ) ---------- */
+async function openPeople() {
+  show("people");
+  const box = $("#people-list");
+  box.replaceChildren(el("div", "muted", "Загрузка…"));
+  try {
+    PEOPLE = (await api("people")).people;
+    renderPeople();
+  } catch (e) {
+    box.replaceChildren();
+    fail(e);
+  }
+}
+function renderPeople() {
+  const box = $("#people-list");
+  box.replaceChildren();
+  if (!PEOPLE.length) {
+    box.append(el("div", "muted", "Пока никто не открывал кабинет."));
+    return;
+  }
+  PEOPLE.forEach((p) => {
+    const c = el("div", "card person");
+    c.append(
+      el("b", null, p.name || "Без имени"),
+      el("div", "muted", (p.username ? "@" + p.username : "без username") + (INFO && p.id === INFO.id ? " · это ты" : ""))
+    );
+    const seg = el("div", "seg");
+    [[1, "1"], [2, "2"], [0, "Все"]].forEach(([v, label]) => {
+      const b = el("button", p.sg === v ? "on" : "", label);
+      b.onclick = async () => {
+        try {
+          await api("setsg", { id: p.id, sg: v });
+          p.sg = v;
+          if (INFO && p.id === INFO.id) { INFO.sg = v; updateHi(); renderNow(); }
+          renderPeople();
+        } catch (e) { fail(e); }
+      };
+      seg.append(b);
+    });
+    c.append(seg);
+    box.append(c);
+  });
+}
+
 /* ---------- «Сейчас» и звонки ---------- */
 let SCH = null;
 const toMin = (s) => { const [a, b] = s.split(":").map(Number); return a * 60 + b; };
@@ -460,14 +524,16 @@ function nsk() {
   const d = new Date(Date.now() + 7 * 3600e3);
   return { date: d.toISOString().slice(0, 10), min: d.getUTCHours() * 60 + d.getUTCMinutes() };
 }
-const activePairs = (day) => day.pairs.filter((p) => !p.entries.every((e) => e.cancelled));
+// записи пары, которые касаются меня (без отмен); без подгруппы показываем все
+const mySg = () => INFO?.sg || 0;
+const mine = (p) => p.entries.filter((e) => !e.cancelled && (!mySg() || !e.sg || e.sg === mySg()));
+const activePairs = (day) => day.pairs.filter((p) => mine(p).length);
 
 function pairLines(p) {
   const frag = document.createDocumentFragment();
-  p.entries.forEach((e) => {
-    if (e.cancelled) return;
+  mine(p).forEach((e) => {
     frag.append(
-      el("div", "now-s", (e.sg ? `${e.sg} подгр. · ` : "") + e.subject),
+      el("div", "now-s", (e.sg && !mySg() ? `${e.sg} подгр. · ` : "") + e.subject),
       el("div", "now-m", [e.teacher, e.room].filter(Boolean).join(" · "))
     );
   });
@@ -567,6 +633,7 @@ document.querySelectorAll("[data-back]").forEach((b) => (b.onclick = back));
 $("#go-mine").onclick = () => show("mine");
 $("#go-add").onclick = openAdd;
 $("#go-admin").onclick = () => INFO?.isAdmin && show("admin");
+$("#go-people").onclick = () => INFO?.isAdmin && openPeople();
 $("#go-bells").onclick = () => show("bells");
 
 $("#go-schedule").onclick = () => {
@@ -581,8 +648,10 @@ $("#now").onclick = () => $("#go-schedule").click();
 api("info")
   .then(async (j) => {
     INFO = j;
-    $("#hi").textContent = j.name ? `Привет, ${j.name}!` : "Привет!";
+    updateHi();
     $("#go-admin").hidden = !j.isAdmin;
+    $("#go-people").hidden = !j.isAdmin;
+    renderNow();
     await refresh();
   })
   .catch((e) => { $("#hi").textContent = ""; fail(e); });

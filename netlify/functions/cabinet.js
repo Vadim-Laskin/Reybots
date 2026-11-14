@@ -8,6 +8,16 @@ const MAX_BYTES = 4 * 1024 * 1024;
 const H = { "Content-Type": "application/json" };
 const out = (code, obj) => ({ statusCode: code, headers: H, body: JSON.stringify(obj) });
 const tgUrl = (m) => `https://api.telegram.org/bot${process.env.BOT_TOKEN}/${m}`;
+const personKey = (id) => "person-" + id;
+
+async function getPerson(st, id) {
+  try {
+    return await st.get(personKey(id), { type: "json" });
+  } catch (e) {
+    console.log("person read failed:", e.message);
+    return null;
+  }
+}
 
 function verify(initData) {
   const p = new URLSearchParams(initData);
@@ -75,20 +85,65 @@ async function main(event) {
   const st = store(event);
   const admin = isAdmin(user.id);
 
+  /* ---------- профиль и подгруппы ---------- */
   if (body.action === "info") {
+    const name = user.first_name || "";
+    const username = user.username || "";
+    let p = await getPerson(st, user.id);
+    if (!p || p.name !== name || p.username !== username) {
+      p = { ...(p || { sg: 0 }), id: user.id, name, username, ts: Date.now() };
+      try {
+        await st.setJSON(personKey(user.id), p);
+      } catch (e) {
+        console.log("person save failed:", e.message);
+      }
+    }
     return out(200, {
-      name: user.first_name || "",
+      id: user.id,
+      name,
       isAdmin: admin,
       appLink: process.env.APP_LINK || "",
+      sg: p.sg || 0,
     });
   }
 
+  if (body.action === "people") {
+    if (!admin) return out(403, { error: "Только для админа" });
+    let list = [];
+    try {
+      const { blobs } = await st.list({ prefix: "person-" });
+      list = (
+        await Promise.all(blobs.map((b) => st.get(b.key, { type: "json" }).catch(() => null)))
+      ).filter(Boolean);
+    } catch (e) {
+      console.log("people list failed:", e.message);
+    }
+    list.sort((a, b) => String(a.name).localeCompare(String(b.name), "ru"));
+    return out(200, {
+      people: list.map((p) => ({ id: p.id, name: p.name, username: p.username, sg: p.sg || 0 })),
+    });
+  }
+
+  if (body.action === "setsg") {
+    if (!admin) return out(403, { error: "Только для админа" });
+    const sg = Number(body.sg);
+    if (![0, 1, 2].includes(sg)) return out(400, { error: "Подгруппа 1, 2 или без подгруппы" });
+    const id = String(body.id || "");
+    if (!/^\d{1,20}$/.test(id)) return out(400, { error: "Плохой id" });
+    const p = await getPerson(st, id);
+    if (!p) return out(404, { error: "Человек не найден" });
+    p.sg = sg;
+    await st.setJSON(personKey(id), p);
+    return out(200, { ok: true });
+  }
+
+  /* ---------- звуки ---------- */
   const sounds = await load(st);
 
   if (body.action === "list") {
     const items = Object.entries(sounds)
       .filter(([, s]) => admin || s.owner === user.id)
-            .map(([id, s]) => ({
+      .map(([id, s]) => ({
         id,
         emoji: s.emoji,
         set: s.set,
@@ -198,7 +253,7 @@ async function main(event) {
     }
     return out(200, { thumb });
   }
-  
+
   if (body.action === "audio") {
     let copy = null;
     try {

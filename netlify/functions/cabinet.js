@@ -10,6 +10,46 @@ const out = (code, obj) => ({ statusCode: code, headers: H, body: JSON.stringify
 const tgUrl = (m) => `https://api.telegram.org/bot${process.env.BOT_TOKEN}/${m}`;
 const personKey = (id) => "person-" + id;
 
+const STATUS = {
+  review: "На проверке",
+  planned: "Принято",
+  dev: "Разрабатывается",
+  done: "Разработано",
+  rejected: "Отказано",
+};
+const adminList = () =>
+  (process.env.ADMIN_IDS || "").split(",").map((s) => s.trim()).filter(Boolean);
+
+async function dm(chat, text) {
+  try {
+    await fetch(tgUrl("sendMessage"), {
+      method: "POST",
+      headers: H,
+      body: JSON.stringify({ chat_id: chat, text }),
+    });
+  } catch (e) {
+    console.log("dm failed:", e.message);
+  }
+}
+
+async function loadIdeas(st) {
+  try {
+    return (await st.get("ideas", { type: "json" })) || {};
+  } catch (e) {
+    console.log("ideas read failed:", e.message);
+    return {};
+  }
+}
+const ideaView = (i, uid) => ({
+  id: i.id,
+  text: i.text,
+  author: i.authorName,
+  mine: i.author === uid,
+  status: i.status,
+  comment: i.comment || "",
+  ts: i.ts,
+});
+
 async function getPerson(st, id) {
   try {
     return await st.get(personKey(id), { type: "json" });
@@ -135,6 +175,73 @@ async function main(event) {
     p.sg = sg;
     await st.setJSON(personKey(id), p);
     return out(200, { ok: true });
+  }
+
+  /* ---------- улучшения ---------- */
+  if (body.action === "ideas") {
+    const ideas = await loadIdeas(st);
+    const items = Object.values(ideas)
+      .sort((a, b) => b.ts - a.ts)
+      .map((i) => ideaView(i, user.id));
+    return out(200, { items });
+  }
+
+  if (body.action === "idea_add") {
+    if (!(await isMember(user.id))) {
+      return out(403, { error: "Предлагать идеи могут только участники группы" });
+    }
+    const text = String(body.text || "").replace(/\s+/g, " ").trim();
+    if (text.length < 5) return out(400, { error: "Опиши идею подробнее (минимум 5 символов)" });
+    if (text.length > 300) return out(400, { error: "Слишком длинно, максимум 300 символов" });
+    const ideas = await loadIdeas(st);
+    const waiting = Object.values(ideas).filter((i) => i.author === user.id && i.status === "review").length;
+    if (!admin && waiting >= 5) {
+      return out(400, { error: "У тебя уже 5 идей на проверке. Дождись ответа" });
+    }
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const idea = {
+      id, text, author: user.id, authorName: user.first_name || "?",
+      status: "review", comment: "", ts: Date.now(),
+    };
+    ideas[id] = idea;
+    await st.setJSON("ideas", ideas);
+    for (const a of adminList()) {
+      if (a !== String(user.id)) await dm(a, `Новая идея от ${idea.authorName}:\n${text}`);
+    }
+    return out(200, { item: ideaView(idea, user.id) });
+  }
+
+  if (body.action === "idea_del") {
+    const ideas = await loadIdeas(st);
+    const i = ideas[body.id];
+    if (!i) return out(404, { error: "Идея не найдена" });
+    if (!admin && !(i.author === user.id && i.status === "review")) {
+      return out(403, { error: "Удалить можно только свою идею, пока она на проверке" });
+    }
+    delete ideas[body.id];
+    await st.setJSON("ideas", ideas);
+    return out(200, { ok: true });
+  }
+
+  if (body.action === "idea_set") {
+    if (!admin) return out(403, { error: "Только для админа" });
+    if (!STATUS[body.status]) return out(400, { error: "Неизвестный статус" });
+    const ideas = await loadIdeas(st);
+    const i = ideas[body.id];
+    if (!i) return out(404, { error: "Идея не найдена" });
+    const comment = String(body.comment || "").trim().slice(0, 200);
+    const changed = i.status !== body.status || (i.comment || "") !== comment;
+    i.status = body.status;
+    i.comment = comment;
+    await st.setJSON("ideas", ideas);
+    if (changed && i.author !== user.id) {
+      await dm(
+        i.author,
+        `Твоя идея «${i.text.slice(0, 80)}»\nСтатус: ${STATUS[i.status]}` +
+          (comment ? `\nКомментарий: ${comment}` : "")
+      );
+    }
+    return out(200, { item: ideaView(i, user.id) });
   }
 
   /* ---------- звуки ---------- */

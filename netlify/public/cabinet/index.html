@@ -26,7 +26,7 @@ h1{font-size:26px}
 .item b+span{font-size:13px;color:var(--muted)}
 
 .card{background:var(--card);border-radius:20px;padding:16px;margin-bottom:12px;cursor:pointer}
-.card.person{cursor:default}
+.card.person,.card.idea,.card.idea-form{cursor:default}
 .row{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .row b{display:block;font-size:16px}
 .row b.ttl{display:flex;align-items:center;gap:8px}
@@ -72,6 +72,23 @@ input[type=file]{display:none}
 .bell-r b{font-size:16px}
 .bell-r span{font-size:13px;color:var(--muted)}
 
+.chips{display:flex;gap:8px;overflow-x:auto;margin:4px 0 14px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chips button{flex:none;border:0;border-radius:999px;padding:8px 14px;background:var(--card);color:var(--muted);font:inherit;font-size:13px;font-weight:700}
+.chips button.on{background:var(--accent);color:#fff}
+.bd{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700}
+.bd-review{background:rgba(245,185,66,.15);color:#f5b942}
+.bd-planned{background:rgba(139,123,255,.18);color:var(--accent)}
+.bd-dev{background:rgba(76,194,255,.15);color:#4cc2ff}
+.bd-done{background:rgba(74,222,128,.15);color:var(--green)}
+.bd-rejected{background:rgba(255,93,108,.15);color:var(--red)}
+.idea-t{margin-top:10px;font-size:15px;line-height:1.4;white-space:pre-wrap;word-break:break-word}
+.idea-c{margin-top:8px;padding:10px 12px;border-radius:12px;background:var(--line);font-size:13px;line-height:1.4}
+textarea{width:100%;min-height:90px;resize:vertical;background:var(--line);border:0;border-radius:12px;padding:12px;color:var(--text);font:inherit}
+select{width:100%;background:var(--line);color:var(--text);border:0;border-radius:12px;padding:12px;font:inherit;margin-top:10px}
+.acts{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.acts .btn{margin-top:0}
+
 #modal{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;justify-content:center}
 .sheet{position:relative;width:100%;max-width:480px;background:var(--card);border-radius:24px 24px 0 0;padding:24px 20px calc(env(safe-area-inset-bottom,0px) + 20px);text-align:center}
 .x{position:absolute;top:12px;right:12px;width:36px;height:36px;border-radius:12px;border:0;background:var(--line);color:var(--text);display:flex;align-items:center;justify-content:center}
@@ -101,6 +118,8 @@ input[type=file]{display:none}
     <button class="item" id="go-schedule"><div class="ic"><span class="i" data-i="calendar"></span></div><div><b>Расписание</b><span>Открыть приложение с расписанием</span></div></button>
     <button class="item" id="go-bells"><div class="ic"><span class="i" data-i="bell"></span></div><div><b>Расписание звонков</b><span>Время начала и конца пар</span></div></button>
     <button class="item" id="go-mine"><div class="ic"><span class="i" data-i="headphones"></span></div><div><b>Мои звуки</b><span>Звуки на стикеры, которые добавил ты</span></div></button>
+    <button class="item" id="go-ideas"><div class="ic"><span class="i" data-i="bulb"></span></div><div><b>Улучшения</b><span>Предложи идею для бота</span></div></button>
+    <button class="item" id="go-requests" hidden><div class="ic"><span class="i" data-i="clipboard"></span></div><div><b>Заявки</b><span id="req-sub">Идеи участников</span></div></button>
     <button class="item" id="go-admin" hidden><div class="ic"><span class="i" data-i="shield"></span></div><div><b>Админка</b><span>Все звуки, удаление</span></div></button>
     <button class="item" id="go-people" hidden><div class="ic"><span class="i" data-i="users"></span></div><div><b>Подгруппы</b><span>Кто в какой подгруппе</span></div></button>
   </div>
@@ -135,6 +154,28 @@ input[type=file]{display:none}
   <h1>Расписание звонков</h1>
   <div class="hi">Время пар по данным расписания на сайте</div>
   <div id="bells-list"></div>
+</div>
+
+<div id="ideas" class="screen" hidden>
+  <button class="link" data-back><span class="i" data-i="back"></span>Назад</button>
+  <h1>Улучшения</h1>
+  <div class="hi">Предложи, что добавить в бота, и следи за статусом</div>
+  <div class="card idea-form">
+    <textarea id="idea-text" maxlength="300" placeholder="Что добавить в бота?"></textarea>
+    <div class="row" style="margin-top:10px">
+      <span class="muted" id="idea-cnt" style="margin:0">0/300</span>
+      <button class="btn" id="idea-send" style="margin-top:0;width:auto;padding:12px 18px"><span class="i" data-i="send"></span>Отправить</button>
+    </div>
+  </div>
+  <div class="chips" id="idea-chips"></div>
+  <div id="idea-list"></div>
+</div>
+
+<div id="requests" class="screen" hidden>
+  <button class="link" data-back><span class="i" data-i="back"></span>Назад</button>
+  <h1>Заявки</h1>
+  <div class="hi">Меняй статус и пиши комментарий: автор получит уведомление в личку</div>
+  <div id="req-list"></div>
 </div>
 
 <div id="admin" class="screen" hidden>
@@ -189,6 +230,9 @@ const ICONS = {
   headphones: '<path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/>',
   shield: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/>',
   users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  bulb: '<path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/>',
+  clipboard: '<rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/>',
+  send: '<path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>',
   plus: '<path d="M5 12h14M12 5v14"/>',
   play: '<polygon points="6 3 20 12 6 21 6 3" fill="currentColor"/>',
   pause: '<rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor"/><rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor"/>',
@@ -472,6 +516,134 @@ $("#modal").onclick = (e) => { if (e.target === $("#modal")) closeModal(); };
 $("#m-play").onclick = () => CUR && togglePlay(CUR.id, $("#m-play"));
 $("#m-del").onclick = () => CUR && askDelete(CUR, closeModal);
 
+/* ---------- улучшения ---------- */
+const STATUS = {
+  review: "На проверке",
+  planned: "Принято",
+  dev: "Разрабатывается",
+  done: "Разработано",
+  rejected: "Отказано",
+};
+let IDEAS = [], IFILTER = "all";
+
+const fmtDate = (ts) => {
+  const d = new Date(ts + 7 * 3600e3);
+  return `${String(d.getUTCDate()).padStart(2, "0")}.${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+};
+const badge = (st) => el("span", "bd bd-" + st, STATUS[st] || st);
+
+async function refreshIdeas() {
+  IDEAS = (await api("ideas")).items;
+  renderIdeas();
+  renderRequests();
+}
+function ideaCard(i, adminMode) {
+  const c = el("div", "card idea");
+  const top = el("div", "row");
+  top.append(badge(i.status), el("span", "muted", `${i.author}${i.mine ? " (ты)" : ""} · ${fmtDate(i.ts)}`));
+  c.append(top, el("div", "idea-t", i.text));
+  if (i.comment) c.append(el("div", "idea-c", "Ответ: " + i.comment));
+  if (!adminMode && i.mine && i.status === "review") {
+    const del = el("button", "btn ghost");
+    del.append(ico("trash"), document.createTextNode("Удалить"));
+    del.onclick = () =>
+      ask("Удалить свою идею?", async () => {
+        try {
+          await api("idea_del", { id: i.id });
+          IDEAS = IDEAS.filter((x) => x.id !== i.id);
+          renderIdeas();
+          renderRequests();
+        } catch (e) { fail(e); }
+      });
+    c.append(del);
+  }
+  return c;
+}
+function renderIdeas() {
+  const chips = $("#idea-chips");
+  chips.replaceChildren();
+  [["all", "Все"], ...Object.entries(STATUS)].forEach(([k, label]) => {
+    const b = el("button", IFILTER === k ? "on" : "", label);
+    b.onclick = () => { IFILTER = k; renderIdeas(); };
+    chips.append(b);
+  });
+  const box = $("#idea-list");
+  box.replaceChildren();
+  const list = IDEAS.filter((i) => IFILTER === "all" || i.status === IFILTER);
+  if (!list.length) box.append(el("div", "muted", "Пока пусто."));
+  list.forEach((i) => box.append(ideaCard(i, false)));
+}
+function renderRequests() {
+  const n = IDEAS.filter((i) => i.status === "review").length;
+  $("#req-sub").textContent = n ? `${n} на проверке` : "Новых нет";
+  if (!INFO?.isAdmin) return;
+  const box = $("#req-list");
+  box.replaceChildren();
+  if (!IDEAS.length) box.append(el("div", "muted", "Заявок пока нет."));
+  [...IDEAS]
+    .sort((a, b) => (a.status === "review" ? 0 : 1) - (b.status === "review" ? 0 : 1) || b.ts - a.ts)
+    .forEach((i) => {
+      const c = ideaCard(i, true);
+      const sel = el("select");
+      Object.entries(STATUS).forEach(([k, v]) => {
+        const o = el("option", null, v);
+        o.value = k;
+        if (k === i.status) o.selected = true;
+        sel.append(o);
+      });
+      const cm = el("input");
+      cm.type = "text";
+      cm.placeholder = "Комментарий (необязательно)";
+      cm.maxLength = 200;
+      cm.value = i.comment || "";
+      cm.style.marginTop = "8px";
+      const acts = el("div", "acts");
+      const save = el("button", "btn");
+      save.append(ico("check"), document.createTextNode("Сохранить"));
+      const del = el("button", "btn ghost");
+      del.append(ico("trash"), document.createTextNode("Удалить"));
+      save.onclick = async () => {
+        try {
+          const r = await api("idea_set", { id: i.id, status: sel.value, comment: cm.value });
+          IDEAS = IDEAS.map((x) => (x.id === i.id ? r.item : x));
+          renderIdeas();
+          renderRequests();
+          note("#ok", "Сохранено, автору отправлено уведомление", 3000);
+        } catch (e) { fail(e); }
+      };
+      del.onclick = () =>
+        ask("Удалить заявку?", async () => {
+          try {
+            await api("idea_del", { id: i.id });
+            IDEAS = IDEAS.filter((x) => x.id !== i.id);
+            renderIdeas();
+            renderRequests();
+          } catch (e) { fail(e); }
+        });
+      acts.append(save, del);
+      c.append(sel, cm, acts);
+      box.append(c);
+    });
+}
+$("#idea-text").oninput = () => {
+  $("#idea-cnt").textContent = `${$("#idea-text").value.length}/300`;
+};
+$("#idea-send").onclick = async () => {
+  const btn = $("#idea-send");
+  btn.disabled = true;
+  try {
+    const r = await api("idea_add", { text: $("#idea-text").value });
+    IDEAS = [r.item, ...IDEAS];
+    $("#idea-text").value = "";
+    $("#idea-cnt").textContent = "0/300";
+    IFILTER = "all";
+    renderIdeas();
+    renderRequests();
+    note("#ok", "Идея отправлена. Статус смотри в этом разделе.", 4000);
+  } catch (e) { fail(e); }
+  btn.disabled = false;
+};
+
 /* ---------- подгруппы (только админ) ---------- */
 async function openPeople() {
   show("people");
@@ -635,6 +807,8 @@ $("#go-add").onclick = openAdd;
 $("#go-admin").onclick = () => INFO?.isAdmin && show("admin");
 $("#go-people").onclick = () => INFO?.isAdmin && openPeople();
 $("#go-bells").onclick = () => show("bells");
+$("#go-ideas").onclick = () => { renderIdeas(); show("ideas"); };
+$("#go-requests").onclick = () => { if (INFO?.isAdmin) { renderRequests(); show("requests"); } };
 
 $("#go-schedule").onclick = () => {
   if (!INFO?.appLink) return fail(new Error("Не задана ссылка на расписание (APP_LINK)"));
@@ -651,7 +825,9 @@ api("info")
     updateHi();
     $("#go-admin").hidden = !j.isAdmin;
     $("#go-people").hidden = !j.isAdmin;
+    $("#go-requests").hidden = !j.isAdmin;
     renderNow();
+    refreshIdeas().catch((e) => console.log("ideas load failed:", e.message));
     await refresh();
   })
   .catch((e) => { $("#hi").textContent = ""; fail(e); });

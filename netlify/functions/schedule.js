@@ -1,4 +1,6 @@
-const { getSchedule, nskInfo, toMin, fmtTime } = require("../../lib/natk");
+const {
+  getSchedule, store, nskInfo, toMin, fmtTime, sigOf, getPosted, savePosted,
+} = require("../../lib/natk");
 const { send, sendDay } = require("../../lib/render");
 
 exports.handler = async (event) => {
@@ -27,10 +29,22 @@ exports.handler = async (event) => {
   }
   if (!actual && /воскресенье/i.test(day.weekday)) return { statusCode: 200 };
 
+  // это расписание уже отправляли (например, как уведомление об изменении): не дублируем
+  const st = store(event);
+  const posted = await getPosted(st);
+  if (posted[day.date] === sigOf(day)) {
+    console.log("это расписание уже отправляли, пропускаю");
+    return { statusCode: 200 };
+  }
+
   let caption = `${prefix}, ${day.label}`;
   if (s.stale) {
     caption += `\n⚠️ natk.ru недоступен, показано сохранённое расписание (${fmtTime(s.fetchedAt)} НСК)`;
   }
-  await sendDay({ ...day, title: `${prefix}, ${day.label}` }, caption, event);
+  const id = await sendDay({ ...day, title: `${prefix}, ${day.label}` }, caption, event);
+  if (id) {
+    posted[day.date] = sigOf(day);
+    await savePosted(st, posted);
+  }
   return { statusCode: 200 };
 };

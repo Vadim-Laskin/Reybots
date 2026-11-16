@@ -17,6 +17,7 @@ h1{font-size:26px}
 @keyframes spin{to{transform:rotate(360deg)}}
 .spin svg{animation:spin 1s linear infinite}
 .hi{color:var(--muted);margin:4px 0 20px}
+.crumbs{color:var(--muted);font-size:13px;margin:-6px 0 10px}
 
 .menu{display:grid;gap:12px}
 .item{display:flex;align-items:center;gap:14px;width:100%;text-align:left;background:var(--card);color:var(--text);border:0;border-radius:20px;padding:16px;font:inherit}
@@ -25,8 +26,21 @@ h1{font-size:26px}
 .item b{display:block;font-size:18px}
 .item b+span{font-size:13px;color:var(--muted)}
 
+.cat{margin:18px 0 8px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.forum{background:var(--card);border-radius:20px;overflow:hidden}
+.frow{display:flex;align-items:center;gap:14px;width:100%;text-align:left;background:none;border:0;color:var(--text);font:inherit;padding:14px 16px}
+.frow+.frow{border-top:1px solid var(--line)}
+.frow .ic{width:44px;height:44px;flex:none;border-radius:12px;background:rgba(139,123,255,.15);color:var(--accent);display:flex;align-items:center;justify-content:center}
+.frow .ic .i{width:24px;height:24px}
+.frow>.i{width:20px;height:20px;color:var(--muted)}
+.ft{flex:1;min-width:0}
+.ft b{display:block;font-size:16px}
+.ft span{font-size:13px;color:var(--muted)}
+.cnt{min-width:26px;padding:3px 9px;border-radius:999px;background:rgba(139,123,255,.18);color:var(--accent);font-size:12px;font-weight:700;text-align:center}
+.cnt.hot{background:rgba(245,185,66,.18);color:#f5b942}
+
 .card{background:var(--card);border-radius:20px;padding:16px;margin-bottom:12px;cursor:pointer}
-.card.person,.card.idea,.card.idea-form{cursor:default}
+.card.person,.card.idea,.card.idea-form,.card.hw-form{cursor:default}
 .row{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .row b{display:block;font-size:16px}
 .row b.ttl{display:flex;align-items:center;gap:8px}
@@ -51,6 +65,7 @@ h1{font-size:26px}
 .st.sel{border-color:var(--accent)}
 .st img{width:100%;height:100%;object-fit:contain}
 input[type=text]{width:100%;background:var(--card);border:0;border-radius:12px;padding:12px;color:var(--text);font:inherit;margin-bottom:8px}
+input[type=date]{width:100%;background:var(--line);border:0;border-radius:12px;padding:12px;color:var(--text);font:inherit;color-scheme:dark}
 input[type=file]{display:none}
 .file{display:flex;align-items:center;justify-content:center;gap:8px;background:var(--card);border:1px dashed var(--line);border-radius:14px;padding:16px;color:var(--text)}
 #err{display:none;background:#2a1a20;color:var(--red);border-radius:14px;padding:12px;margin-bottom:12px;font-size:14px}
@@ -89,6 +104,12 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
 .acts{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
 .acts .btn{margin-top:0}
 
+.picks{display:flex;gap:8px}
+.pick{display:flex;align-items:center;justify-content:center;gap:6px;flex:1;background:var(--line);border-radius:12px;padding:12px 6px;font-size:14px;font-weight:700}
+.hwf{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
+.hwf-n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}
+.hwf .sq{width:34px;height:34px}
+
 #modal{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;justify-content:center}
 .sheet{position:relative;width:100%;max-width:480px;background:var(--card);border-radius:24px 24px 0 0;padding:24px 20px calc(env(safe-area-inset-bottom,0px) + 20px);text-align:center}
 .x{position:absolute;top:12px;right:12px;width:36px;height:36px;border-radius:12px;border:0;background:var(--line);color:var(--text);display:flex;align-items:center;justify-content:center}
@@ -98,14 +119,6 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
 .m-title{font-size:20px;font-weight:700}
 .m-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
 .m-btns .btn{margin-top:0}
-
-input[type=date]{width:100%;background:var(--line);border:0;border-radius:12px;padding:12px;color:var(--text);font:inherit;color-scheme:dark}
-.card.hw-form{cursor:default}
-.picks{display:flex;gap:8px}
-.pick{display:flex;align-items:center;justify-content:center;gap:6px;flex:1;background:var(--line);border-radius:12px;padding:12px 6px;font-size:14px;font-weight:700}
-.hwf{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
-.hwf-n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}
-.hwf .sq{width:34px;height:34px}
 </style>
 </head>
 <body>
@@ -128,10 +141,7 @@ input[type=date]{width:100%;background:var(--line);border:0;border-radius:12px;p
     <button class="item" id="go-mine"><div class="ic"><span class="i" data-i="headphones"></span></div><div><b>Мои звуки</b><span>Звуки на стикеры, которые добавил ты</span></div></button>
     <button class="item" id="go-ideas"><div class="ic"><span class="i" data-i="bulb"></span></div><div><b>Улучшения</b><span>Предложи идею для бота</span></div></button>
     <button class="item" id="go-hw"><div class="ic"><span class="i" data-i="homework"></span></div><div><b>Домашка</b><span>Загрузить задание для группы</span></div></button>
-    <button class="item" id="go-hwadmin" hidden><div class="ic"><span class="i" data-i="checks"></span></div><div><b>ДЗ: все</b><span>Кто и что загрузил</span></div></button>
-    <button class="item" id="go-requests" hidden><div class="ic"><span class="i" data-i="clipboard"></span></div><div><b>Заявки</b><span id="req-sub">Идеи участников</span></div></button>
-    <button class="item" id="go-admin" hidden><div class="ic"><span class="i" data-i="shield"></span></div><div><b>Админка</b><span>Все звуки, удаление</span></div></button>
-    <button class="item" id="go-people" hidden><div class="ic"><span class="i" data-i="users"></span></div><div><b>Подгруппы</b><span>Кто в какой подгруппе</span></div></button>
+    <button class="item" id="go-apanel" hidden><div class="ic"><span class="i" data-i="shield"></span></div><div><b>Админ-панель</b><span id="ap-sub">Управление ботом</span></div></button>
   </div>
 </div>
 
@@ -181,28 +191,6 @@ input[type=date]{width:100%;background:var(--line);border:0;border-radius:12px;p
   <div id="idea-list"></div>
 </div>
 
-<div id="requests" class="screen" hidden>
-  <button class="link" data-back><span class="i" data-i="back"></span>Назад</button>
-  <h1>Заявки</h1>
-  <div class="hi">Меняй статус и пиши комментарий: автор получит уведомление в личку</div>
-  <div id="req-list"></div>
-</div>
-
-<div id="admin" class="screen" hidden>
-  <button class="link" data-back><span class="i" data-i="back"></span>Назад</button>
-  <h1>Админка</h1>
-  <div class="hi">Все звуки. Удалить можно любой.</div>
-  <div id="admin-list"></div>
-</div>
-
-<div id="people" class="screen" hidden>
-  <button class="link" data-back><span class="i" data-i="back"></span>Назад</button>
-  <h1>Подгруппы</h1>
-  <div class="hi">Подгруппа влияет только на карточку «Что сейчас» в кабинете. Без подгруппы («Все») человек видит все пары. В самом расписании всегда показаны все подгруппы.</div>
-  <div id="people-list"></div>
-  <div class="muted">Здесь только те, кто хотя бы раз открывал кабинет.</div>
-</div>
-
 <div id="hw" class="screen" hidden>
   <button class="link" data-back><span class="i" data-i="back"></span>Назад</button>
   <h1>Домашка</h1>
@@ -229,11 +217,44 @@ input[type=date]{width:100%;background:var(--line);border:0;border-radius:12px;p
   <div id="hw-mine"></div>
 </div>
 
+<div id="apanel" class="screen" hidden>
+  <button class="link" data-back><span class="i" data-i="back"></span>Назад</button>
+  <h1>Админ-панель</h1>
+  <div class="hi">Разделы управления ботом</div>
+  <div id="ap-tree"></div>
+</div>
+
+<div id="admin" class="screen" hidden>
+  <button class="link" data-back><span class="i" data-i="back"></span>Назад</button>
+  <div class="crumbs">Админ-панель › Контент › Звуки</div>
+  <h1>Звуки</h1>
+  <div class="hi">Все звуки на стикеры. Удалить можно любой.</div>
+  <div id="admin-list"></div>
+</div>
+
 <div id="hwadmin" class="screen" hidden>
   <button class="link" data-back><span class="i" data-i="back"></span>Назад</button>
-  <h1>ДЗ: все</h1>
+  <div class="crumbs">Админ-панель › Контент › Домашка</div>
+  <h1>Домашка</h1>
   <div class="hi">Здесь виден отправитель. Можно удалить или отправить в группу прямо сейчас.</div>
   <div id="hw-all"></div>
+</div>
+
+<div id="people" class="screen" hidden>
+  <button class="link" data-back><span class="i" data-i="back"></span>Назад</button>
+  <div class="crumbs">Админ-панель › Участники › Подгруппы</div>
+  <h1>Подгруппы</h1>
+  <div class="hi">Подгруппа влияет только на карточку «Что сейчас» в кабинете. Без подгруппы («Все») человек видит все пары. В самом расписании всегда показаны все подгруппы.</div>
+  <div id="people-list"></div>
+  <div class="muted">Здесь только те, кто хотя бы раз открывал кабинет.</div>
+</div>
+
+<div id="requests" class="screen" hidden>
+  <button class="link" data-back><span class="i" data-i="back"></span>Назад</button>
+  <div class="crumbs">Админ-панель › Обратная связь › Заявки</div>
+  <h1>Заявки</h1>
+  <div class="hi">Меняй статус и пиши комментарий: автор получит уведомление в личку</div>
+  <div id="req-list"></div>
 </div>
 
 <div id="modal" hidden>
@@ -281,6 +302,7 @@ const ICONS = {
   pause: '<rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor"/><rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor"/>',
   trash: '<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/>',
   back: '<path d="m12 19-7-7 7-7M19 12H5"/>',
+  chevron: '<path d="m9 18 6-6-6-6"/>',
   check: '<path d="M20 6 9 17l-5-5"/>',
   loader: '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>',
   music: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
@@ -293,7 +315,6 @@ const ICONS = {
   image: '<rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>',
   video: '<path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2"/>',
   file: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/>',
-  checks: '<path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/>',
 };
 const svg = (n) =>
   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]}</svg>`;
@@ -379,6 +400,8 @@ async function togglePlay(id, btn) {
 }
 
 /* ---------- навигация ---------- */
+// куда ведёт «Назад» с вложенных экранов (по умолчанию на главную)
+const PARENT = { add: "mine", admin: "apanel", hwadmin: "apanel", people: "apanel", requests: "apanel" };
 function show(id) {
   stopAudio();
   document.querySelectorAll(".screen").forEach((s) => (s.hidden = s.id !== id));
@@ -388,7 +411,7 @@ function show(id) {
 function back() {
   if (!$("#modal").hidden) return closeModal();
   const cur = document.querySelector(".screen:not([hidden])")?.id;
-  show(cur === "add" ? "mine" : "home");
+  show(PARENT[cur] || "home");
 }
 
 /* ---------- списки звуков ---------- */
@@ -440,6 +463,7 @@ function renderLists() {
   if (INFO.isAdmin) {
     if (!ITEMS.length) all.append(el("div", "muted", "Звуков пока нет."));
     ITEMS.forEach((i) => all.append(card(i, true)));
+    renderApanel();
   }
 }
 async function refresh() {
@@ -447,7 +471,7 @@ async function refresh() {
   renderLists();
 }
 
-/* ---------- добавление ---------- */
+/* ---------- добавление звука ---------- */
 function updateUpload() { $("#upload").disabled = !(PICK && FILE); }
 
 function renderGrid() {
@@ -622,9 +646,8 @@ function renderIdeas() {
   list.forEach((i) => box.append(ideaCard(i, false)));
 }
 function renderRequests() {
-  const n = IDEAS.filter((i) => i.status === "review").length;
-  $("#req-sub").textContent = n ? `${n} на проверке` : "Новых нет";
   if (!INFO?.isAdmin) return;
+  renderApanel();
   const box = $("#req-list");
   box.replaceChildren();
   if (!IDEAS.length) box.append(el("div", "muted", "Заявок пока нет."));
@@ -734,119 +757,6 @@ function renderPeople() {
     c.append(seg);
     box.append(c);
   });
-}
-
-/* ---------- «Сейчас» и звонки ---------- */
-let SCH = null;
-const toMin = (s) => { const [a, b] = s.split(":").map(Number); return a * 60 + b; };
-const fmtMin = (m) => (m < 60 ? `${m} мин` : `${Math.floor(m / 60)} ч${m % 60 ? ` ${m % 60} мин` : ""}`);
-function nsk() {
-  const d = new Date(Date.now() + 7 * 3600e3);
-  return { date: d.toISOString().slice(0, 10), min: d.getUTCHours() * 60 + d.getUTCMinutes() };
-}
-// записи пары, которые касаются меня (без отмен); без подгруппы показываем все
-const mySg = () => INFO?.sg || 0;
-const mine = (p) => p.entries.filter((e) => !e.cancelled && (!mySg() || !e.sg || e.sg === mySg()));
-const activePairs = (day) => day.pairs.filter((p) => mine(p).length);
-
-function pairLines(p) {
-  const frag = document.createDocumentFragment();
-  mine(p).forEach((e) => {
-    frag.append(
-      el("div", "now-s", (e.sg && !mySg() ? `${e.sg} подгр. · ` : "") + e.subject),
-      el("div", "now-m", [e.teacher, e.room].filter(Boolean).join(" · "))
-    );
-  });
-  return frag;
-}
-
-function renderNow() {
-  const box = $("#now");
-  if (!SCH?.days?.length) { box.hidden = true; return; }
-  const n = nsk();
-  const today = SCH.days.find((d) => d.date === n.date);
-  const list = today ? activePairs(today) : [];
-  const live = list.find((p) => toMin(p.start) <= n.min && n.min < toMin(p.end));
-  const next = list.find((p) => toMin(p.start) > n.min);
-
-  let title, pair = null, extra, pct = null;
-  if (live) {
-    const s = toMin(live.start), e = toMin(live.end);
-    title = `Идёт ${live.num}-я пара`;
-    pair = live;
-    extra = `Осталось ${e - n.min} мин (до ${live.end})`;
-    pct = Math.round(((n.min - s) / (e - s)) * 100);
-  } else if (next) {
-    title = `Следующая: ${next.num}-я пара`;
-    pair = next;
-    extra = `Начало в ${next.start}, через ${fmtMin(toMin(next.start) - n.min)}`;
-    } else {
-    title = list.length ? "На сегодня всё" : "Сегодня занятий нет";
-    if (list.length) {
-      const nd = SCH.days.find((d) => d.date > n.date && activePairs(d).length);
-      if (nd) {
-        pair = activePairs(nd)[0];
-        extra = `Ближайшая пара: ${nd.weekday.toLowerCase()}, ${nd.label}, в ${pair.start}`;
-      } else extra = "Ближайших занятий в расписании нет";
-    }
-  }
-
-  box.classList.toggle("live", !!live);
-  $("#now-t").textContent = title;
-  const b = $("#now-b");
-  b.replaceChildren();
-  if (pair) b.append(pairLines(pair));
-  if (extra) b.append(el("div", "now-x", extra));
-  if (SCH.stale) b.append(el("div", "now-m", "Сайт natk.ru недоступен, данные могут быть устаревшими"));
-  const bar = $("#now-bar");
-  bar.hidden = pct == null;
-  if (pct != null) bar.firstElementChild.style.width = pct + "%";
-  box.hidden = false;
-}
-
-const WD_ORDER = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
-const WD_SHORT = { Понедельник: "Пн", Вторник: "Вт", Среда: "Ср", Четверг: "Чт", Пятница: "Пт", Суббота: "Сб", Воскресенье: "Вс" };
-function renderBells() {
-  const box = $("#bells-list");
-  box.replaceChildren();
-  const grid = {};
-  (SCH?.days || []).forEach((d) =>
-    d.pairs.forEach((p) => {
-      const key = `${p.start}–${p.end}`;
-      grid[p.num] = grid[p.num] || {};
-      grid[p.num][key] = grid[p.num][key] || new Set();
-      grid[p.num][key].add(d.weekday);
-    })
-  );
-  const nums = Object.keys(grid).sort();
-  if (!nums.length) {
-    box.append(el("div", "muted", "Данных пока нет, попробуй позже."));
-    return;
-  }
-  nums.forEach((num) => {
-    const c = el("div", "card bell");
-    const right = el("div", "bell-t");
-    Object.entries(grid[num]).sort().forEach(([time, set]) => {
-      const days = WD_ORDER.filter((w) => set.has(w)).map((w) => WD_SHORT[w] || w.slice(0, 2)).join(", ");
-      const row = el("div", "bell-r");
-      row.append(el("b", null, time), el("span", null, days));
-      right.append(row);
-    });
-    c.append(el("div", "bell-n", num), right);
-    box.append(c);
-  });
-}
-
-async function loadSchedule() {
-  try {
-    const r = await fetch("/.netlify/functions/schedule-data", { cache: "no-store" });
-    if (!r.ok) throw new Error("HTTP " + r.status);
-    SCH = await r.json();
-  } catch (e) {
-    console.log("schedule load failed:", e.message);
-  }
-  renderNow();
-  renderBells();
 }
 
 /* ---------- домашка ---------- */
@@ -997,6 +907,7 @@ function renderHwMine() {
 }
 function renderHwAdmin() {
   if (!INFO?.isAdmin) return;
+  renderApanel();
   const box = $("#hw-all");
   box.replaceChildren();
   if (!HW.length) box.append(el("div", "muted", "Домашек пока нет."));
@@ -1037,19 +948,181 @@ $("#hw-send").onclick = async () => {
   updateHwSend();
 };
 
+/* ---------- «Сейчас» и звонки ---------- */
+let SCH = null;
+const toMin = (s) => { const [a, b] = s.split(":").map(Number); return a * 60 + b; };
+const fmtMin = (m) => (m < 60 ? `${m} мин` : `${Math.floor(m / 60)} ч${m % 60 ? ` ${m % 60} мин` : ""}`);
+function nsk() {
+  const d = new Date(Date.now() + 7 * 3600e3);
+  return { date: d.toISOString().slice(0, 10), min: d.getUTCHours() * 60 + d.getUTCMinutes() };
+}
+// записи пары, которые касаются меня (без отмен); без подгруппы показываем все
+const mySg = () => INFO?.sg || 0;
+const mine = (p) => p.entries.filter((e) => !e.cancelled && (!mySg() || !e.sg || e.sg === mySg()));
+const activePairs = (day) => day.pairs.filter((p) => mine(p).length);
+
+function pairLines(p) {
+  const frag = document.createDocumentFragment();
+  mine(p).forEach((e) => {
+    frag.append(
+      el("div", "now-s", (e.sg && !mySg() ? `${e.sg} подгр. · ` : "") + e.subject),
+      el("div", "now-m", [e.teacher, e.room].filter(Boolean).join(" · "))
+    );
+  });
+  return frag;
+}
+
+function renderNow() {
+  const box = $("#now");
+  if (!SCH?.days?.length) { box.hidden = true; return; }
+  const n = nsk();
+  const today = SCH.days.find((d) => d.date === n.date);
+  const list = today ? activePairs(today) : [];
+  const live = list.find((p) => toMin(p.start) <= n.min && n.min < toMin(p.end));
+  const next = list.find((p) => toMin(p.start) > n.min);
+
+  let title, pair = null, extra = "", pct = null;
+  if (live) {
+    const s = toMin(live.start), e = toMin(live.end);
+    title = `Идёт ${live.num}-я пара`;
+    pair = live;
+    extra = `Осталось ${e - n.min} мин (до ${live.end})`;
+    pct = Math.round(((n.min - s) / (e - s)) * 100);
+  } else if (next) {
+    title = `Следующая: ${next.num}-я пара`;
+    pair = next;
+    extra = `Начало в ${next.start}, через ${fmtMin(toMin(next.start) - n.min)}`;
+  } else {
+    title = list.length ? "На сегодня всё" : "Сегодня занятий нет";
+    if (list.length) {
+      const nd = SCH.days.find((d) => d.date > n.date && activePairs(d).length);
+      if (nd) {
+        pair = activePairs(nd)[0];
+        extra = `Ближайшая пара: ${nd.weekday.toLowerCase()}, ${nd.label}, в ${pair.start}`;
+      } else extra = "Ближайших занятий в расписании нет";
+    }
+  }
+
+  box.classList.toggle("live", !!live);
+  $("#now-t").textContent = title;
+  const b = $("#now-b");
+  b.replaceChildren();
+  if (pair) b.append(pairLines(pair));
+  if (extra) b.append(el("div", "now-x", extra));
+  if (SCH.stale) b.append(el("div", "now-m", "Сайт natk.ru недоступен, данные могут быть устаревшими"));
+  const bar = $("#now-bar");
+  bar.hidden = pct == null;
+  if (pct != null) bar.firstElementChild.style.width = pct + "%";
+  box.hidden = false;
+}
+
+const WD_ORDER = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
+const WD_SHORT = { Понедельник: "Пн", Вторник: "Вт", Среда: "Ср", Четверг: "Чт", Пятница: "Пт", Суббота: "Сб", Воскресенье: "Вс" };
+function renderBells() {
+  const box = $("#bells-list");
+  box.replaceChildren();
+  const grid = {};
+  (SCH?.days || []).forEach((d) =>
+    d.pairs.forEach((p) => {
+      const key = `${p.start}–${p.end}`;
+      grid[p.num] = grid[p.num] || {};
+      grid[p.num][key] = grid[p.num][key] || new Set();
+      grid[p.num][key].add(d.weekday);
+    })
+  );
+  const nums = Object.keys(grid).sort();
+  if (!nums.length) {
+    box.append(el("div", "muted", "Данных пока нет, попробуй позже."));
+    return;
+  }
+  nums.forEach((num) => {
+    const c = el("div", "card bell");
+    const right = el("div", "bell-t");
+    Object.entries(grid[num]).sort().forEach(([time, set]) => {
+      const days = WD_ORDER.filter((w) => set.has(w)).map((w) => WD_SHORT[w] || w.slice(0, 2)).join(", ");
+      const row = el("div", "bell-r");
+      row.append(el("b", null, time), el("span", null, days));
+      right.append(row);
+    });
+    c.append(el("div", "bell-n", num), right);
+    box.append(c);
+  });
+}
+
+async function loadSchedule() {
+  try {
+    const r = await fetch("/.netlify/functions/schedule-data", { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    SCH = await r.json();
+  } catch (e) {
+    console.log("schedule load failed:", e.message);
+  }
+  renderNow();
+  renderBells();
+}
+
+/* ---------- админ-панель: разделы и подразделы ---------- */
+// чтобы добавить подраздел, достаточно добавить строку в rows нужного раздела
+const ADMIN_TREE = [
+  {
+    title: "Контент",
+    rows: [
+      { icon: "headphones", title: "Звуки", desc: "Все звуки на стикеры", count: () => ITEMS.length, open: () => show("admin") },
+      { icon: "homework", title: "Домашка", desc: "Кто и что загрузил", count: () => HW.filter((h) => !h.posted).length, hot: true, open: () => { renderHwAdmin(); show("hwadmin"); } },
+    ],
+  },
+  {
+    title: "Участники",
+    rows: [
+      { icon: "users", title: "Подгруппы", desc: "Кто в какой подгруппе", open: openPeople },
+    ],
+  },
+  {
+    title: "Обратная связь",
+    rows: [
+      { icon: "clipboard", title: "Заявки", desc: "Идеи участников", count: () => IDEAS.filter((i) => i.status === "review").length, hot: true, open: () => { renderRequests(); show("requests"); } },
+    ],
+  },
+];
+
+function renderApanel() {
+  if (!INFO?.isAdmin) return;
+  const box = $("#ap-tree");
+  box.replaceChildren();
+  let attention = 0;
+  ADMIN_TREE.forEach((cat) => {
+    box.append(el("div", "cat", cat.title));
+    const forum = el("div", "forum");
+    cat.rows.forEach((r) => {
+      const b = el("button", "frow");
+      const ic = el("div", "ic");
+      ic.append(ico(r.icon));
+      const t = el("div", "ft");
+      t.append(el("b", null, r.title), el("span", null, r.desc));
+      b.append(ic, t);
+      const n = r.count ? r.count() : 0;
+      if (n) {
+        b.append(el("span", "cnt" + (r.hot ? " hot" : ""), String(n)));
+        if (r.hot) attention += n;
+      }
+      b.append(ico("chevron"));
+      b.onclick = r.open;
+      forum.append(b);
+    });
+    box.append(forum);
+  });
+  $("#ap-sub").textContent = attention ? `Требуют внимания: ${attention}` : "Всё спокойно";
+}
+
 /* ---------- запуск ---------- */
 tg?.BackButton.onClick(back);
 document.querySelectorAll("[data-back]").forEach((b) => (b.onclick = back));
 $("#go-mine").onclick = () => show("mine");
 $("#go-add").onclick = openAdd;
-$("#go-admin").onclick = () => INFO?.isAdmin && show("admin");
-$("#go-people").onclick = () => INFO?.isAdmin && openPeople();
 $("#go-bells").onclick = () => show("bells");
 $("#go-ideas").onclick = () => { renderIdeas(); show("ideas"); };
-$("#go-requests").onclick = () => { if (INFO?.isAdmin) { renderRequests(); show("requests"); } };
-
 $("#go-hw").onclick = openHw;
-$("#go-hwadmin").onclick = () => { if (INFO?.isAdmin) { renderHwAdmin(); show("hwadmin"); } };
+$("#go-apanel").onclick = () => { if (INFO?.isAdmin) { renderApanel(); show("apanel"); } };
 
 $("#go-schedule").onclick = () => {
   if (!INFO?.appLink) return fail(new Error("Не задана ссылка на расписание (APP_LINK)"));
@@ -1064,14 +1137,12 @@ api("info")
   .then(async (j) => {
     INFO = j;
     updateHi();
-    $("#go-admin").hidden = !j.isAdmin;
-    $("#go-people").hidden = !j.isAdmin;
-    $("#go-requests").hidden = !j.isAdmin;
-    $("#go-hwadmin").hidden = !j.isAdmin;
-    refreshHw().catch((e) => console.log("homework load failed:", e.message));
+    $("#go-apanel").hidden = !j.isAdmin;
     renderNow();
     refreshIdeas().catch((e) => console.log("ideas load failed:", e.message));
+    refreshHw().catch((e) => console.log("homework load failed:", e.message));
     await refresh();
+    renderApanel();
   })
   .catch((e) => { $("#hi").textContent = ""; fail(e); });
 

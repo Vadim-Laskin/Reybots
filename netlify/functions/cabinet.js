@@ -1,14 +1,30 @@
 const crypto = require("crypto");
-const { store } = require("../../lib/natk");
+const { store, nskInfo } = require("../../lib/natk");
+const { loadHw, saveHw, postHomework } = require("../../lib/homework");
 const { isAdmin, isMember, load, save } = require("../../lib/sounds");
 
-const MAX_PER_USER = 5;
+const MAX_PER_USER = 15;
 const MAX_SECONDS = 30;
 const MAX_BYTES = 4 * 1024 * 1024;
 const H = { "Content-Type": "application/json" };
 const out = (code, obj) => ({ statusCode: code, headers: H, body: JSON.stringify(obj) });
 const tgUrl = (m) => `https://api.telegram.org/bot${process.env.BOT_TOKEN}/${m}`;
 const personKey = (id) => "person-" + id;
+
+const HW_MAX_FILES = 8;
+const HW_MAX_BYTES = 15 * 1024 * 1024;
+const HW_MAX_CHUNKS = 6;
+const addDays = (date, n) => new Date(Date.parse(date) + n * 864e5).toISOString().slice(0, 10);
+const hwView = (h, uid, admin) => ({
+  id: h.id,
+  date: h.date,
+  text: h.text,
+  files: h.files.map((f) => ({ kind: f.kind, name: f.name })),
+  posted: !!h.posted,
+  mine: h.author === uid,
+  ts: h.ts,
+  sender: admin ? `${h.authorName}${h.authorUsername ? " @" + h.authorUsername : ""}` : "",
+});
 
 const STATUS = {
   review: "На проверке",
@@ -242,6 +258,147 @@ async function main(event) {
       );
     }
     return out(200, { item: ideaView(i, user.id) });
+  }
+  
+    /* ---------- домашка ---------- */
+  if (body.action === "hw_file") {
+    const uid = String(body.uid || "");
+    const i = Number(body.i), n = Number(body.n);
+    if (!/^[\w-]{6,40}$/.test(uid) || !Number.isInteger(i) || !Number.isInteger(n) || i < 0 || n < 1 || n > HW_MAX_CHUNKS || i >= n) {
+      return out(400, { error: "Плохой запрос загрузки" });
+    }
+    if (i === 0 && !(await isMember(user.id))) {
+      return out(403, { error: "Загружать домашку могут только участники группы" });
+    }
+    const key = (k) => `hwc-${user.id}-${uid}-${k}`;
+    await st.set(key(i), String(body.data || ""));
+    if (i < n - 1) return out(200, { ok: true });
+
+    // последний кусок: собираем файл
+    const parts = [];
+    for (let k = 0; k < n; k++) {
+      let part = k === n - 1 ? String(body.data || "") : null;
+      for (let t = 0; t < 4 && !part; t++) {
+        try {
+          part = await st.get(key(k));
+        } catch (e) {
+          console.log("chunk read failed:", e.message);
+        }
+        if (!part) await new Promise((r) => setTimeout(r, 600));
+      }
+      if (!part) return out(500, { error: "Не удалось собрать файл, попробуй ещё раз" });
+      parts.push(Buffer.from(part, "base64"));
+    }
+    for (let k = 0; k < n; k++) {
+      try {
+        await st.delete(key(k));
+      } catch {}
+    }
+    const buf = Buffer.concat(parts);
+    if (!buf.length || buf.length > HW_MAX_BYTES) {
+      return out(400, { error: "Файл пустой или больше 15 МБ" });
+    }
+
+    const kind = ["photo", "video", "document"].includes(body.kind) ? body.kind : "document";
+    const name = String(body.name || "file").slice(0, 80);
+    const sendOne = async (method, field) => {
+      const fd = new FormData();
+      fd.append("chat_id", String(user.id));
+      fd.append("caption", "Файл для домашки. В группу уйдёт в назначенный день.");
+      fd.append(field, new Blob([buf]), name);
+      const j = await (await fetch(tgUrl(method), { method: "POST", body: fd })).json();
+      console.log(method, JSON.stringify(j).slice(0, 200));
+      if (!j.ok) return null;
+      const r = j.result;
+      if (r.photo) return { file_id: r.photo[r.photo.length - 1].file_id, kind: "photo", name };
+      if (r.video) return { file_id: r.video.file_id, kind: "video", name };
+      if (r.document) return { file_id: r.document.file_id, kind: "document", name };
+      return null;
+    };
+    let res = null;
+    if (kind === "photo") res = await sendOne("sendPhoto", "photo");
+    else if (kind === "video") res = await sendOne("sendVideo", "video");
+    if (!res) res = await sendOne("sendDocument", "document");
+    if (!res) {
+      return out(502, { error: "Telegram не принял файл. Напиши боту /start в личку и попробуй другой файл" });
+    }
+    return out(200, res);
+  }
+
+  if (body.action === "hw_add") {
+    if (!(await isMember(user.id))) {
+      return out(403, { error: "Загружать домашку могут только участники группы" });
+    }
+    const date = String(body.date || "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return out(400, { error: "Укажи дату" });
+    const nw = nskInfo();
+    if (date < nw.date) return out(400, { error: "Эта дата уже прошла" });
+    if (date === nw.date && nw.min >= 14 * 60) {
+      return out(400, { error: "На сегодня уже поздно: бот отправляет в 14:00. Выбери другую дату" });
+    }
+    if (date > addDays(nw.date, 60)) return out(400, { error: "Дата слишком далеко (максимум 60 дней)" });
+
+    const rawText = String(body.text || "").trim();
+    if (rawText.length > 900) return out(400, { error: "Текст слишком длинный, максимум 900 символов" });
+    const files = (Array.isArray(body.files) ? body.files : [])
+      .slice(0, HW_MAX_FILES)
+      .filter((f) => f && typeof f.file_id === "string" && ["photo", "video", "document"].includes(f.kind))
+      .map((f) => ({ file_id: f.file_id.slice(0, 250), kind: f.kind, name: String(f.name || "").slice(0, 80) }));
+    if (!rawText && !files.length) return out(400, { error: "Добавь текст, фото, видео или файл" });
+
+    const all = await loadHw(st);
+    const pending = Object.values(all).filter((h) => h.author === user.id && !h.posted).length;
+    if (!admin && pending >= 10) return out(400, { error: "У тебя уже 10 неотправленных домашек" });
+
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const hw = {
+      id, date, text: rawText, files,
+      author: user.id,
+      authorName: user.first_name || "?",
+      authorUsername: user.username || "",
+      ts: Date.now(),
+      posted: false,
+    };
+    all[id] = hw;
+    await saveHw(st, all);
+    return out(200, { item: hwView(hw, user.id, admin) });
+  }
+
+  if (body.action === "hw_list") {
+    const all = Object.values(await loadHw(st));
+    const items = all
+      .filter((h) => admin || h.author === user.id)
+      .sort((a, b) =>
+        (a.posted ? 1 : 0) - (b.posted ? 1 : 0) ||
+        (a.posted ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date))
+      )
+      .map((h) => hwView(h, user.id, admin));
+    return out(200, { items });
+  }
+
+  if (body.action === "hw_del") {
+    const all = await loadHw(st);
+    const h = all[body.id];
+    if (!h) return out(404, { error: "Домашка не найдена" });
+    if (!admin && !(h.author === user.id && !h.posted)) {
+      return out(403, { error: "Удалить можно только свою неотправленную домашку" });
+    }
+    delete all[body.id];
+    await saveHw(st, all);
+    return out(200, { ok: true });
+  }
+
+  if (body.action === "hw_now") {
+    if (!admin) return out(403, { error: "Только для админа" });
+    const all = await loadHw(st);
+    const h = all[body.id];
+    if (!h) return out(404, { error: "Домашка не найдена" });
+    if (h.posted) return out(400, { error: "Уже отправлено" });
+    if (!(await postHomework(h))) return out(502, { error: "Не удалось отправить в группу" });
+    h.posted = true;
+    h.postedAt = Date.now();
+    await saveHw(st, all);
+    return out(200, { item: hwView(h, user.id, true) });
   }
 
   /* ---------- звуки ---------- */

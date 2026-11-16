@@ -98,6 +98,14 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
 .m-title{font-size:20px;font-weight:700}
 .m-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
 .m-btns .btn{margin-top:0}
+
+input[type=date]{width:100%;background:var(--line);border:0;border-radius:12px;padding:12px;color:var(--text);font:inherit;color-scheme:dark}
+.card.hw-form{cursor:default}
+.picks{display:flex;gap:8px}
+.pick{display:flex;align-items:center;justify-content:center;gap:6px;flex:1;background:var(--line);border-radius:12px;padding:12px 6px;font-size:14px;font-weight:700}
+.hwf{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
+.hwf-n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}
+.hwf .sq{width:34px;height:34px}
 </style>
 </head>
 <body>
@@ -119,6 +127,8 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
     <button class="item" id="go-bells"><div class="ic"><span class="i" data-i="bell"></span></div><div><b>Расписание звонков</b><span>Время начала и конца пар</span></div></button>
     <button class="item" id="go-mine"><div class="ic"><span class="i" data-i="headphones"></span></div><div><b>Мои звуки</b><span>Звуки на стикеры, которые добавил ты</span></div></button>
     <button class="item" id="go-ideas"><div class="ic"><span class="i" data-i="bulb"></span></div><div><b>Улучшения</b><span>Предложи идею для бота</span></div></button>
+    <button class="item" id="go-hw"><div class="ic"><span class="i" data-i="homework"></span></div><div><b>Домашка</b><span>Загрузить задание для группы</span></div></button>
+    <button class="item" id="go-hwadmin" hidden><div class="ic"><span class="i" data-i="checks"></span></div><div><b>ДЗ: все</b><span>Кто и что загрузил</span></div></button>
     <button class="item" id="go-requests" hidden><div class="ic"><span class="i" data-i="clipboard"></span></div><div><b>Заявки</b><span id="req-sub">Идеи участников</span></div></button>
     <button class="item" id="go-admin" hidden><div class="ic"><span class="i" data-i="shield"></span></div><div><b>Админка</b><span>Все звуки, удаление</span></div></button>
     <button class="item" id="go-people" hidden><div class="ic"><span class="i" data-i="users"></span></div><div><b>Подгруппы</b><span>Кто в какой подгруппе</span></div></button>
@@ -193,6 +203,39 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
   <div class="muted">Здесь только те, кто хотя бы раз открывал кабинет.</div>
 </div>
 
+<div id="hw" class="screen" hidden>
+  <button class="link" data-back><span class="i" data-i="back"></span>Назад</button>
+  <h1>Домашка</h1>
+  <div class="hi">Бот отправит её в группу в 14:00 в выбранный день. Отправитель не указывается.</div>
+  <div class="card hw-form">
+    <div class="h3" style="margin-top:0">На какое число</div>
+    <input type="date" id="hw-date">
+    <div class="h3">Текст</div>
+    <textarea id="hw-text" maxlength="900" placeholder="Что задали (необязательно, если есть вложения)"></textarea>
+    <div class="h3">Вложения</div>
+    <div class="picks">
+      <label class="pick" for="hw-photo"><span class="i" data-i="image"></span>Фото</label>
+      <label class="pick" for="hw-video"><span class="i" data-i="video"></span>Видео</label>
+      <label class="pick" for="hw-file"><span class="i" data-i="file"></span>Файл</label>
+    </div>
+    <input type="file" id="hw-photo" accept="image/*" multiple>
+    <input type="file" id="hw-video" accept="video/*" multiple>
+    <input type="file" id="hw-file" multiple>
+    <div id="hw-files"></div>
+    <div class="muted">До 8 вложений, каждое до 15 МБ. Нужно добавить хотя бы текст или одно вложение.</div>
+    <button class="btn" id="hw-send" disabled><span class="i" data-i="send"></span>Отправить</button>
+  </div>
+  <div class="h3">Мои домашки</div>
+  <div id="hw-mine"></div>
+</div>
+
+<div id="hwadmin" class="screen" hidden>
+  <button class="link" data-back><span class="i" data-i="back"></span>Назад</button>
+  <h1>ДЗ: все</h1>
+  <div class="hi">Здесь виден отправитель. Можно удалить или отправить в группу прямо сейчас.</div>
+  <div id="hw-all"></div>
+</div>
+
 <div id="modal" hidden>
   <div class="sheet">
     <button class="x" id="modal-x" aria-label="Закрыть"><span class="i" data-i="close"></span></button>
@@ -246,6 +289,11 @@ const ICONS = {
   close: '<path d="M18 6 6 18M6 6l12 12"/>',
   bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
   clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  homework: '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>',
+  image: '<rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>',
+  video: '<path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2"/>',
+  file: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/>',
+  checks: '<path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/>',
 };
 const svg = (n) =>
   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]}</svg>`;
@@ -801,6 +849,194 @@ async function loadSchedule() {
   renderBells();
 }
 
+/* ---------- домашка ---------- */
+const MONTHS_RU = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
+const hwDate = (d) => { const [, m, x] = d.split("-"); return `${Number(x)} ${MONTHS_RU[Number(m) - 1]}`; };
+let HW = [], HWF = [];
+const HW_CHUNK = 3 * 1000 * 1000;
+
+const toB64 = (blob) =>
+  new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(String(r.result).split(",")[1]);
+    r.onerror = () => rej(new Error("Не удалось прочитать файл"));
+    r.readAsDataURL(blob);
+  });
+
+async function shrinkPhoto(file) {
+  try {
+    const bmp = await createImageBitmap(file);
+    const k = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
+    const c = document.createElement("canvas");
+    c.width = Math.round(bmp.width * k);
+    c.height = Math.round(bmp.height * k);
+    c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+    const blob = await new Promise((res) => c.toBlob(res, "image/jpeg", 0.85));
+    return blob ? new File([blob], file.name.replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" }) : file;
+  } catch {
+    return file;
+  }
+}
+
+async function hwUpload(entry, file) {
+  const total = Math.max(1, Math.ceil(file.size / HW_CHUNK));
+  const uid = Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
+  for (let i = 0; i < total; i++) {
+    entry.pct = Math.round((i / total) * 100);
+    renderHwFiles();
+    const data = await toB64(file.slice(i * HW_CHUNK, (i + 1) * HW_CHUNK));
+    const r = await api("hw_file", { uid, i, n: total, name: file.name, kind: entry.kind, data });
+    if (i === total - 1) { entry.file_id = r.file_id; entry.kind = r.kind; }
+  }
+  entry.state = "ok";
+}
+
+function updateHwSend() {
+  const busy = HWF.some((f) => f.state === "up");
+  const hasFile = HWF.some((f) => f.state === "ok");
+  $("#hw-send").disabled = !($("#hw-date").value && ($("#hw-text").value.trim() || hasFile) && !busy);
+}
+
+function renderHwFiles() {
+  const box = $("#hw-files");
+  box.replaceChildren();
+  HWF.forEach((f, idx) => {
+    const row = el("div", "hwf");
+    const icon = ico(f.state === "up" ? "loader" : f.state === "err" ? "close" : { photo: "image", video: "video", document: "file" }[f.kind]);
+    if (f.state === "up") icon.classList.add("spin");
+    const st = el("span", "muted", f.state === "up" ? `${f.pct || 0}%` : f.state === "err" ? f.err || "Ошибка" : "готово");
+    st.style.margin = "0";
+    const rm = el("button", "sq");
+    setIcon(rm, "trash");
+    rm.onclick = () => { HWF.splice(idx, 1); renderHwFiles(); updateHwSend(); };
+    row.append(icon, el("span", "hwf-n", f.name), st, rm);
+    box.append(row);
+  });
+}
+
+function addHwFiles(list, kind) {
+  for (const f of list) {
+    if (HWF.length >= 8) { fail(new Error("Не больше 8 вложений")); break; }
+    if (kind !== "photo" && f.size > 15 * 1024 * 1024) { fail(new Error(`${f.name}: больше 15 МБ`)); continue; }
+    const e = { kind, name: f.name, state: "up", pct: 0 };
+    HWF.push(e);
+    (async () => {
+      try {
+        await hwUpload(e, kind === "photo" ? await shrinkPhoto(f) : f);
+      } catch (err) {
+        e.state = "err";
+        e.err = err.message;
+      }
+      renderHwFiles();
+      updateHwSend();
+    })();
+  }
+  renderHwFiles();
+  updateHwSend();
+}
+
+async function refreshHw() {
+  HW = (await api("hw_list")).items;
+  renderHwMine();
+  renderHwAdmin();
+}
+
+function hwCard(h, adminMode) {
+  const c = el("div", "card idea");
+  const top = el("div", "row");
+  top.append(
+    el("span", "bd " + (h.posted ? "bd-done" : "bd-review"), h.posted ? "Отправлено" : "Ждёт отправки"),
+    el("span", "muted", `на ${hwDate(h.date)}`)
+  );
+  c.append(top);
+  if (adminMode && h.sender) c.append(el("div", "muted", "Отправитель: " + h.sender));
+  if (h.text) c.append(el("div", "idea-t", h.text));
+  if (h.files.length) {
+    const names = h.files.map((f) => ({ photo: "фото", video: "видео", document: "файл" }[f.kind]));
+    c.append(el("div", "muted", `Вложений: ${h.files.length} (${names.join(", ")})`));
+  }
+  const acts = el("div", "acts");
+  if (adminMode && !h.posted) {
+    const now = el("button", "btn");
+    now.append(ico("send"), document.createTextNode("Отправить сейчас"));
+    now.onclick = () =>
+      ask("Отправить в группу прямо сейчас?", async () => {
+        try {
+          const r = await api("hw_now", { id: h.id });
+          HW = HW.map((x) => (x.id === h.id ? r.item : x));
+          renderHwMine();
+          renderHwAdmin();
+          note("#ok", "Отправлено в группу", 3000);
+        } catch (e) { fail(e); }
+      });
+    acts.append(now);
+  }
+  if (adminMode || (h.mine && !h.posted)) {
+    const del = el("button", "btn ghost");
+    del.append(ico("trash"), document.createTextNode("Удалить"));
+    del.onclick = () =>
+      ask("Удалить домашку?", async () => {
+        try {
+          await api("hw_del", { id: h.id });
+          HW = HW.filter((x) => x.id !== h.id);
+          renderHwMine();
+          renderHwAdmin();
+        } catch (e) { fail(e); }
+      });
+    acts.append(del);
+  }
+  if (acts.children.length) c.append(acts);
+  return c;
+}
+function renderHwMine() {
+  const box = $("#hw-mine");
+  box.replaceChildren();
+  const my = HW.filter((h) => h.mine);
+  if (!my.length) box.append(el("div", "muted", "Пока ничего не загружено."));
+  my.forEach((h) => box.append(hwCard(h, false)));
+}
+function renderHwAdmin() {
+  if (!INFO?.isAdmin) return;
+  const box = $("#hw-all");
+  box.replaceChildren();
+  if (!HW.length) box.append(el("div", "muted", "Домашек пока нет."));
+  HW.forEach((h) => box.append(hwCard(h, true)));
+}
+
+function openHw() {
+  const n = nsk();
+  const d = $("#hw-date");
+  d.min = new Date(Date.parse(n.date) + (n.min >= 14 * 60 ? 864e5 : 0)).toISOString().slice(0, 10);
+  d.max = new Date(Date.parse(n.date) + 60 * 864e5).toISOString().slice(0, 10);
+  renderHwFiles();
+  renderHwMine();
+  updateHwSend();
+  show("hw");
+}
+
+$("#hw-photo").onchange = (e) => { addHwFiles([...e.target.files], "photo"); e.target.value = ""; };
+$("#hw-video").onchange = (e) => { addHwFiles([...e.target.files], "video"); e.target.value = ""; };
+$("#hw-file").onchange = (e) => { addHwFiles([...e.target.files], "document"); e.target.value = ""; };
+$("#hw-date").oninput = updateHwSend;
+$("#hw-text").oninput = updateHwSend;
+$("#hw-send").onclick = async () => {
+  const btn = $("#hw-send");
+  btn.disabled = true;
+  const files = HWF.filter((f) => f.state === "ok").map((f) => ({ file_id: f.file_id, kind: f.kind, name: f.name }));
+  try {
+    const r = await api("hw_add", { date: $("#hw-date").value, text: $("#hw-text").value, files });
+    HW = [r.item, ...HW];
+    HWF = [];
+    $("#hw-text").value = "";
+    $("#hw-date").value = "";
+    renderHwFiles();
+    renderHwMine();
+    renderHwAdmin();
+    note("#ok", `Готово! Бот отправит в группу ${hwDate(r.item.date)} в 14:00.`, 5000);
+  } catch (e) { fail(e); }
+  updateHwSend();
+};
+
 /* ---------- запуск ---------- */
 tg?.BackButton.onClick(back);
 document.querySelectorAll("[data-back]").forEach((b) => (b.onclick = back));
@@ -811,6 +1047,9 @@ $("#go-people").onclick = () => INFO?.isAdmin && openPeople();
 $("#go-bells").onclick = () => show("bells");
 $("#go-ideas").onclick = () => { renderIdeas(); show("ideas"); };
 $("#go-requests").onclick = () => { if (INFO?.isAdmin) { renderRequests(); show("requests"); } };
+
+$("#go-hw").onclick = openHw;
+$("#go-hwadmin").onclick = () => { if (INFO?.isAdmin) { renderHwAdmin(); show("hwadmin"); } };
 
 $("#go-schedule").onclick = () => {
   if (!INFO?.appLink) return fail(new Error("Не задана ссылка на расписание (APP_LINK)"));
@@ -828,6 +1067,8 @@ api("info")
     $("#go-admin").hidden = !j.isAdmin;
     $("#go-people").hidden = !j.isAdmin;
     $("#go-requests").hidden = !j.isAdmin;
+    $("#go-hwadmin").hidden = !j.isAdmin;
+    refreshHw().catch((e) => console.log("homework load failed:", e.message));
     renderNow();
     refreshIdeas().catch((e) => console.log("ideas load failed:", e.message));
     await refresh();

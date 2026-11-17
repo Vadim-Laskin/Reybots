@@ -1,6 +1,16 @@
 const crypto = require("crypto");
 const { store, nskInfo } = require("../../lib/natk");
 const { loadHw, saveHw, postHomework } = require("../../lib/homework");
+const nextBd = (bd, today) => {
+  // сколько дней до ближайшего дня рождения (29 февраля в невисокосный год — 28-го)
+  const [y, m, d] = today.split("-").map(Number);
+  const t0 = Date.UTC(y, m - 1, d);
+  const [bm, bdd] = bd.split("-").map(Number);
+  const at = (yy) => Date.UTC(yy, bm - 1, bm === 2 && bdd === 29 && new Date(yy, 1, 29).getDate() !== 29 ? 28 : bdd);
+  let t = at(y);
+  if (t < t0) t = at(y + 1);
+  return Math.round((t - t0) / 864e5);
+};
 const { isAdmin, isMember, load, save } = require("../../lib/sounds");
 
 const MAX_PER_USER = 15;
@@ -18,8 +28,10 @@ const addDays = (date, n) => new Date(Date.parse(date) + n * 864e5).toISOString(
 const hwView = (h, uid, admin) => ({
   id: h.id,
   date: h.date,
+  subject: h.subject || "",
   text: h.text,
-  files: h.files.map((f) => ({ kind: f.kind, name: f.name })),
+  // file_id нужен автору и админу, чтобы изменить домашку
+  files: h.files.map((f) => ({ kind: f.kind, name: f.name, ...(admin || h.author === uid ? { file_id: f.file_id } : {}) })),
   posted: !!h.posted,
   mine: h.author === uid,
   ts: h.ts,
@@ -181,6 +193,23 @@ async function main(event) {
     if (p.bd !== bd) delete p.bdDone;
     await st.setJSON(personKey(user.id), { ...p, id: user.id, name, username, bd, ts: Date.now() });
     return out(200, { bd });
+  }
+
+  // список дней рождений (имя и дата), ближайшие сверху
+  if (body.action === "bd_list") {
+    if (!(await isMember(user.id))) return out(403, { error: "Только для участников группы" });
+    let list = [];
+    try {
+      const { blobs } = await st.list({ prefix: "person-" });
+      list = (await Promise.all(blobs.map((b) => st.get(b.key, { type: "json" }).catch(() => null)))).filter((p) => p && p.bd);
+    } catch (e) {
+      console.log("bd list failed:", e.message);
+    }
+    const today = nskInfo().date;
+    const items = list
+      .map((p) => ({ name: p.name || "?", bd: p.bd, days: nextBd(p.bd, today), mine: p.id === user.id }))
+      .sort((a, b) => a.days - b.days || a.name.localeCompare(b.name, "ru"));
+    return out(200, { items });
   }
 
   if (body.action === "bd_clear") {
@@ -355,26 +384,74 @@ async function main(event) {
     return out(200, res);
   }
 
-  if (body.action === "hw_add") {
-    if (!(await isMember(user.id))) {
-      return out(403, { error: "Загружать домашку могут только участники группы" });
-    }
+  // общая проверка полей домашки для hw_add и hw_edit
+  const hwClean = () => {
     const date = String(body.date || "");
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return out(400, { error: "Укажи дату" });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: "Укажи дату" };
     const nw = nskInfo();
-    if (date < nw.date) return out(400, { error: "Эта дата уже прошла" });
+    if (date < nw.date) return { error: "Эта дата уже прошла" };
     if (date === nw.date && nw.min >= 18 * 60 + 1) {
-      return out(400, { error: "На сегодня уже поздно: бот отправляет в 18:01. Выбери другую дату" });
+      return { error: "На сегодня уже поздно: бот отправляет в 18:01. Выбери другую дату" };
     }
-    if (date > addDays(nw.date, 60)) return out(400, { error: "Дата слишком далеко (максимум 60 дней)" });
+    if (date > addDays(nw.date, 60)) return { error: "Дата слишком далеко (максимум 60 дней)" };
 
-    const rawText = String(body.text || "").trim();
-    if (rawText.length > 900) return out(400, { error: "Текст слишком длинный, максимум 900 символов" });
+    const text = String(body.text || "").trim();
+    if (text.length > 900) return { error: "Текст слишком длинный, максимум 900 символов" };
+    const subject = String(body.subject || "").replace(/\s+/g, " ").trim();
+    if (subject.length > 60) return { error: "Название предмета слишком длинное, максимум 60 символов" };
     const files = (Array.isArray(body.files) ? body.files : [])
       .slice(0, HW_MAX_FILES)
       .filter((f) => f && typeof f.file_id === "string" && ["photo", "video", "document"].includes(f.kind))
       .map((f) => ({ file_id: f.file_id.slice(0, 250), kind: f.kind, name: String(f.name || "").slice(0, 80) }));
-    if (!rawText && !files.length) return out(400, { error: "Добавь текст, фото, видео или файл" });
+    if (!text && !files.length) return { error: "Добавь текст, фото, видео или файл" };
+    return { date, text, subject, files };
+  };
+
+  if (body.action === "hw_edit") {
+    const all = await loadHw(st);
+    const h = all[body.id];
+    if (!h) return out(404, { error: "Домашка не найдена" });
+    if (!admin && h.author !== user.id) return out(403, { error: "Менять можно только свою домашку" });
+    if (h.posted) return out(400, { error: "Эта домашка уже отправлена, изменить нельзя" });
+    const c = hwClean();
+    if (c.error) return out(400, { error: c.error });
+    Object.assign(h, { date: c.date, text: c.text, subject: c.subject, files: c.files });
+    await saveHw(st, all);
+    return out(200, { item: hwView(h, user.id, admin) });
+  }
+
+  // архив: уже отправленные в группу домашки (без отправителя)
+  if (body.action === "hw_archive") {
+    if (!(await isMember(user.id))) return out(403, { error: "Только для участников группы" });
+    const items = Object.values(await loadHw(st))
+      .filter((h) => h.posted)
+      .sort((a, b) => b.date.localeCompare(a.date) || b.ts - a.ts)
+      .slice(0, 40)
+      .map((h) => ({
+        id: h.id, date: h.date, subject: h.subject || "", text: h.text,
+        files: h.files.map((f) => ({ kind: f.kind, name: f.name })),
+      }));
+    return out(200, { items });
+  }
+
+  // прислать отправленную домашку себе в личку
+  if (body.action === "hw_me") {
+    if (!(await isMember(user.id))) return out(403, { error: "Только для участников группы" });
+    const h = (await loadHw(st))[body.id];
+    if (!h || !h.posted) return out(404, { error: "Домашка не найдена" });
+    if (!(await postHomework(h, user.id))) {
+      return out(502, { error: "Не удалось отправить. Напиши боту /start в личку и попробуй снова" });
+    }
+    return out(200, { ok: true });
+  }
+
+  if (body.action === "hw_add") {
+    if (!(await isMember(user.id))) {
+      return out(403, { error: "Загружать домашку могут только участники группы" });
+    }
+    const c = hwClean();
+    if (c.error) return out(400, { error: c.error });
+    const { date, text: rawText, subject, files } = c;
 
     const all = await loadHw(st);
     const pending = Object.values(all).filter((h) => h.author === user.id && !h.posted).length;
@@ -382,7 +459,7 @@ async function main(event) {
 
     const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     const hw = {
-      id, date, text: rawText, files,
+      id, date, subject, text: rawText, files,
       author: user.id,
       authorName: user.first_name || "?",
       authorUsername: user.username || "",

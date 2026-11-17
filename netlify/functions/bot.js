@@ -1,5 +1,6 @@
 const { store } = require("../../lib/natk");
 const { isAdmin, load, save } = require("../../lib/sounds");
+const { groupCommand } = require("../../lib/commands");
 
 const API = `https://api.telegram.org/bot${process.env.BOT_TOKEN}`;
 const MAX_PER_USER = 5;
@@ -142,6 +143,7 @@ exports.handler = async (event) => {
   try {
     if (msg.chat.type === "private") await privateChat(st, msg);
     else if (msg.sticker) await groupSticker(st, msg);
+    else if (msg.text && msg.text.startsWith("/")) await groupCommand(event, msg);
   } catch (e) {
     console.log("bot error:", e.message);
   }

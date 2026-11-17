@@ -1,5 +1,6 @@
 const { store, nskInfo } = require("../../lib/natk");
 const { isMember } = require("../../lib/sounds");
+const HOLIDAYS = require("../../lib/holidays");
 
 const H = { "Content-Type": "application/json" };
 const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -17,10 +18,32 @@ async function tg(method, payload) {
 }
 
 // каждый день в 9:00 по Новосибирску (02:00 UTC) поздравляем именинников
+async function holiday(st, today) {
+  const text = HOLIDAYS[today.slice(5)];
+  if (!text) return;
+  const key = `holiday-${today}`;
+  try {
+    if (await st.get(key)) return; // уже поздравляли
+  } catch {}
+  const j = await tg("sendMessage", { chat_id: process.env.CHAT_ID, text });
+  if (j.ok) {
+    try {
+      await st.set(key, "1");
+    } catch (e) {
+      console.log("holiday mark failed:", e.message);
+    }
+  }
+}
+
 exports.handler = async (event) => {
   const st = store(event);
   const today = nskInfo().date; // YYYY-MM-DD
   const year = Number(today.slice(0, 4));
+  try {
+    await holiday(st, today);
+  } catch (e) {
+    console.log("holiday failed:", e.message);
+  }
   let md = today.slice(5);
   // 29 февраля в невисокосный год отмечаем 28-го
   const feb29 = md === "02-28" && !isLeap(year);

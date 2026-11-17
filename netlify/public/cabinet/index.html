@@ -223,6 +223,14 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
   <div class="card hw-form">
     <div class="h3" style="margin-top:0">На какую пару</div>
     <select id="hw-subject" style="margin-top:0"></select>
+    <div id="hw-sg-box" hidden>
+      <div class="h3">Подгруппа</div>
+      <select id="hw-sg" style="margin-top:0">
+        <option value="">Выбери подгруппу</option>
+        <option value="1">1 подгруппа</option>
+        <option value="2">2 подгруппа</option>
+      </select>
+    </div>
     <div class="h3">Текст</div>
     <textarea id="hw-text" maxlength="900" placeholder="Что задали (необязательно, если есть вложения)"></textarea>
     <div class="h3">Вложения</div>
@@ -845,7 +853,22 @@ async function hwUpload(entry, file) {
 function updateHwSend() {
   const busy = HWF.some((f) => f.state === "up");
   const hasFile = HWF.some((f) => f.state === "ok");
-  $("#hw-send").disabled = !($("#hw-subject").value && ($("#hw-text").value.trim() || hasFile) && !busy);
+  const sgOk = $("#hw-sg-box").hidden || $("#hw-sg").value;
+  $("#hw-send").disabled = !($("#hw-subject").value && sgOk && ($("#hw-text").value.trim() || hasFile) && !busy);
+}
+
+// предмет идёт по подгруппам (в расписании есть «1 подгруппа» / «2 подгруппа»)?
+const normSubj = (s) => String(s || "").replace(/\s+/g, " ").trim().toLowerCase();
+function needsSg(subject) {
+  const k = normSubj(subject);
+  return !!k && (SCH?.days || []).some((d) => d.pairs.some((p) => p.entries.some((e) => e.sg && normSubj(e.subject) === k)));
+}
+function syncSg(preset) {
+  const need = needsSg($("#hw-subject").value);
+  $("#hw-sg-box").hidden = !need;
+  if (!need) $("#hw-sg").value = "";
+  else if (preset) $("#hw-sg").value = String(preset);
+  else if (!$("#hw-sg").value && (INFO?.sg === 1 || INFO?.sg === 2)) $("#hw-sg").value = String(INFO.sg); // по умолчанию — твоя подгруппа
 }
 
 function fillSubjects(selected) {
@@ -859,6 +882,7 @@ function fillSubjects(selected) {
   [...set].sort((a, b) => a.localeCompare(b, "ru")).forEach((s) => opts.push(new Option(s, s)));
   sel.replaceChildren(...opts);
   sel.value = selected || "";
+  syncSg();
 }
 
 let HWE = null; // id редактируемой домашки
@@ -877,6 +901,7 @@ function startHwEdit(h) {
   openHw(true);
   HWE = h.id;
   fillSubjects(h.subject || "");
+  syncSg(h.sg);
   $("#hw-text").value = h.text || "";
   HWF = h.files.map((f) => ({ kind: f.kind, name: f.name || "файл", file_id: f.file_id, state: "ok" }));
   $("#hw-title").textContent = "Изменить домашку";
@@ -938,7 +963,7 @@ function hwCard(h, adminMode) {
     el("span", "muted", h.posted ? (h.date ? `на ${hwDate(h.date)}` : "") : h.expected ? `ближайшая пара: ${hwDate(h.expected)}` : "пары пока нет в расписании")
   );
   c.append(top);
-  if (h.subject) c.append(el("b", null, h.subject));
+  if (h.subject) c.append(el("b", null, h.subject + (h.sg ? ` · ${h.sg} подгруппа` : "")));
   if (adminMode && h.sender) c.append(el("div", "muted", "Отправитель: " + h.sender));
   if (h.text) c.append(el("div", "idea-t", h.text));
   if (h.files.length) {
@@ -1015,7 +1040,8 @@ function openHw(keep) {
 }
 
 $("#hw-new").onclick = () => openHw();
-$("#hw-subject").onchange = updateHwSend;
+$("#hw-subject").onchange = () => { syncSg(); updateHwSend(); };
+$("#hw-sg").onchange = updateHwSend;
 $("#hw-photo").onchange = (e) => { addHwFiles([...e.target.files], "photo"); e.target.value = ""; };
 $("#hw-video").onchange = (e) => { addHwFiles([...e.target.files], "video"); e.target.value = ""; };
 $("#hw-file").onchange = (e) => { addHwFiles([...e.target.files], "document"); e.target.value = ""; };
@@ -1026,7 +1052,7 @@ $("#hw-send").onclick = async () => {
   btn.disabled = true;
   const files = HWF.filter((f) => f.state === "ok").map((f) => ({ file_id: f.file_id, kind: f.kind, name: f.name }));
   try {
-    const data = { subject: $("#hw-subject").value, text: $("#hw-text").value, files };
+    const data = { subject: $("#hw-subject").value, sg: $("#hw-sg-box").hidden ? 0 : Number($("#hw-sg").value), text: $("#hw-text").value, files };
     if (HWE) {
       const r = await api("hw_edit", { id: HWE, ...data });
       HW = HW.map((x) => (x.id === HWE ? r.item : x));

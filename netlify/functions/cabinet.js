@@ -1,6 +1,6 @@
 const crypto = require("crypto");
 const { store, nskInfo, getSchedule } = require("../../lib/natk");
-const { loadHw, saveHw, postHomework, norm, subjectsOf, nextLesson, postIfLessonTomorrow } = require("../../lib/homework");
+const { loadHw, saveHw, postHomework, norm, subjectsOf, subgroupSubjects, nextLesson, postIfLessonTomorrow } = require("../../lib/homework");
 const nextBd = (bd, today) => {
   // сколько дней до ближайшего дня рождения (29 февраля в невисокосный год — 28-го)
   const [y, m, d] = today.split("-").map(Number);
@@ -31,6 +31,7 @@ const hwView = (h, uid, admin, expected = "") => ({
   expected,
   mode: h.mode || "date",
   subject: h.subject || "",
+  sg: h.sg || 0,
   text: h.text,
   // file_id нужен автору и админу, чтобы изменить домашку
   files: h.files.map((f) => ({ kind: f.kind, name: f.name, ...(admin || h.author === uid ? { file_id: f.file_id } : {}) })),
@@ -401,11 +402,16 @@ async function main(event) {
     let subject = String(body.subject || "").replace(/\s+/g, " ").trim();
     if (!subject) return { error: "Выбери предмет" };
     if (subject.length > 120) return { error: "Слишком длинное название предмета" };
+    let sg = Number(body.sg) === 1 || Number(body.sg) === 2 ? Number(body.sg) : 0;
     const sch = await schedule();
     if (sch) {
       const known = subjectsOf(sch).get(norm(subject));
       if (!known) return { error: "Такого предмета нет в расписании. Выбери из списка" };
       subject = known;
+      // у предметов по подгруппам (иностранный язык, компьютерная графика) подгруппа обязательна
+      if (subgroupSubjects(sch).has(norm(subject))) {
+        if (!sg) return { error: "Выбери подгруппу" };
+      } else sg = 0;
     }
     const text = String(body.text || "").trim();
     if (text.length > 900) return { error: "Текст слишком длинный, максимум 900 символов" };
@@ -414,12 +420,12 @@ async function main(event) {
       .filter((f) => f && typeof f.file_id === "string" && ["photo", "video", "document"].includes(f.kind))
       .map((f) => ({ file_id: f.file_id.slice(0, 250), kind: f.kind, name: String(f.name || "").slice(0, 80) }));
     if (!text && !files.length) return { error: "Добавь текст, фото, видео или файл" };
-    return { subject, text, files, sch };
+    return { subject, sg, text, files, sch };
   };
 
   // ближайшая пара по предмету (для подписи «ждёт пару»)
   const expectedOf = (h, sch) =>
-    !h.posted && h.mode === "lesson" && sch ? nextLesson(sch, h.subject, nskInfo().tomorrow) : "";
+    !h.posted && h.mode === "lesson" && sch ? nextLesson(sch, h.subject, nskInfo().tomorrow, h.sg || 0) : "";
 
   if (body.action === "hw_edit") {
     const all = await loadHw(st);
@@ -429,7 +435,7 @@ async function main(event) {
     if (h.posted) return out(400, { error: "Эта домашка уже отправлена, изменить нельзя" });
     const c = await hwClean();
     if (c.error) return out(400, { error: c.error });
-    Object.assign(h, { subject: c.subject, text: c.text, files: c.files });
+    Object.assign(h, { subject: c.subject, sg: c.sg, text: c.text, files: c.files });
     if (!h.mode) { h.mode = "lesson"; h.date = ""; } // старая запись с датой становится «по паре»
     await saveHw(st, all);
     return out(200, { item: hwView(h, user.id, admin, expectedOf(h, c.sch)) });
@@ -448,7 +454,7 @@ async function main(event) {
 
     const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     const hw = {
-      id, mode: "lesson", date: "", subject: c.subject, text: c.text, files: c.files,
+      id, mode: "lesson", date: "", subject: c.subject, sg: c.sg, text: c.text, files: c.files,
       author: user.id,
       authorName: user.first_name || "?",
       authorUsername: user.username || "",
@@ -503,7 +509,7 @@ async function main(event) {
     if (h.posted) return out(400, { error: "Уже отправлено" });
     if (h.mode === "lesson" && !h.date) {
       const sch = await schedule();
-      h.date = (sch && nextLesson(sch, h.subject, nskInfo().tomorrow)) || "";
+      h.date = (sch && nextLesson(sch, h.subject, nskInfo().tomorrow, h.sg || 0)) || "";
     }
     if (!(await postHomework(h))) return out(502, { error: "Не удалось отправить в группу" });
     h.posted = true;

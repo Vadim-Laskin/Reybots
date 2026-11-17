@@ -14,3 +14,6 @@
 
 [functions."homework"]
   schedule = "1 11 * * *"
+
+[functions."birthday"]
+  schedule = "0 2 * * *"

@@ -160,7 +160,37 @@ async function main(event) {
       isAdmin: admin,
       appLink: process.env.APP_LINK || "",
       sg: p.sg || 0,
+      bd: p.bd || "",
     });
+  }
+
+  /* ---------- день рождения (только свой) ---------- */
+  if (body.action === "bd_set") {
+    if (!(await isMember(user.id))) {
+      return out(403, { error: "Указать день рождения могут только участники группы" });
+    }
+    const day = Number(body.day), month = Number(body.month);
+    const maxDay = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
+    if (!Number.isInteger(month) || !Number.isInteger(day) || month < 1 || month > 12 || day < 1 || day > maxDay) {
+      return out(400, { error: "Некорректная дата" });
+    }
+    const name = user.first_name || "";
+    const username = user.username || "";
+    const p = (await getPerson(st, user.id)) || { sg: 0 };
+    const bd = String(month).padStart(2, "0") + "-" + String(day).padStart(2, "0");
+    if (p.bd !== bd) delete p.bdDone;
+    await st.setJSON(personKey(user.id), { ...p, id: user.id, name, username, bd, ts: Date.now() });
+    return out(200, { bd });
+  }
+
+  if (body.action === "bd_clear") {
+    const p = await getPerson(st, user.id);
+    if (p) {
+      delete p.bd;
+      delete p.bdDone;
+      await st.setJSON(personKey(user.id), p);
+    }
+    return out(200, { ok: true });
   }
 
   if (body.action === "people") {

@@ -24,7 +24,7 @@
   var reduce = false;
   try { reduce = matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) {}
 
-  var root = null, topBox = null, timers = [], current = "";
+  var root = null, timers = [], current = "";
 
   function nskMd() {
     return new Date(Date.now() + 7 * 3600e3).toISOString().slice(5, 10);
@@ -50,7 +50,6 @@
     var s = document.createElement("style");
     s.id = "festive-css";
     s.textContent =
-      "#festive-top{position:absolute;left:0;right:0;top:0;height:0;z-index:40;pointer-events:none}" +
       "#festive{position:fixed;inset:0;z-index:40;pointer-events:none;overflow:hidden}" +
       ".fs-strip{position:absolute;left:0;right:0;top:calc(var(--tg-safe-area-inset-top,0px) + var(--tg-content-safe-area-inset-top,0px));height:6px;opacity:.95}" +
       // в кабинете лента идёт по самому краю экрана, а не по середине шапки
@@ -86,8 +85,7 @@
     timers.forEach(clearInterval);
     timers = [];
     if (root) root.remove();
-    if (topBox) topBox.remove();
-    root = topBox = null;
+    root = null;
   }
 
   function burst() {
@@ -111,18 +109,14 @@
     root.id = "festive";
     root.setAttribute("aria-hidden", "true");
     if (/\/cabinet\//.test(location.pathname) || /[?&]edge=1/.test(location.search)) root.className = "fs-edge";
-    // лента и гирлянда — часть страницы: уезжают вверх вместе с ней, а не режут текст при прокрутке
-    topBox = el("div");
-    topBox.id = "festive-top";
-    topBox.setAttribute("aria-hidden", "true");
 
     // полоска / гирлянда сверху
     if (t.strip === "lights") {
       var g = el("div", "fs-strip fs-lights");
       for (var i = 0; i < 18; i++) g.appendChild(el("i", "", "--c:" + COLORS[i % COLORS.length] + ";animation-delay:" + (i % 3) * 0.5 + "s" + (reduce ? ";animation:none" : "")));
-      topBox.appendChild(g);
+      root.appendChild(g);
     } else if (t.strip) {
-      topBox.appendChild(el("div", "fs-strip fs-" + t.strip));
+      root.appendChild(el("div", "fs-strip fs-" + t.strip));
     }
 
     if (!reduce) {
@@ -159,7 +153,6 @@
       setTimeout(function () { chip.remove(); }, 5200);
       try { localStorage.setItem(seenKey, "1"); } catch (e) {}
     }
-    document.body.appendChild(topBox);
     document.body.appendChild(root);
   }
 

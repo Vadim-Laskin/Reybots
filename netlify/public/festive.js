@@ -58,10 +58,10 @@
       ".fs-green{background:linear-gradient(90deg,#4ade80,#a3e635,#4ade80)}" +
       ".fs-army{background:repeating-linear-gradient(90deg,#4b5320 0 20px,#6b7a2f 20px 40px)}" +
       ".fs-lights{height:18px;display:flex;justify-content:space-between;padding:0 6px;border-top:2px solid rgba(120,120,120,.5);border-radius:0 0 50% 50%/0 0 8px 8px}" +
-      ".fs-lights i{width:8px;height:12px;border-radius:50% 50% 55% 55%;margin-top:1px;background:var(--c);box-shadow:0 0 8px var(--c);animation:fs-blink 1.6s ease-in-out infinite}" +
-      "@keyframes fs-blink{0%,100%{opacity:1}50%{opacity:.25}}" +
-      ".fs-p{position:absolute;top:-10vh;left:var(--x);font-size:var(--s);line-height:1;will-change:transform;animation:fs-fall var(--d) linear var(--dl) infinite}" +
-      ".fs-c{position:absolute;top:-10vh;left:var(--x);width:8px;height:12px;background:var(--c);border-radius:2px;will-change:transform;animation:fs-fall var(--d) linear var(--dl) infinite}" +
+      ".fs-lights i{width:8px;height:12px;border-radius:50% 50% 55% 55%;margin-top:1px;background:var(--c);box-shadow:0 0 8px var(--c);animation:fs-blink 3.5s ease-in-out infinite}" +
+      "@keyframes fs-blink{0%,100%{opacity:1}50%{opacity:.6}}" +
+      ".fs-p{position:absolute;top:-10vh;left:var(--x);font-size:var(--s);line-height:1;opacity:.6;will-change:transform;animation:fs-fall var(--d) linear var(--dl) infinite}" +
+      ".fs-c{position:absolute;top:-10vh;left:var(--x);width:8px;height:12px;background:var(--c);border-radius:2px;opacity:.55;will-change:transform;animation:fs-fall var(--d) linear var(--dl) infinite}" +
       "@keyframes fs-fall{from{transform:translate(0,0) rotate(0)}to{transform:translate(var(--dx),115vh) rotate(540deg)}}" +
       ".fs-b{position:absolute;width:0;height:0}" +
       ".fs-b i{position:absolute;left:-2px;top:-2px;width:4px;height:4px;border-radius:50%;background:var(--c);box-shadow:0 0 6px var(--c);animation:fs-burst 1.3s ease-out forwards}" +
@@ -89,8 +89,8 @@
   function burst() {
     if (!root || document.hidden) return;
     var b = el("div", "fs-b", "left:" + rnd(15, 85) + "%;top:" + rnd(18, 50) + "%;--c:hsl(" + Math.round(rnd(0, 360)) + ",90%,60%)");
-    for (var i = 0; i < 14; i++) {
-      var a = (i / 14) * Math.PI * 2, r = rnd(50, 80);
+    for (var i = 0; i < 10; i++) {
+      var a = (i / 10) * Math.PI * 2, r = rnd(50, 80);
       b.appendChild(el("i", "", "--dx:" + Math.cos(a) * r + "px;--dy:" + Math.sin(a) * r + "px"));
     }
     root.appendChild(b);
@@ -119,8 +119,8 @@
     if (!reduce) {
       // падающие эмодзи
       (t.fall || []).length && (function () {
-        for (var i = 0; i < 16; i++) {
-          var p = el("span", "fs-p", "--x:" + rnd(0, 96) + "%;--s:" + Math.round(rnd(14, 26)) + "px;--d:" + rnd(9, 17) + "s;--dl:-" + rnd(0, 16) + "s;--dx:" + rnd(-60, 60) + "px");
+        for (var i = 0; i < 6; i++) {
+          var p = el("span", "fs-p", "--x:" + rnd(4, 94) + "%;--s:" + Math.round(rnd(14, 20)) + "px;--d:" + rnd(16, 26) + "s;--dl:-" + rnd(0, 26) + "s;--dx:" + rnd(-40, 40) + "px");
           p.textContent = t.fall[i % t.fall.length];
           root.appendChild(p);
         }
@@ -128,15 +128,15 @@
       // конфетти
       if (t.confetti) {
         var cols = Array.isArray(t.confetti) ? t.confetti : COLORS;
-        for (var j = 0; j < 22; j++) {
-          root.appendChild(el("span", "fs-c", "--x:" + rnd(0, 98) + "%;--d:" + rnd(6, 11) + "s;--dl:-" + rnd(0, 11) + "s;--dx:" + rnd(-80, 80) + "px;--c:" + cols[j % cols.length]));
+        for (var j = 0; j < 8; j++) {
+          root.appendChild(el("span", "fs-c", "--x:" + rnd(4, 96) + "%;--d:" + rnd(12, 20) + "s;--dl:-" + rnd(0, 20) + "s;--dx:" + rnd(-50, 50) + "px;--c:" + cols[j % cols.length]));
         }
       }
       // салют
       var salute = t.burst || (t.burstDays && t.burstDays.indexOf(nskMd()) !== -1);
       if (salute) {
         burst();
-        timers.push(setInterval(burst, 1800));
+        timers.push(setInterval(burst, 6000));
       }
     }
 

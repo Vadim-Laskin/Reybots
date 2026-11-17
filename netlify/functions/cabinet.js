@@ -1,6 +1,6 @@
 const crypto = require("crypto");
-const { store, nskInfo } = require("../../lib/natk");
-const { loadHw, saveHw, postHomework } = require("../../lib/homework");
+const { store, nskInfo, getSchedule } = require("../../lib/natk");
+const { loadHw, saveHw, postHomework, norm, subjectsOf, nextLesson, postIfLessonTomorrow } = require("../../lib/homework");
 const nextBd = (bd, today) => {
   // сколько дней до ближайшего дня рождения (29 февраля в невисокосный год — 28-го)
   const [y, m, d] = today.split("-").map(Number);
@@ -25,9 +25,11 @@ const HW_MAX_FILES = 8;
 const HW_MAX_BYTES = 15 * 1024 * 1024;
 const HW_MAX_CHUNKS = 6;
 const addDays = (date, n) => new Date(Date.parse(date) + n * 864e5).toISOString().slice(0, 10);
-const hwView = (h, uid, admin) => ({
+const hwView = (h, uid, admin, expected = "") => ({
   id: h.id,
-  date: h.date,
+  date: h.date || "",
+  expected,
+  mode: h.mode || "date",
   subject: h.subject || "",
   text: h.text,
   // file_id нужен автору и админу, чтобы изменить домашку
@@ -384,28 +386,40 @@ async function main(event) {
     return out(200, res);
   }
 
-  // общая проверка полей домашки для hw_add и hw_edit
-  const hwClean = () => {
-    const date = String(body.date || "");
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: "Укажи дату" };
-    const nw = nskInfo();
-    if (date < nw.date) return { error: "Эта дата уже прошла" };
-    if (date === nw.date && nw.min >= 18 * 60 + 1) {
-      return { error: "На сегодня уже поздно: бот отправляет в 18:01. Выбери другую дату" };
+  // расписание для привязки домашки к паре (из кэша; если сайт недоступен — null)
+  const schedule = async () => {
+    try {
+      return await getSchedule(event, { maxAge: 10 * 60 * 1000 });
+    } catch (e) {
+      console.log("hw: расписание недоступно:", e.message);
+      return null;
     }
-    if (date > addDays(nw.date, 60)) return { error: "Дата слишком далеко (максимум 60 дней)" };
+  };
 
+  // общая проверка полей домашки для hw_add и hw_edit
+  const hwClean = async () => {
+    let subject = String(body.subject || "").replace(/\s+/g, " ").trim();
+    if (!subject) return { error: "Выбери предмет" };
+    if (subject.length > 120) return { error: "Слишком длинное название предмета" };
+    const sch = await schedule();
+    if (sch) {
+      const known = subjectsOf(sch).get(norm(subject));
+      if (!known) return { error: "Такого предмета нет в расписании. Выбери из списка" };
+      subject = known;
+    }
     const text = String(body.text || "").trim();
     if (text.length > 900) return { error: "Текст слишком длинный, максимум 900 символов" };
-    const subject = String(body.subject || "").replace(/\s+/g, " ").trim();
-    if (subject.length > 60) return { error: "Название предмета слишком длинное, максимум 60 символов" };
     const files = (Array.isArray(body.files) ? body.files : [])
       .slice(0, HW_MAX_FILES)
       .filter((f) => f && typeof f.file_id === "string" && ["photo", "video", "document"].includes(f.kind))
       .map((f) => ({ file_id: f.file_id.slice(0, 250), kind: f.kind, name: String(f.name || "").slice(0, 80) }));
     if (!text && !files.length) return { error: "Добавь текст, фото, видео или файл" };
-    return { date, text, subject, files };
+    return { subject, text, files, sch };
   };
+
+  // ближайшая пара по предмету (для подписи «ждёт пару»)
+  const expectedOf = (h, sch) =>
+    !h.posted && h.mode === "lesson" && sch ? nextLesson(sch, h.subject, nskInfo().tomorrow) : "";
 
   if (body.action === "hw_edit") {
     const all = await loadHw(st);
@@ -413,20 +427,20 @@ async function main(event) {
     if (!h) return out(404, { error: "Домашка не найдена" });
     if (!admin && h.author !== user.id) return out(403, { error: "Менять можно только свою домашку" });
     if (h.posted) return out(400, { error: "Эта домашка уже отправлена, изменить нельзя" });
-    const c = hwClean();
+    const c = await hwClean();
     if (c.error) return out(400, { error: c.error });
-    Object.assign(h, { date: c.date, text: c.text, subject: c.subject, files: c.files });
+    Object.assign(h, { subject: c.subject, text: c.text, files: c.files });
+    if (!h.mode) { h.mode = "lesson"; h.date = ""; } // старая запись с датой становится «по паре»
     await saveHw(st, all);
-    return out(200, { item: hwView(h, user.id, admin) });
+    return out(200, { item: hwView(h, user.id, admin, expectedOf(h, c.sch)) });
   }
 
   if (body.action === "hw_add") {
     if (!(await isMember(user.id))) {
       return out(403, { error: "Загружать домашку могут только участники группы" });
     }
-    const c = hwClean();
+    const c = await hwClean();
     if (c.error) return out(400, { error: c.error });
-    const { date, text: rawText, subject, files } = c;
 
     const all = await loadHw(st);
     const pending = Object.values(all).filter((h) => h.author === user.id && !h.posted).length;
@@ -434,7 +448,7 @@ async function main(event) {
 
     const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     const hw = {
-      id, date, subject, text: rawText, files,
+      id, mode: "lesson", date: "", subject: c.subject, text: c.text, files: c.files,
       author: user.id,
       authorName: user.first_name || "?",
       authorUsername: user.username || "",
@@ -442,19 +456,30 @@ async function main(event) {
       posted: false,
     };
     all[id] = hw;
+    // 18:01 уже прошло, а завтра есть эта пара: ждать до завтрашнего вечера поздно, отправляем сразу
+    const nw = nskInfo();
+    if (c.sch && nw.min >= 18 * 60 + 1) {
+      try {
+        await postIfLessonTomorrow(hw, c.sch, nw.tomorrow);
+      } catch (e) {
+        console.log("hw immediate post failed:", e.message);
+      }
+    }
     await saveHw(st, all);
-    return out(200, { item: hwView(hw, user.id, admin) });
+    return out(200, { item: hwView(hw, user.id, admin, expectedOf(hw, c.sch)) });
   }
 
+  // вся домашка видна всем участникам группы (без отправителя; его видит только админ)
   if (body.action === "hw_list") {
+    if (!(await isMember(user.id))) return out(403, { error: "Только для участников группы" });
     const all = Object.values(await loadHw(st));
+    const sch = all.some((h) => !h.posted && h.mode === "lesson") ? await schedule() : null;
     const items = all
-      .filter((h) => admin || h.author === user.id)
       .sort((a, b) =>
         (a.posted ? 1 : 0) - (b.posted ? 1 : 0) ||
-        (a.posted ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date))
+        (a.posted ? (b.date || "").localeCompare(a.date || "") || b.ts - a.ts : b.ts - a.ts)
       )
-      .map((h) => hwView(h, user.id, admin));
+      .map((h) => hwView(h, user.id, admin, expectedOf(h, sch)));
     return out(200, { items });
   }
 
@@ -476,6 +501,10 @@ async function main(event) {
     const h = all[body.id];
     if (!h) return out(404, { error: "Домашка не найдена" });
     if (h.posted) return out(400, { error: "Уже отправлено" });
+    if (h.mode === "lesson" && !h.date) {
+      const sch = await schedule();
+      h.date = (sch && nextLesson(sch, h.subject, nskInfo().tomorrow)) || "";
+    }
     if (!(await postHomework(h))) return out(502, { error: "Не удалось отправить в группу" });
     h.posted = true;
     h.postedAt = Date.now();

@@ -1,16 +1,29 @@
-const { store, nskInfo } = require("../../lib/natk");
-const { loadHw, saveHw, postHomework } = require("../../lib/homework");
+const { store, nskInfo, getSchedule } = require("../../lib/natk");
+const { loadHw, saveHw, postHomework, postIfLessonTomorrow } = require("../../lib/homework");
 
+// каждый день в 18:01 по Новосибирску:
+// домашка «по паре» уходит в группу, если завтра есть этот предмет; иначе ждёт следующего дня.
+// Старые записи с конкретной датой уходят в свой день, как раньше.
 exports.handler = async (event) => {
   const st = store(event);
   const all = await loadHw(st);
-  const today = nskInfo().date;
+  const n = nskInfo();
   let changed = false;
 
+  let schedule = null;
+  try {
+    schedule = await getSchedule(event);
+  } catch (e) {
+    console.log("homework: расписание недоступно:", e.message);
+  }
+
   for (const h of Object.values(all)) {
-    if (h.posted || h.date > today) continue; // ждёт своей даты
+    if (h.posted) continue;
     try {
-      if (await postHomework(h)) {
+      if (h.mode === "lesson") {
+        if (!schedule) continue;
+        if (await postIfLessonTomorrow(h, schedule, n.tomorrow)) changed = true;
+      } else if (h.date && h.date <= n.date && (await postHomework(h))) {
         h.posted = true;
         h.postedAt = Date.now();
         changed = true;

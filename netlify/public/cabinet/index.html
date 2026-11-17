@@ -156,7 +156,7 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
     <button class="item" id="go-bells"><div class="ic"><span class="i" data-i="bell"></span></div><div><b>Расписание звонков</b><span>Время начала и конца пар</span></div></button>
     <button class="item" id="go-mine"><div class="ic"><span class="i" data-i="headphones"></span></div><div><b>Мои звуки</b><span>Звуки на стикеры, которые добавил ты</span></div></button>
     <button class="item" id="go-ideas"><div class="ic"><span class="i" data-i="bulb"></span></div><div><b>Улучшения</b><span>Предложи идею для бота</span></div></button>
-    <button class="item" id="go-hw"><div class="ic"><span class="i" data-i="homework"></span></div><div><b>Домашка</b><span>Загрузить задание для группы</span></div></button>
+    <button class="item" id="go-hw"><div class="ic"><span class="i" data-i="homework"></span></div><div><b>Домашка</b><span>Вся домашка группы</span></div></button>
     <button class="item" id="go-bd"><div class="ic"><span class="i" data-i="gift"></span></div><div><b>День рождения</b><span id="bd-sub">Укажи свою дату</span></div></button>
     <button class="item" id="go-apanel" hidden><div class="ic"><span class="i" data-i="shield"></span></div><div><b>Админ-панель</b><span id="ap-sub">Управление ботом</span></div></button>
   </div>
@@ -208,16 +208,21 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
   <div id="idea-list"></div>
 </div>
 
+<div id="hwlist" class="screen" hidden>
+  <button class="link" data-back><span class="i" data-i="back"></span>Назад</button>
+  <h1>Домашка</h1>
+  <div class="hi">Вся домашка группы. Отправитель не указывается.</div>
+  <button class="btn" id="hw-new"><span class="i" data-i="plus"></span>Добавить</button>
+  <div id="hwlist-items" style="margin-top:14px"></div>
+</div>
+
 <div id="hw" class="screen" hidden>
   <button class="link" data-back><span class="i" data-i="back"></span>Назад</button>
-  <h1 id="hw-title">Домашка</h1>
-  <div class="hi">Бот отправит её в группу в 18:01 в выбранный день. Отправитель не указывается.</div>
+  <h1 id="hw-title">Новая домашка</h1>
+  <div class="hi">Выбери предмет, и бот сам отправит домашку в группу накануне ближайшей пары по нему. Отправитель не указывается.</div>
   <div class="card hw-form">
-    <div class="h3" style="margin-top:0">На какое число</div>
-    <input type="date" id="hw-date">
-    <div class="h3">Предмет</div>
-    <input type="text" class="fld" id="hw-subject" list="hw-subjects" maxlength="60" placeholder="Необязательно" autocomplete="off">
-    <datalist id="hw-subjects"></datalist>
+    <div class="h3" style="margin-top:0">На какую пару</div>
+    <select id="hw-subject" style="margin-top:0"></select>
     <div class="h3">Текст</div>
     <textarea id="hw-text" maxlength="900" placeholder="Что задали (необязательно, если есть вложения)"></textarea>
     <div class="h3">Вложения</div>
@@ -234,8 +239,6 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
     <button class="btn" id="hw-send" disabled><span class="i" data-i="send"></span><span id="hw-send-t">Отправить</span></button>
     <button class="btn ghost" id="hw-cancel" hidden><span class="i" data-i="close"></span>Отмена</button>
   </div>
-  <div class="h3">Мои домашки</div>
-  <div id="hw-mine"></div>
 </div>
 
 <div id="bd" class="screen" hidden>
@@ -439,7 +442,7 @@ async function togglePlay(id, btn) {
 
 /* ---------- навигация ---------- */
 // куда ведёт «Назад» с вложенных экранов (по умолчанию на главную)
-const PARENT = { add: "mine", admin: "apanel", hwadmin: "apanel", people: "apanel", requests: "apanel" };
+const PARENT = { hw: "hwlist", add: "mine", admin: "apanel", hwadmin: "apanel", people: "apanel", requests: "apanel" };
 function show(id) {
   stopAudio();
   document.querySelectorAll(".screen").forEach((s) => (s.hidden = s.id !== id));
@@ -842,16 +845,20 @@ async function hwUpload(entry, file) {
 function updateHwSend() {
   const busy = HWF.some((f) => f.state === "up");
   const hasFile = HWF.some((f) => f.state === "ok");
-  $("#hw-send").disabled = !($("#hw-date").value && ($("#hw-text").value.trim() || hasFile) && !busy);
+  $("#hw-send").disabled = !($("#hw-subject").value && ($("#hw-text").value.trim() || hasFile) && !busy);
 }
 
-function fillSubjects() {
-  const dl = $("#hw-subjects");
+function fillSubjects(selected) {
+  const sel = $("#hw-subject");
   const set = new Set();
   (SCH?.days || []).forEach((d) => d.pairs.forEach((p) => p.entries.forEach((e) => {
     if (!e.cancelled && e.subject) set.add(e.subject.trim());
   })));
-  dl.replaceChildren(...[...set].sort((a, b) => a.localeCompare(b, "ru")).map((s) => new Option(s, s)));
+  if (selected) set.add(selected); // например, предмет из старой записи
+  const opts = [new Option(set.size ? "Выбери предмет" : "Расписание не загрузилось", "")];
+  [...set].sort((a, b) => a.localeCompare(b, "ru")).forEach((s) => opts.push(new Option(s, s)));
+  sel.replaceChildren(...opts);
+  sel.value = selected || "";
 }
 
 let HWE = null; // id редактируемой домашки
@@ -859,9 +866,8 @@ function resetHwForm() {
   HWE = null;
   HWF = [];
   $("#hw-text").value = "";
-  $("#hw-date").value = "";
-  $("#hw-subject").value = "";
-  $("#hw-title").textContent = "Домашка";
+  fillSubjects();
+  $("#hw-title").textContent = "Новая домашка";
   $("#hw-send-t").textContent = "Отправить";
   $("#hw-cancel").hidden = true;
   renderHwFiles();
@@ -870,8 +876,7 @@ function resetHwForm() {
 function startHwEdit(h) {
   openHw(true);
   HWE = h.id;
-  $("#hw-date").value = h.date;
-  $("#hw-subject").value = h.subject || "";
+  fillSubjects(h.subject || "");
   $("#hw-text").value = h.text || "";
   HWF = h.files.map((f) => ({ kind: f.kind, name: f.name || "файл", file_id: f.file_id, state: "ok" }));
   $("#hw-title").textContent = "Изменить домашку";
@@ -929,8 +934,8 @@ function hwCard(h, adminMode) {
   const c = el("div", "card idea");
   const top = el("div", "row");
   top.append(
-    el("span", "bd " + (h.posted ? "bd-done" : "bd-review"), h.posted ? "Отправлено" : "Ждёт отправки"),
-    el("span", "muted", `на ${hwDate(h.date)}`)
+    el("span", "bd " + (h.posted ? "bd-done" : "bd-review"), h.posted ? "Отправлено" : "Ждёт пару"),
+    el("span", "muted", h.posted ? (h.date ? `на ${hwDate(h.date)}` : "") : h.expected ? `ближайшая пара: ${hwDate(h.expected)}` : "пары пока нет в расписании")
   );
   c.append(top);
   if (h.subject) c.append(el("b", null, h.subject));
@@ -979,12 +984,17 @@ function hwCard(h, adminMode) {
   if (acts.children.length) c.append(acts);
   return c;
 }
+// вся домашка группы (видна всем)
 function renderHwMine() {
-  const box = $("#hw-mine");
+  const box = $("#hwlist-items");
   box.replaceChildren();
-  const my = HW.filter((h) => h.mine);
-  if (!my.length) box.append(el("div", "muted", "Пока ничего не загружено."));
-  my.forEach((h) => box.append(hwCard(h, false)));
+  if (!HW.length) box.append(el("div", "muted", "Домашки пока нет."));
+  HW.forEach((h) => box.append(hwCard(h, false)));
+}
+async function openHwList() {
+  renderHwMine();
+  show("hwlist");
+  try { await refreshHw(); } catch (e) { fail(e); }
 }
 function renderHwAdmin() {
   if (!INFO?.isAdmin) return;
@@ -997,29 +1007,26 @@ function renderHwAdmin() {
 
 function openHw(keep) {
   if (keep !== true) resetHwForm();
-  fillSubjects();
-  const n = nsk();
-  const d = $("#hw-date");
-  d.min = new Date(Date.parse(n.date) + (n.min >= 18 * 60 + 1 ? 864e5 : 0)).toISOString().slice(0, 10);
-  d.max = new Date(Date.parse(n.date) + 60 * 864e5).toISOString().slice(0, 10);
+  // расписание ещё не успело загрузиться: подтянем и обновим список предметов
+  if (!SCH?.days?.length) loadSchedule().then(() => fillSubjects($("#hw-subject").value));
   renderHwFiles();
-  renderHwMine();
   updateHwSend();
   show("hw");
 }
 
+$("#hw-new").onclick = () => openHw();
+$("#hw-subject").onchange = updateHwSend;
 $("#hw-photo").onchange = (e) => { addHwFiles([...e.target.files], "photo"); e.target.value = ""; };
 $("#hw-video").onchange = (e) => { addHwFiles([...e.target.files], "video"); e.target.value = ""; };
 $("#hw-file").onchange = (e) => { addHwFiles([...e.target.files], "document"); e.target.value = ""; };
-$("#hw-cancel").onclick = resetHwForm;
-$("#hw-date").oninput = updateHwSend;
+$("#hw-cancel").onclick = () => { resetHwForm(); show("hwlist"); };
 $("#hw-text").oninput = updateHwSend;
 $("#hw-send").onclick = async () => {
   const btn = $("#hw-send");
   btn.disabled = true;
   const files = HWF.filter((f) => f.state === "ok").map((f) => ({ file_id: f.file_id, kind: f.kind, name: f.name }));
   try {
-    const data = { date: $("#hw-date").value, subject: $("#hw-subject").value, text: $("#hw-text").value, files };
+    const data = { subject: $("#hw-subject").value, text: $("#hw-text").value, files };
     if (HWE) {
       const r = await api("hw_edit", { id: HWE, ...data });
       HW = HW.map((x) => (x.id === HWE ? r.item : x));
@@ -1027,11 +1034,12 @@ $("#hw-send").onclick = async () => {
     } else {
       const r = await api("hw_add", data);
       HW = [r.item, ...HW];
-      note("#ok", `Готово! Бот отправит в группу ${hwDate(r.item.date)} в 18:01.`, 5000);
+      note("#ok", r.item.posted ? "Отправлено в группу" : "Добавлено", 3000);
     }
     resetHwForm();
     renderHwMine();
     renderHwAdmin();
+    show("hwlist");
   } catch (e) { fail(e); }
   updateHwSend();
 };
@@ -1269,7 +1277,7 @@ $("#go-mine").onclick = () => show("mine");
 $("#go-add").onclick = openAdd;
 $("#go-bells").onclick = () => show("bells");
 $("#go-ideas").onclick = () => { renderIdeas(); show("ideas"); };
-$("#go-hw").onclick = () => openHw();
+$("#go-hw").onclick = openHwList;
 $("#go-apanel").onclick = () => { if (INFO?.isAdmin) { renderApanel(); show("apanel"); } };
 
 $("#go-schedule").onclick = () => {

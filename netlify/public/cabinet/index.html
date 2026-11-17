@@ -141,7 +141,7 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
     <button class="item" id="go-mine"><div class="ic"><span class="i" data-i="headphones"></span></div><div><b>Мои звуки</b><span>Звуки на стикеры, которые добавил ты</span></div></button>
     <button class="item" id="go-ideas"><div class="ic"><span class="i" data-i="bulb"></span></div><div><b>Улучшения</b><span>Предложи идею для бота</span></div></button>
     <button class="item" id="go-hw"><div class="ic"><span class="i" data-i="homework"></span></div><div><b>Домашка</b><span>Загрузить задание для группы</span></div></button>
-    <button class="item" id="go-bd"><div class="ic"><span class="i" data-i="gift"></span></div><div><b>День рождения</b><span id="bd-sub">Бот поздравит тебя в группе</span></div></button>
+    <button class="item" id="go-bd"><div class="ic"><span class="i" data-i="gift"></span></div><div><b>День рождения</b><span id="bd-sub">Укажи свою дату</span></div></button>
     <button class="item" id="go-apanel" hidden><div class="ic"><span class="i" data-i="shield"></span></div><div><b>Админ-панель</b><span id="ap-sub">Управление ботом</span></div></button>
   </div>
 </div>
@@ -221,7 +221,7 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
 <div id="bd" class="screen" hidden>
   <button class="link" data-back><span class="i" data-i="back"></span>Назад</button>
   <h1>День рождения</h1>
-  <div class="hi">В этот день в 9:00 бот поздравит тебя в группе. Указать и изменить можно только свою дату.</div>
+  <div class="hi">Указать и изменить можно только свою дату.</div>
   <div class="card hw-form">
     <div class="h3" style="margin-top:0">Твоя дата</div>
     <div class="acts">
@@ -1095,7 +1095,7 @@ function renderBd() {
   }
   $("#bd-cur").textContent = bd ? `Сейчас указано: ${bdLabel(bd)}` : "Дата пока не указана.";
   $("#bd-clear").hidden = !bd;
-  $("#bd-sub").textContent = bd ? `Указано: ${bdLabel(bd)}` : "Бот поздравит тебя в группе";
+  $("#bd-sub").textContent = bd ? `Указано: ${bdLabel(bd)}` : "Укажи свою дату";
 }
 $("#go-bd").onclick = () => { renderBd(); show("bd"); };
 $("#bd-save").onclick = async () => {
@@ -1106,7 +1106,7 @@ $("#bd-save").onclick = async () => {
     const r = await api("bd_set", { day, month });
     INFO.bd = r.bd;
     renderBd();
-    note("#ok", `Сохранено! Бот поздравит тебя ${bdLabel(r.bd)} в 9:00.`, 4000);
+    note("#ok", "Сохранено", 3000);
   } catch (e) { fail(e); }
 };
 $("#bd-clear").onclick = () => ask("Убрать дату рождения?", async () => {

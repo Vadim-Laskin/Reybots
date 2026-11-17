@@ -1,6 +1,5 @@
 const { store } = require("../../lib/natk");
 const { isAdmin, load, save } = require("../../lib/sounds");
-const { groupCommand } = require("../../lib/commands");
 
 const API = `https://api.telegram.org/bot${process.env.BOT_TOKEN}`;
 const MAX_PER_USER = 5;
@@ -37,9 +36,17 @@ async function privateChat(st, msg) {
     const rows = [];
     if (process.env.APP_LINK) rows.push([{ text: "📅 Расписание", url: process.env.APP_LINK }]);
     rows.push([{ text: "Личный кабинет", web_app: { url: process.env.CABINET_URL } }]);
-    return say(chat, `Привет, ${msg.from.first_name || "студент"}! 👋`, {
-      reply_markup: { inline_keyboard: rows },
-    });
+    const hello = `Привет, ${msg.from.first_name || "студент"}! 👋`;
+    const j = await say(chat, hello, { reply_markup: { inline_keyboard: rows } });
+    if (!j.ok) {
+      // например, неподходящая ссылка в APP_LINK: отвечаем хотя бы кнопкой кабинета
+      return say(chat, hello, {
+        reply_markup: {
+          inline_keyboard: [[{ text: "Личный кабинет", web_app: { url: process.env.CABINET_URL } }]],
+        },
+      });
+    }
+    return j;
   }
 
   // шаг 1: стикер
@@ -147,7 +154,10 @@ exports.handler = async (event) => {
   try {
     if (msg.chat.type === "private") await privateChat(st, msg);
     else if (msg.sticker) await groupSticker(st, msg);
-    else if (msg.text && msg.text.startsWith("/")) await groupCommand(event, msg);
+    else if (msg.text && msg.text.startsWith("/")) {
+      // команды подгружаем только здесь, чтобы их сбой не ломал остальную работу бота
+      await require("../../lib/commands").groupCommand(event, msg);
+    }
   } catch (e) {
     console.log("bot error:", e.message);
   }

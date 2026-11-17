@@ -958,7 +958,8 @@ function nsk() {
 }
 // записи пары, которые касаются меня (без отмен); без подгруппы показываем все
 const mySg = () => INFO?.sg || 0;
-const mine = (p) => p.entries.filter((e) => !e.cancelled && (!mySg() || !e.sg || e.sg === mySg()));
+const remote = (e) => /дистанц/i.test(e.room || "");
+const mine = (p) => p.entries.filter((e) => !e.cancelled && !remote(e) && (!mySg() || !e.sg || e.sg === mySg()));
 const activePairs = (day) => day.pairs.filter((p) => mine(p).length);
 
 function pairLines(p) {

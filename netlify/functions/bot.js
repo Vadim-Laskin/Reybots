@@ -5,6 +5,8 @@ const API = `https://api.telegram.org/bot${process.env.BOT_TOKEN}`;
 const MAX_PER_USER = 5;
 const MAX_SECONDS = 30;
 const ok = { statusCode: 200, body: "ok" };
+// ссылка на кабинет: из CABINET_URL, а если переменная не задана, берём адрес этого же сайта
+let cabinetUrl = "";
 
 async function tg(method, payload) {
   const r = await fetch(`${API}/${method}`, {
@@ -35,14 +37,14 @@ async function privateChat(st, msg) {
     }
     const rows = [];
     if (process.env.APP_LINK) rows.push([{ text: "📅 Расписание", url: process.env.APP_LINK }]);
-    rows.push([{ text: "Личный кабинет", web_app: { url: process.env.CABINET_URL } }]);
+    rows.push([{ text: "Личный кабинет", web_app: { url: cabinetUrl } }]);
     const hello = `Привет, ${msg.from.first_name || "студент"}! 👋`;
     const j = await say(chat, hello, { reply_markup: { inline_keyboard: rows } });
     if (!j.ok) {
       // например, неподходящая ссылка в APP_LINK: отвечаем хотя бы кнопкой кабинета
       return say(chat, hello, {
         reply_markup: {
-          inline_keyboard: [[{ text: "Личный кабинет", web_app: { url: process.env.CABINET_URL } }]],
+          inline_keyboard: [[{ text: "Личный кабинет", web_app: { url: cabinetUrl } }]],
         },
       });
     }
@@ -147,6 +149,7 @@ exports.handler = async (event) => {
   if (event.headers["x-telegram-bot-api-secret-token"] !== process.env.SECRET) {
     return { statusCode: 403, body: "no" };
   }
+  cabinetUrl = process.env.CABINET_URL || `https://${event.headers.host}/cabinet/`;
   const msg = JSON.parse(event.body).message;
   if (!msg) return ok;
   const st = store(event);

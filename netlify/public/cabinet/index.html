@@ -194,7 +194,7 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
 <div id="hw" class="screen" hidden>
   <button class="link" data-back><span class="i" data-i="back"></span>Назад</button>
   <h1>Домашка</h1>
-  <div class="hi">Бот отправит её в группу в 14:00 в выбранный день. Отправитель не указывается.</div>
+  <div class="hi">Бот отправит её в группу в 18:01 в выбранный день. Отправитель не указывается.</div>
   <div class="card hw-form">
     <div class="h3" style="margin-top:0">На какое число</div>
     <input type="date" id="hw-date">
@@ -917,7 +917,7 @@ function renderHwAdmin() {
 function openHw() {
   const n = nsk();
   const d = $("#hw-date");
-  d.min = new Date(Date.parse(n.date) + (n.min >= 14 * 60 ? 864e5 : 0)).toISOString().slice(0, 10);
+  d.min = new Date(Date.parse(n.date) + (n.min >= 18 * 60 + 1 ? 864e5 : 0)).toISOString().slice(0, 10);
   d.max = new Date(Date.parse(n.date) + 60 * 864e5).toISOString().slice(0, 10);
   renderHwFiles();
   renderHwMine();
@@ -943,7 +943,7 @@ $("#hw-send").onclick = async () => {
     renderHwFiles();
     renderHwMine();
     renderHwAdmin();
-    note("#ok", `Готово! Бот отправит в группу ${hwDate(r.item.date)} в 14:00.`, 5000);
+    note("#ok", `Готово! Бот отправит в группу ${hwDate(r.item.date)} в 18:01.`, 5000);
   } catch (e) { fail(e); }
   updateHwSend();
 };

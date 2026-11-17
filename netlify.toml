@@ -11,3 +11,6 @@
 
 [functions."watch"]
   schedule = "*/15 * * * *"
+
+[functions."homework"]
+  schedule = "1 11 * * *"

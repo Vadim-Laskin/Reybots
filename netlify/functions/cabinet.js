@@ -333,8 +333,8 @@ async function main(event) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return out(400, { error: "Укажи дату" });
     const nw = nskInfo();
     if (date < nw.date) return out(400, { error: "Эта дата уже прошла" });
-    if (date === nw.date && nw.min >= 14 * 60) {
-      return out(400, { error: "На сегодня уже поздно: бот отправляет в 14:00. Выбери другую дату" });
+    if (date === nw.date && nw.min >= 18 * 60 + 1) {
+      return out(400, { error: "На сегодня уже поздно: бот отправляет в 18:01. Выбери другую дату" });
     }
     if (date > addDays(nw.date, 60)) return out(400, { error: "Дата слишком далеко (максимум 60 дней)" });
 

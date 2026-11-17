@@ -24,7 +24,7 @@
   var reduce = false;
   try { reduce = matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) {}
 
-  var root = null, timers = [], current = "";
+  var root = null, topBox = null, timers = [], current = "";
 
   function nskMd() {
     return new Date(Date.now() + 7 * 3600e3).toISOString().slice(5, 10);
@@ -50,6 +50,7 @@
     var s = document.createElement("style");
     s.id = "festive-css";
     s.textContent =
+      "#festive-top{position:absolute;left:0;right:0;top:0;height:0;z-index:40;pointer-events:none}" +
       "#festive{position:fixed;inset:0;z-index:40;pointer-events:none;overflow:hidden}" +
       ".fs-strip{position:absolute;left:0;right:0;top:calc(var(--tg-safe-area-inset-top,0px) + var(--tg-content-safe-area-inset-top,0px));height:6px;opacity:.95}" +
       ".fs-tricolor{background:linear-gradient(#fff 0 33.3%,#2a6fdb 33.3% 66.6%,#e0352b 66.6%)}" +
@@ -83,7 +84,8 @@
     timers.forEach(clearInterval);
     timers = [];
     if (root) root.remove();
-    root = null;
+    if (topBox) topBox.remove();
+    root = topBox = null;
   }
 
   function burst() {
@@ -106,14 +108,18 @@
     root = el("div");
     root.id = "festive";
     root.setAttribute("aria-hidden", "true");
+    // лента и гирлянда — часть страницы: уезжают вверх вместе с ней, а не режут текст при прокрутке
+    topBox = el("div");
+    topBox.id = "festive-top";
+    topBox.setAttribute("aria-hidden", "true");
 
     // полоска / гирлянда сверху
     if (t.strip === "lights") {
       var g = el("div", "fs-strip fs-lights");
       for (var i = 0; i < 18; i++) g.appendChild(el("i", "", "--c:" + COLORS[i % COLORS.length] + ";animation-delay:" + (i % 3) * 0.5 + "s" + (reduce ? ";animation:none" : "")));
-      root.appendChild(g);
+      topBox.appendChild(g);
     } else if (t.strip) {
-      root.appendChild(el("div", "fs-strip fs-" + t.strip));
+      topBox.appendChild(el("div", "fs-strip fs-" + t.strip));
     }
 
     if (!reduce) {
@@ -150,6 +156,7 @@
       setTimeout(function () { chip.remove(); }, 5200);
       try { localStorage.setItem(seenKey, "1"); } catch (e) {}
     }
+    document.body.appendChild(topBox);
     document.body.appendChild(root);
   }
 

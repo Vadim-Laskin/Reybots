@@ -31,10 +31,14 @@ async function privateChat(st, msg) {
   const chat = msg.chat.id;
 
   if (msg.text && msg.text.startsWith("/start")) {
-    return say(chat, "Привет! Чтобы пользоваться ботом, заходи в мини-приложение 👇", {
-      reply_markup: {
-        inline_keyboard: [[{ text: "Открыть кабинет", web_app: { url: process.env.CABINET_URL } }]],
-      },
+    if (!(await isMember(uid))) {
+      return say(chat, "Бот работает только для группы РЭУ-26.256.");
+    }
+    const rows = [];
+    if (process.env.APP_LINK) rows.push([{ text: "📅 Расписание", url: process.env.APP_LINK }]);
+    rows.push([{ text: "Личный кабинет", web_app: { url: process.env.CABINET_URL } }]);
+    return say(chat, `Привет, ${msg.from.first_name || "студент"}! 👋`, {
+      reply_markup: { inline_keyboard: rows },
     });
   }
 

@@ -142,7 +142,6 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
     <button class="item" id="go-mine"><div class="ic"><span class="i" data-i="headphones"></span></div><div><b>Мои звуки</b><span>Звуки на стикеры, которые добавил ты</span></div></button>
     <button class="item" id="go-ideas"><div class="ic"><span class="i" data-i="bulb"></span></div><div><b>Улучшения</b><span>Предложи идею для бота</span></div></button>
     <button class="item" id="go-hw"><div class="ic"><span class="i" data-i="homework"></span></div><div><b>Домашка</b><span>Загрузить задание для группы</span></div></button>
-    <button class="item" id="go-hwarc"><div class="ic"><span class="i" data-i="clipboard"></span></div><div><b>Архив домашки</b><span>Что уже отправляли в группу</span></div></button>
     <button class="item" id="go-bd"><div class="ic"><span class="i" data-i="gift"></span></div><div><b>День рождения</b><span id="bd-sub">Укажи свою дату</span></div></button>
     <button class="item" id="go-apanel" hidden><div class="ic"><span class="i" data-i="shield"></span></div><div><b>Админ-панель</b><span id="ap-sub">Управление ботом</span></div></button>
   </div>
@@ -222,13 +221,6 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
   </div>
   <div class="h3">Мои домашки</div>
   <div id="hw-mine"></div>
-</div>
-
-<div id="hwarc" class="screen" hidden>
-  <button class="link" data-back><span class="i" data-i="back"></span>Назад</button>
-  <h1>Архив домашки</h1>
-  <div class="hi">То, что бот уже отправил в группу. Нажми «Прислать мне», и бот перешлёт задание в личку.</div>
-  <div id="hwarc-list"></div>
 </div>
 
 <div id="bd" class="screen" hidden>
@@ -1144,44 +1136,6 @@ async function loadSchedule() {
   renderNow();
   renderBells();
 }
-
-/* ---------- архив домашки ---------- */
-async function openHwArc() {
-  const box = $("#hwarc-list");
-  box.replaceChildren(el("div", "muted", "Загрузка…"));
-  show("hwarc");
-  try {
-    const { items } = await api("hw_archive");
-    box.replaceChildren();
-    if (!items.length) box.append(el("div", "muted", "Пока ничего не отправляли."));
-    items.forEach((h) => {
-      const c = el("div", "card idea");
-      c.append(el("span", "muted", `на ${hwDate(h.date)}`));
-      if (h.subject) c.append(el("b", null, h.subject));
-      if (h.text) c.append(el("div", "idea-t", h.text));
-      if (h.files.length) {
-        const names = h.files.map((f) => ({ photo: "фото", video: "видео", document: "файл" }[f.kind]));
-        c.append(el("div", "muted", `Вложений: ${h.files.length} (${names.join(", ")})`));
-      }
-      const b = el("button", "btn ghost");
-      b.append(ico("send"), document.createTextNode("Прислать мне"));
-      b.onclick = async () => {
-        b.disabled = true;
-        try {
-          await api("hw_me", { id: h.id });
-          note("#ok", "Отправил в личку", 3000);
-        } catch (e) { fail(e); }
-        b.disabled = false;
-      };
-      c.append(b);
-      box.append(c);
-    });
-  } catch (e) {
-    box.replaceChildren();
-    fail(e);
-  }
-}
-$("#go-hwarc").onclick = openHwArc;
 
 /* ---------- день рождения ---------- */
 const bdLabel = (bd) => { const [m, d] = bd.split("-"); return `${Number(d)} ${MONTHS_RU[Number(m) - 1]}`; };

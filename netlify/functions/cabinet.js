@@ -420,31 +420,6 @@ async function main(event) {
     return out(200, { item: hwView(h, user.id, admin) });
   }
 
-  // архив: уже отправленные в группу домашки (без отправителя)
-  if (body.action === "hw_archive") {
-    if (!(await isMember(user.id))) return out(403, { error: "Только для участников группы" });
-    const items = Object.values(await loadHw(st))
-      .filter((h) => h.posted)
-      .sort((a, b) => b.date.localeCompare(a.date) || b.ts - a.ts)
-      .slice(0, 40)
-      .map((h) => ({
-        id: h.id, date: h.date, subject: h.subject || "", text: h.text,
-        files: h.files.map((f) => ({ kind: f.kind, name: f.name })),
-      }));
-    return out(200, { items });
-  }
-
-  // прислать отправленную домашку себе в личку
-  if (body.action === "hw_me") {
-    if (!(await isMember(user.id))) return out(403, { error: "Только для участников группы" });
-    const h = (await loadHw(st))[body.id];
-    if (!h || !h.posted) return out(404, { error: "Домашка не найдена" });
-    if (!(await postHomework(h, user.id))) {
-      return out(502, { error: "Не удалось отправить. Напиши боту /start в личку и попробуй снова" });
-    }
-    return out(200, { ok: true });
-  }
-
   if (body.action === "hw_add") {
     if (!(await isMember(user.id))) {
       return out(403, { error: "Загружать домашку могут только участники группы" });

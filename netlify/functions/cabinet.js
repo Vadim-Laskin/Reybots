@@ -604,4 +604,4 @@ exports.handler = async (event) => {
     console.log("cabinet error:", e.stack);
     return out(500, { error: "Ошибка сервера: " + e.message });
   }
-};
+};

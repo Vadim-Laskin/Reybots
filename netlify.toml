@@ -17,3 +17,6 @@
 
 [functions."birthday"]
   schedule = "0 2 * * *"
+
+[functions."newyear"]
+  schedule = "0 17 31 12 *"

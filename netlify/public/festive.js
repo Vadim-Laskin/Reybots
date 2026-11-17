@@ -53,6 +53,8 @@
       "#festive-top{position:absolute;left:0;right:0;top:0;height:0;z-index:40;pointer-events:none}" +
       "#festive{position:fixed;inset:0;z-index:40;pointer-events:none;overflow:hidden}" +
       ".fs-strip{position:absolute;left:0;right:0;top:calc(var(--tg-safe-area-inset-top,0px) + var(--tg-content-safe-area-inset-top,0px));height:6px;opacity:.95}" +
+      // в кабинете лента идёт по самому краю экрана, а не по середине шапки
+      ".fs-edge .fs-strip{top:0}" +
       ".fs-tricolor{background:linear-gradient(#fff 0 33.3%,#2a6fdb 33.3% 66.6%,#e0352b 66.6%)}" +
       ".fs-ribbon{background:repeating-linear-gradient(135deg,#f58220 0 8px,#111 8px 16px)}" +
       ".fs-pink{background:linear-gradient(90deg,#ff8fb8,#ffd1e3,#ff8fb8)}" +
@@ -108,6 +110,7 @@
     root = el("div");
     root.id = "festive";
     root.setAttribute("aria-hidden", "true");
+    if (/\/cabinet\//.test(location.pathname) || /[?&]edge=1/.test(location.search)) root.className = "fs-edge";
     // лента и гирлянда — часть страницы: уезжают вверх вместе с ней, а не режут текст при прокрутке
     topBox = el("div");
     topBox.id = "festive-top";

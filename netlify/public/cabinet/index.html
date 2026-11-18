@@ -157,6 +157,7 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
     <button class="item" id="go-mine"><div class="ic"><span class="i" data-i="headphones"></span></div><div><b>Мои звуки</b><span>Звуки на стикеры, которые добавил ты</span></div></button>
     <button class="item" id="go-ideas"><div class="ic"><span class="i" data-i="bulb"></span></div><div><b>Улучшения</b><span>Предложи идею для бота</span></div></button>
     <button class="item" id="go-hw"><div class="ic"><span class="i" data-i="homework"></span></div><div><b>Домашка</b><span>Вся домашка группы</span></div></button>
+    <button class="item" id="go-mat"><div class="ic"><span class="i" data-i="folder"></span></div><div><b>Информатика</b><span>Файлы по ИТПД и ИНФиВТ</span></div></button>
     <button class="item" id="go-bd"><div class="ic"><span class="i" data-i="gift"></span></div><div><b>День рождения</b><span id="bd-sub">Укажи свою дату</span></div></button>
     <button class="item" id="go-apanel" hidden><div class="ic"><span class="i" data-i="shield"></span></div><div><b>Админ-панель</b><span id="ap-sub">Управление ботом</span></div></button>
   </div>
@@ -214,6 +215,21 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
   <div class="hi">Вся домашка группы.</div>
   <button class="btn" id="hw-new"><span class="i" data-i="plus"></span>Добавить</button>
   <div id="hwlist-items" style="margin-top:14px"></div>
+</div>
+
+<div id="mat" class="screen" hidden>
+  <button class="link" data-back><span class="i" data-i="back"></span>Назад</button>
+  <h1>Информатика</h1>
+  <div class="hi" id="mat-hi">Файлы по предметам. Нажми на файл, и бот пришлёт его тебе в личку.</div>
+  <div class="chips" id="mat-chips"></div>
+  <div class="card hw-form" id="mat-form" hidden>
+    <div class="h3" style="margin-top:0">Новый файл</div>
+    <input type="text" id="mat-title" maxlength="120" placeholder="Название (необязательно)">
+    <label class="file" for="mat-file" id="mat-label" style="margin-top:10px"><span class="i" data-i="file"></span>Выбрать файл (до 15 МБ)</label>
+    <input type="file" id="mat-file">
+    <button class="btn" id="mat-send" disabled><span class="i" data-i="upload"></span><span id="mat-send-t">Загрузить</span></button>
+  </div>
+  <div id="mat-list"></div>
 </div>
 
 <div id="hw" class="screen" hidden>
@@ -363,6 +379,7 @@ const ICONS = {
   image: '<rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>',
   video: '<path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2"/>',
   gift: '<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"/>',
+  folder: '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
   file: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/>',
 };
 const svg = (n) =>
@@ -1295,6 +1312,101 @@ function renderApanel() {
   });
   $("#ap-sub").textContent = attention ? `Требуют внимания: ${attention}` : "Всё спокойно";
 }
+
+/* ---------- Информатика: материалы ---------- */
+const MAT_TABS = { itpd: ["ИТПД", "Информационные технологии в профессиональной деятельности"], infvt: ["ИНФиВТ", "Информатика и вычислительная техника"] };
+let MAT = [], MTAB = "itpd", MFILE = null, MBUSY = false;
+const fmtSize = (n) => (n >= 1048576 ? (n / 1048576).toFixed(1) + " МБ" : Math.max(1, Math.round(n / 1024)) + " КБ");
+function renderMat() {
+  const chips = $("#mat-chips");
+  chips.replaceChildren();
+  Object.entries(MAT_TABS).forEach(([k, [short]]) => {
+    const b = el("button", MTAB === k ? "on" : "", short);
+    b.onclick = () => { MTAB = k; renderMat(); };
+    chips.append(b);
+  });
+  $("#mat-hi").textContent = MAT_TABS[MTAB][1] + ". Нажми на файл, и бот пришлёт его тебе в личку.";
+  $("#mat-form").hidden = !INFO?.isAdmin;
+  const box = $("#mat-list");
+  box.replaceChildren();
+  const list = MAT.filter((m) => m.subj === MTAB);
+  if (!list.length) box.append(el("div", "muted", "Файлов пока нет."));
+  list.forEach((m) => {
+    const c = el("div", "card idea");
+    c.style.cursor = "pointer";
+    c.append(el("b", null, m.title));
+    c.append(el("div", "muted", `${m.name}${m.size ? " · " + fmtSize(m.size) : ""} · ${fmtDate(m.ts)}`));
+    c.onclick = async () => {
+      if (c.dataset.busy) return;
+      c.dataset.busy = "1";
+      try {
+        await api("mat_get", { id: m.id });
+        note("#ok", "Файл отправлен в личку с ботом", 3000);
+      } catch (e) { fail(e); }
+      delete c.dataset.busy;
+    };
+    if (INFO?.isAdmin) {
+      const del = el("button", "btn ghost");
+      del.append(ico("trash"), document.createTextNode("Удалить"));
+      del.onclick = (ev) => {
+        ev.stopPropagation();
+        ask("Удалить файл?", async () => {
+          try {
+            await api("mat_del", { id: m.id });
+            MAT = MAT.filter((x) => x.id !== m.id);
+            renderMat();
+          } catch (e) { fail(e); }
+        });
+      };
+      c.append(del);
+    }
+    box.append(c);
+  });
+}
+function resetMatForm() {
+  MFILE = null;
+  $("#mat-title").value = "";
+  $("#mat-file").value = "";
+  $("#mat-label").replaceChildren(ico("file"), document.createTextNode("Выбрать файл (до 15 МБ)"));
+  $("#mat-send").disabled = true;
+}
+$("#mat-file").onchange = (ev) => {
+  const f = ev.target.files[0];
+  if (!f) return;
+  if (f.size > 15 * 1024 * 1024) { ev.target.value = ""; return fail(new Error("Файл больше 15 МБ")); }
+  MFILE = f;
+  $("#mat-label").replaceChildren(ico("file"), document.createTextNode(`${f.name} (${fmtSize(f.size)})`));
+  $("#mat-send").disabled = false;
+};
+$("#mat-send").onclick = async () => {
+  if (!MFILE || MBUSY) return;
+  MBUSY = true;
+  const btn = $("#mat-send");
+  btn.disabled = true;
+  try {
+    const total = Math.max(1, Math.ceil(MFILE.size / HW_CHUNK));
+    const uid = Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
+    let r;
+    for (let i = 0; i < total; i++) {
+      $("#mat-send-t").textContent = `Загрузка ${Math.round((i / total) * 100)}%`;
+      const data = await toB64(MFILE.slice(i * HW_CHUNK, (i + 1) * HW_CHUNK));
+      r = await api("hw_file", { uid, i, n: total, name: MFILE.name, kind: "document", purpose: "mat", data });
+    }
+    const j = await api("mat_add", { subj: MTAB, title: $("#mat-title").value, file: { file_id: r.file_id, name: MFILE.name, size: r.size } });
+    MAT.unshift(j.item);
+    resetMatForm();
+    renderMat();
+    note("#ok", "Сохранено", 2500);
+  } catch (e) { fail(e); btn.disabled = false; }
+  MBUSY = false;
+  $("#mat-send-t").textContent = "Загрузить";
+};
+async function openMat() {
+  renderMat();
+  show("mat");
+  try { MAT = (await api("mat_list")).items; renderMat(); } catch (e) { fail(e); }
+}
+$("#go-mat").onclick = openMat;
 
 /* ---------- запуск ---------- */
 tg?.BackButton.onClick(back);

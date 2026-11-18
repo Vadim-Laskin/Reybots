@@ -24,6 +24,28 @@ const personKey = (id) => "person-" + id;
 const HW_MAX_FILES = 8;
 const HW_MAX_BYTES = 15 * 1024 * 1024;
 const HW_MAX_CHUNKS = 6;
+// раздел «Информатика»: файлы по двум предметам, грузит только админ
+const MAT_SUBJ = {
+  itpd: "Информационные технологии в профессиональной деятельности",
+  infvt: "Информатика и вычислительная техника",
+};
+const MAT_KEY = "materials";
+const MAT_MAX = 200;
+const loadMat = async (st) => {
+  try {
+    return (await st.get(MAT_KEY, { type: "json" })) || {};
+  } catch {
+    return {};
+  }
+};
+const matView = (m, admin) => ({
+  id: m.id,
+  subj: m.subj,
+  title: m.title,
+  name: m.name,
+  size: m.size || 0,
+  ts: m.ts,
+});
 const addDays = (date, n) => new Date(Date.parse(date) + n * 864e5).toISOString().slice(0, 10);
 const hwView = (h, uid, admin, expected = "") => ({
   id: h.id,
@@ -329,7 +351,9 @@ async function main(event) {
     if (!/^[\w-]{6,40}$/.test(uid) || !Number.isInteger(i) || !Number.isInteger(n) || i < 0 || n < 1 || n > HW_MAX_CHUNKS || i >= n) {
       return out(400, { error: "Плохой запрос загрузки" });
     }
-    if (i === 0 && !(await isMember(user.id))) {
+    const mat = body.purpose === "mat";
+    if (mat && !admin) return out(403, { error: "Материалы загружает только админ" });
+    if (i === 0 && !mat && !(await isMember(user.id))) {
       return out(403, { error: "Загружать домашку могут только участники группы" });
     }
     const key = (k) => `hwc-${user.id}-${uid}-${k}`;
@@ -361,12 +385,12 @@ async function main(event) {
       return out(400, { error: "Файл пустой или больше 15 МБ" });
     }
 
-    const kind = ["photo", "video", "document"].includes(body.kind) ? body.kind : "document";
+    const kind = mat ? "document" : ["photo", "video", "document"].includes(body.kind) ? body.kind : "document";
     const name = String(body.name || "file").slice(0, 80);
     const sendOne = async (method, field) => {
       const fd = new FormData();
       fd.append("chat_id", String(user.id));
-      fd.append("caption", "Файл для домашки. В группу уйдёт в назначенный день.");
+      fd.append("caption", mat ? "Файл для раздела «Информатика»." : "Файл для домашки. В группу уйдёт в назначенный день.");
       fd.append(field, new Blob([buf]), name);
       const j = await (await fetch(tgUrl(method), { method: "POST", body: fd })).json();
       console.log(method, JSON.stringify(j).slice(0, 200));
@@ -384,7 +408,58 @@ async function main(event) {
     if (!res) {
       return out(502, { error: "Telegram не принял файл. Напиши боту /start в личку и попробуй другой файл" });
     }
-    return out(200, res);
+    return out(200, { ...res, size: buf.length });
+  }
+
+  /* ---------- Информатика: материалы ---------- */
+  if (body.action === "mat_list") {
+    if (!(await isMember(user.id))) return out(403, { error: "Только для участников группы" });
+    const items = Object.values(await loadMat(st))
+      .sort((a, b) => b.ts - a.ts)
+      .map((m) => matView(m, admin));
+    return out(200, { items, subjects: MAT_SUBJ });
+  }
+
+  if (body.action === "mat_add") {
+    if (!admin) return out(403, { error: "Материалы добавляет только админ" });
+    const subj = String(body.subj || "");
+    if (!MAT_SUBJ[subj]) return out(400, { error: "Выбери предмет" });
+    const f = body.file || {};
+    if (typeof f.file_id !== "string" || !f.file_id) return out(400, { error: "Сначала загрузи файл" });
+    const name = String(f.name || "файл").slice(0, 80);
+    const title = String(body.title || "").replace(/\s+/g, " ").trim().slice(0, 120) || name;
+    const all = await loadMat(st);
+    if (Object.keys(all).length >= MAT_MAX) return out(400, { error: "Слишком много материалов, удали ненужные" });
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    all[id] = { id, subj, title, name, size: Number(f.size) || 0, file_id: f.file_id.slice(0, 250), ts: Date.now(), author: user.id };
+    await st.setJSON(MAT_KEY, all);
+    return out(200, { item: matView(all[id], admin) });
+  }
+
+  if (body.action === "mat_del") {
+    if (!admin) return out(403, { error: "Удалять материалы может только админ" });
+    const all = await loadMat(st);
+    if (!all[body.id]) return out(404, { error: "Материал не найден" });
+    delete all[body.id];
+    await st.setJSON(MAT_KEY, all);
+    return out(200, { ok: true });
+  }
+
+  // получить файл: бот присылает его в личку
+  if (body.action === "mat_get") {
+    if (!(await isMember(user.id))) return out(403, { error: "Только для участников группы" });
+    const m = (await loadMat(st))[body.id];
+    if (!m) return out(404, { error: "Материал не найден" });
+    const j = await (
+      await fetch(tgUrl("sendDocument"), {
+        method: "POST",
+        headers: H,
+        body: JSON.stringify({ chat_id: user.id, document: m.file_id, caption: `${m.title}\n${MAT_SUBJ[m.subj] || ""}` }),
+      })
+    ).json();
+    console.log("mat_get", JSON.stringify(j).slice(0, 200));
+    if (!j.ok) return out(502, { error: "Не получилось отправить. Напиши боту /start в личку и попробуй снова" });
+    return out(200, { ok: true });
   }
 
   // расписание для привязки домашки к паре (из кэша; если сайт недоступен — null)

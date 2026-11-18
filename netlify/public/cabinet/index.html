@@ -224,9 +224,9 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
   <div class="chips" id="mat-chips"></div>
   <div class="card hw-form" id="mat-form" hidden>
     <div class="h3" style="margin-top:0">Новый файл</div>
-    <input type="text" id="mat-title" maxlength="120" placeholder="Название (необязательно)">
-    <label class="file" for="mat-file" id="mat-label" style="margin-top:10px"><span class="i" data-i="file"></span>Выбрать файл (до 15 МБ)</label>
-    <input type="file" id="mat-file">
+    <input type="text" id="mat-title" maxlength="120" placeholder="Название (только если файл один)">
+    <label class="file" for="mat-file" id="mat-label" style="margin-top:10px"><span class="i" data-i="file"></span>Выбрать файлы (каждый до 15 МБ)</label>
+    <input type="file" id="mat-file" multiple>
     <button class="btn" id="mat-send" disabled><span class="i" data-i="upload"></span><span id="mat-send-t">Загрузить</span></button>
   </div>
   <div id="mat-list"></div>
@@ -1315,7 +1315,7 @@ function renderApanel() {
 
 /* ---------- Информатика: материалы ---------- */
 const MAT_TABS = { itpd: ["ИТПД", "Информационные технологии в профессиональной деятельности"], infvt: ["ИНФиВТ", "Информатика и вычислительная техника"] };
-let MAT = [], MTAB = "itpd", MFILE = null, MBUSY = false;
+let MAT = [], MTAB = "itpd", MFILES = [], MBUSY = false;
 const fmtSize = (n) => (n >= 1048576 ? (n / 1048576).toFixed(1) + " МБ" : Math.max(1, Math.round(n / 1024)) + " КБ");
 function renderMat() {
   const chips = $("#mat-chips");
@@ -1364,40 +1364,53 @@ function renderMat() {
   });
 }
 function resetMatForm() {
-  MFILE = null;
+  MFILES = [];
   $("#mat-title").value = "";
   $("#mat-file").value = "";
-  $("#mat-label").replaceChildren(ico("file"), document.createTextNode("Выбрать файл (до 15 МБ)"));
+  $("#mat-label").replaceChildren(ico("file"), document.createTextNode("Выбрать файлы (каждый до 15 МБ)"));
   $("#mat-send").disabled = true;
 }
 $("#mat-file").onchange = (ev) => {
-  const f = ev.target.files[0];
-  if (!f) return;
-  if (f.size > 15 * 1024 * 1024) { ev.target.value = ""; return fail(new Error("Файл больше 15 МБ")); }
-  MFILE = f;
-  $("#mat-label").replaceChildren(ico("file"), document.createTextNode(`${f.name} (${fmtSize(f.size)})`));
-  $("#mat-send").disabled = false;
+  const all = [...ev.target.files];
+  if (!all.length) return;
+  const files = all.filter((f) => f.size <= 15 * 1024 * 1024).slice(0, 20);
+  if (files.length < all.length) fail(new Error("Пропущены файлы больше 15 МБ или сверх 20 штук"));
+  MFILES = files;
+  $("#mat-label").replaceChildren(ico("file"), document.createTextNode(files.length === 1 ? `${files[0].name} (${fmtSize(files[0].size)})` : `Выбрано файлов: ${files.length}`));
+  $("#mat-send").disabled = !files.length;
 };
 $("#mat-send").onclick = async () => {
-  if (!MFILE || MBUSY) return;
+  if (!MFILES.length || MBUSY) return;
   MBUSY = true;
   const btn = $("#mat-send");
   btn.disabled = true;
+  const files = MFILES.slice();
+  const title = files.length === 1 ? $("#mat-title").value : "";
+  let done = 0;
   try {
-    const total = Math.max(1, Math.ceil(MFILE.size / HW_CHUNK));
-    const uid = Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
-    let r;
-    for (let i = 0; i < total; i++) {
-      $("#mat-send-t").textContent = `Загрузка ${Math.round((i / total) * 100)}%`;
-      const data = await toB64(MFILE.slice(i * HW_CHUNK, (i + 1) * HW_CHUNK));
-      r = await api("hw_file", { uid, i, n: total, name: MFILE.name, kind: "document", purpose: "mat", data });
+    for (const f of files) {
+      const total = Math.max(1, Math.ceil(f.size / HW_CHUNK));
+      const uid = Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
+      let r;
+      for (let i = 0; i < total; i++) {
+        $("#mat-send-t").textContent = `Загрузка ${done + 1}/${files.length}, ${Math.round((i / total) * 100)}%`;
+        const data = await toB64(f.slice(i * HW_CHUNK, (i + 1) * HW_CHUNK));
+        r = await api("hw_file", { uid, i, n: total, name: f.name, kind: "document", purpose: "mat", data });
+      }
+      const j = await api("mat_add", { subj: MTAB, title, file: { file_id: r.file_id, name: f.name, size: r.size } });
+      MAT.unshift(j.item);
+      done++;
+      renderMat();
     }
-    const j = await api("mat_add", { subj: MTAB, title: $("#mat-title").value, file: { file_id: r.file_id, name: MFILE.name, size: r.size } });
-    MAT.unshift(j.item);
     resetMatForm();
-    renderMat();
     note("#ok", "Сохранено", 2500);
-  } catch (e) { fail(e); btn.disabled = false; }
+  } catch (e) {
+    // что уже загружено, остаётся в списке; в форме остаются только не загруженные файлы
+    MFILES = files.slice(done);
+    if (done) $("#mat-label").replaceChildren(ico("file"), document.createTextNode(`Осталось загрузить: ${MFILES.length}`));
+    fail(e);
+    btn.disabled = false;
+  }
   MBUSY = false;
   $("#mat-send-t").textContent = "Загрузить";
 };

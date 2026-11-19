@@ -306,6 +306,19 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
   <div id="hw-all"></div>
 </div>
 
+<div id="upd" class="screen" hidden>
+  <button class="link" data-back><span class="i" data-i="back"></span>Назад</button>
+  <div class="crumbs">Админ-панель › Рассылка › Обновление</div>
+  <h1>Обновление</h1>
+  <div class="hi">Бот отправит это в группу. Первым фото всегда уйдёт картинка «Обновление».</div>
+  <img src="/cabinet/update-banner.jpg" alt="" style="width:100%;border-radius:14px;display:block;margin:0 0 12px">
+  <textarea id="upd-text" maxlength="3500" placeholder="Что нового"></textarea>
+  <div class="muted" id="upd-count" style="margin:4px 2px 8px">0 / 3500</div>
+  <button class="btn" id="upd-send" disabled><span class="i" data-i="send"></span>Отправить в группу</button>
+  <div class="cat" style="margin-top:18px">Отправленные</div>
+  <div id="upd-list"></div>
+</div>
+
 <div id="people" class="screen" hidden>
   <button class="link" data-back><span class="i" data-i="back"></span>Назад</button>
   <div class="crumbs">Админ-панель › Участники › Подгруппы</div>
@@ -467,7 +480,7 @@ async function togglePlay(id, btn) {
 
 /* ---------- навигация ---------- */
 // куда ведёт «Назад» с вложенных экранов (по умолчанию на главную)
-const PARENT = { hw: "hwlist", add: "mine", admin: "apanel", hwadmin: "apanel", people: "apanel", requests: "apanel" };
+const PARENT = { hw: "hwlist", add: "mine", admin: "apanel", upd: "apanel", hwadmin: "apanel", people: "apanel", requests: "apanel" };
 function show(id) {
   stopAudio();
   document.querySelectorAll(".screen").forEach((s) => (s.hidden = s.id !== id));
@@ -1277,12 +1290,61 @@ const ADMIN_TREE = [
     ],
   },
   {
+    title: "Рассылка",
+    rows: [
+      { icon: "send", title: "Обновление", desc: "Сообщение в группу с картинкой", open: openUpd },
+    ],
+  },
+  {
     title: "Обратная связь",
     rows: [
       { icon: "clipboard", title: "Заявки", desc: "Идеи участников", count: () => IDEAS.filter((i) => i.status === "review").length, hot: true, open: () => { renderRequests(); show("requests"); } },
     ],
   },
 ];
+
+/* ---------- рассылка обновлений ---------- */
+function renderUpd(items) {
+  const box = $("#upd-list");
+  box.replaceChildren();
+  if (!items.length) return box.append(el("div", "muted", "Пока ничего не отправляли"));
+  items.forEach((u) => {
+    const c = el("div", "card");
+    c.append(el("div", "muted", new Date(u.ts).toLocaleString("ru-RU", { timeZone: "Asia/Novosibirsk", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })));
+    const t = el("div", null, u.text.length > 300 ? u.text.slice(0, 300) + "…" : u.text);
+    t.style.whiteSpace = "pre-wrap";
+    c.append(t);
+    box.append(c);
+  });
+}
+async function openUpd() {
+  if (!INFO?.isAdmin) return;
+  $("#upd-text").value = "";
+  $("#upd-count").textContent = "0 / 3500";
+  $("#upd-send").disabled = true;
+  renderUpd([]);
+  show("upd");
+  try { renderUpd((await api("upd_list")).items); } catch (e) { fail(e); }
+}
+$("#upd-text").oninput = () => {
+  const n = $("#upd-text").value.trim().length;
+  $("#upd-count").textContent = $("#upd-text").value.length + " / 3500";
+  $("#upd-send").disabled = !n;
+};
+$("#upd-send").onclick = () => {
+  const text = $("#upd-text").value.trim();
+  if (!text) return;
+  ask("Отправить обновление в группу?", async () => {
+    $("#upd-send").disabled = true;
+    try {
+      const j = await api("upd_send", { text });
+      $("#upd-text").value = "";
+      $("#upd-count").textContent = "0 / 3500";
+      renderUpd(j.items);
+      note("#ok", "Отправлено в группу", 3000);
+    } catch (e) { fail(e); $("#upd-send").disabled = false; }
+  });
+};
 
 function renderApanel() {
   if (!INFO?.isAdmin) return;

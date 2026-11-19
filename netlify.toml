@@ -3,7 +3,7 @@
   functions = "netlify/functions"
 
 [functions]
-  included_files = ["fonts/**"]
+  included_files = ["fonts/**", "assets/**"]
   external_node_modules = ["@resvg/resvg-js"]
 
 [functions."schedule"]

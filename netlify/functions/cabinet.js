@@ -12,6 +12,9 @@ const nextBd = (bd, today) => {
   return Math.round((t - t0) / 864e5);
 };
 const { isAdmin, isMember, load, save } = require("../../lib/sounds");
+const { sendUpdate } = require("../../lib/update");
+const UPD_KEY = "updates";
+const UPD_MAX = 3500;
 
 const MAX_PER_USER = 15;
 const MAX_SECONDS = 30;
@@ -409,6 +412,30 @@ async function main(event) {
       return out(502, { error: "Telegram не принял файл. Напиши боту /start в личку и попробуй другой файл" });
     }
     return out(200, { ...res, size: buf.length });
+  }
+
+  /* ---------- обновления: админ шлёт сообщение в группу ---------- */
+  if (body.action === "upd_list") {
+    if (!admin) return out(403, { error: "Только для админа" });
+    let items = [];
+    try { items = (await st.get(UPD_KEY, { type: "json" })) || []; } catch {}
+    return out(200, { items });
+  }
+  if (body.action === "upd_send") {
+    if (!admin) return out(403, { error: "Только для админа" });
+    const text = String(body.text || "").trim();
+    if (!text) return out(400, { error: "Напиши текст обновления" });
+    if (text.length > UPD_MAX) return out(400, { error: `Слишком длинно, максимум ${UPD_MAX} символов` });
+    try {
+      await sendUpdate(text);
+    } catch (e) {
+      return out(502, { error: e.message });
+    }
+    let items = [];
+    try { items = (await st.get(UPD_KEY, { type: "json" })) || []; } catch {}
+    items.unshift({ ts: Date.now(), text, author: user.id });
+    await st.setJSON(UPD_KEY, items.slice(0, 10));
+    return out(200, { ok: true, items: items.slice(0, 10) });
   }
 
   /* ---------- Информатика: материалы ---------- */

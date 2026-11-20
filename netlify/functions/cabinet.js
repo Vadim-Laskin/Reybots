@@ -533,6 +533,26 @@ async function main(event) {
   const expectedOf = (h, sch) =>
     !h.posted && h.mode === "lesson" && sch ? nextLesson(sch, h.subject, nskInfo().tomorrow, h.sg || 0) : "";
 
+  // картинка вложения для просмотра при редактировании (только автору и админу)
+  if (body.action === "hw_img") {
+    const fid = String(body.file_id || "");
+    const all = await loadHw(st);
+    const ok = Object.values(all).some((h) => (admin || h.author === user.id) && h.files.some((f) => f.file_id === fid && f.kind === "photo"));
+    if (!fid || !ok) return out(404, { error: "Фото не найдено" });
+    try {
+      const g = await (await fetch(tgUrl("getFile"), { method: "POST", headers: H, body: JSON.stringify({ file_id: fid }) })).json();
+      if (!g.ok) return out(502, { error: "Telegram не отдал фото" });
+      const r = await fetch(`https://api.telegram.org/file/bot${process.env.BOT_TOKEN}/${g.result.file_path}`);
+      const buf = Buffer.from(await r.arrayBuffer());
+      if (!r.ok || !buf.length) return out(502, { error: "Не удалось загрузить фото" });
+      if (buf.length > 4.2 * 1024 * 1024) return out(413, { error: "Фото слишком большое для просмотра" });
+      const mime = /\.png$/i.test(g.result.file_path) ? "image/png" : /\.webp$/i.test(g.result.file_path) ? "image/webp" : "image/jpeg";
+      return out(200, { mime, data: buf.toString("base64") });
+    } catch (e) {
+      return out(502, { error: "Не удалось загрузить фото" });
+    }
+  }
+
   if (body.action === "hw_edit") {
     const all = await loadHw(st);
     const h = all[body.id];

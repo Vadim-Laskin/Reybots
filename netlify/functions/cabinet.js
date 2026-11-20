@@ -690,7 +690,7 @@ async function main(event) {
     try {
       return out(200, { reply: await ai.chat(messages, context) });
     } catch (e) {
-      return out(e.status || 502, { error: e.message });
+      return out(e.status || 502, { error: e.message + (e.diag && admin ? " " + e.diag : "") });
     }
   }
 

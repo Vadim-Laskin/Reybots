@@ -67,6 +67,7 @@ h1{font-size:26px}
 .btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;border:0;border-radius:16px;padding:14px;font:inherit;font-weight:700;background:var(--accent);color:#fff;margin-top:12px}
 .btn:disabled{opacity:.45}
 .btn.ghost{background:var(--line);color:var(--text)}
+.in-tg .link[data-back]{display:none} /* в Telegram есть своя кнопка «Назад» */
 .link{display:inline-flex;align-items:center;gap:6px;background:none;border:0;color:var(--accent);font:inherit;margin-bottom:14px;padding:0}
 .muted{color:var(--muted);font-size:13px;margin-top:4px;line-height:1.4}
 .h3{font-weight:700;margin:16px 0 8px}
@@ -358,6 +359,7 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
 
 <script>
 const tg = window.Telegram?.WebApp;
+if (tg?.initData) document.documentElement.classList.add("in-tg");
 if (tg) {
   tg.ready();
   tg.expand();

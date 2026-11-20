@@ -13,6 +13,10 @@ const nextBd = (bd, today) => {
 };
 const { isAdmin, isMember, load, save } = require("../../lib/sounds");
 const { sendUpdate } = require("../../lib/update");
+const ai = require("../../lib/ai");
+// пока ИИ только для админа; чтобы открыть всем участникам — переменная окружения AI_FOR_ALL=1
+const AI_FOR_ALL = process.env.AI_FOR_ALL === "1";
+const AI_LIMIT = 15; // сообщений за 5 минут на человека
 const UPD_KEY = "updates";
 const UPD_MAX = 3500;
 
@@ -201,6 +205,8 @@ async function main(event) {
       appLink: process.env.APP_LINK || "",
       sg: p.sg || 0,
       bd: p.bd || "",
+      ai: admin || AI_FOR_ALL,
+      aiName: ai.NAME,
     });
   }
 
@@ -642,6 +648,50 @@ async function main(event) {
     h.postedAt = Date.now();
     await saveHw(st, all);
     return out(200, { item: hwView(h, user.id, true) });
+  }
+
+  /* ---------- ИИ-помощник ---------- */
+  if (body.action === "ai_chat") {
+    if (!(admin || (AI_FOR_ALL && (await isMember(user.id))))) return out(403, { error: "ИИ пока доступен только админу" });
+    const messages = ai.cleanMessages(body.messages);
+    if (!messages.length || messages[messages.length - 1].role !== "user") return out(400, { error: "Напиши сообщение" });
+    // не больше AI_LIMIT сообщений за 5 минут
+    const rk = "ai-rate-" + user.id;
+    let hits = [];
+    try { hits = ((await st.get(rk, { type: "json" })) || []).filter((t) => Date.now() - t < 5 * 60 * 1000); } catch {}
+    if (hits.length >= AI_LIMIT) return out(429, { error: "Мурзик устал, подожди пару минут" });
+    hits.push(Date.now());
+    try { await st.setJSON(rk, hits); } catch {}
+
+    // собираем только то, что видит обычный участник; админские данные (отправители, участники, чужие заявки, рассылки) не берём
+    const nw = nskInfo();
+    const p = (await getPerson(st, user.id)) || {};
+    const sch = await schedule();
+    const hwAll = Object.values(await loadHw(st));
+    const weekAgo = Date.now() - 14 * 864e5;
+    const homework = hwAll
+      .filter((h) => !h.posted || (h.postedAt || h.ts) > weekAgo)
+      .sort((a, b) => b.ts - a.ts)
+      .slice(0, 25)
+      .map((h) => ({ subject: h.subject, sg: h.sg || 0, text: h.text, files: h.files.length, posted: !!h.posted, date: h.date, expected: expectedOf(h, sch) }));
+    const materials = Object.values(await loadMat(st)).sort((a, b) => b.ts - a.ts).slice(0, 40).map((m) => ({ subj: MAT_SUBJ[m.subj] || m.subj, title: m.title }));
+    const ideas = Object.values(await loadIdeas(st)).filter((i) => i.author === user.id).slice(0, 10).map((i) => ({ text: i.text, status: STATUS[i.status] || i.status, comment: i.comment || "" }));
+    let birthdays = [];
+    try {
+      const { blobs } = await st.list({ prefix: "person-" });
+      const ppl = (await Promise.all(blobs.map((b) => st.get(b.key, { type: "json" }).catch(() => null)))).filter((x) => x && x.bd);
+      birthdays = ppl.map((x) => ({ name: x.name || "?", bd: x.bd, days: nextBd(x.bd, nw.date) })).sort((a, b) => a.days - b.days).slice(0, 8);
+    } catch {}
+    const context = ai.buildContext({
+      now: { ...nw, dateMs: Date.parse(nw.date + "T00:00:00Z") },
+      person: { name: user.first_name || "", sg: p.sg || 0 },
+      schedule: sch, homework, materials, ideas, birthdays,
+    });
+    try {
+      return out(200, { reply: await ai.chat(messages, context) });
+    } catch (e) {
+      return out(e.status || 502, { error: e.message });
+    }
   }
 
   /* ---------- звуки ---------- */

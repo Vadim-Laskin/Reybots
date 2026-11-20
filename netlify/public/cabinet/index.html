@@ -150,6 +150,13 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
 .ai-head small{display:block;font-weight:400;color:var(--muted);font-size:12px}
 .ai-msgs{flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
 .ai-m{max-width:86%;padding:9px 12px;border-radius:16px;font-size:15px;line-height:1.35;white-space:pre-wrap;word-wrap:break-word}
+.ai-m.md{white-space:normal}
+.ai-m p{margin:0 0 7px}.ai-m p:last-child,.ai-m ul:last-child,.ai-m ol:last-child,.ai-m pre:last-child{margin-bottom:0}
+.ai-m ul,.ai-m ol{margin:0 0 7px;padding-left:20px}.ai-m li{margin:2px 0}
+.ai-m code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.92em;background:rgba(127,127,127,.2);border-radius:5px;padding:1px 5px}
+.ai-m pre{margin:0 0 7px;background:rgba(127,127,127,.18);border-radius:10px;padding:9px 11px;overflow-x:auto;white-space:pre}
+.ai-m pre code{background:none;padding:0}
+.ai-m a{color:var(--accent);text-decoration:underline}
 .ai-m.bot{align-self:flex-start;background:var(--card);border-bottom-left-radius:5px}
 .ai-m.me{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:5px}
 .ai-m.err{align-self:flex-start;background:var(--errbg);color:var(--red)}
@@ -1386,8 +1393,67 @@ $("#bd-clear").onclick = () => ask("Убрать дату рождения?", as
 let AIH = [], AIBUSY = false;
 const AI_HELLO = "Мяу! Я Мурзик, ИИ-кот группы. Могу рассказать про расписание, домашку, материалы и дни рождения, а ещё просто поболтать. Но с самой домашкой помогаю плохо, я же кот.";
 const AI_SUG = ["Что завтра по расписанию?", "Какая домашка задана?", "Когда ближайший день рождения?"];
-function aiBubble(cls, text) {
-  const m = el("div", "ai-m " + cls, text);
+/* простой безопасный разбор разметки: **жирный**, *курсив*, ~~зачёркнутый~~, `код`, ссылки, списки, блоки кода (всё собирается через DOM, без innerHTML) */
+function mdInline(text, parent) {
+  const re = /(\*\*[^*\n]+?\*\*|(?<![\w*])\*[^*\s][^*\n]*?\*(?![\w*])|~~[^~\n]+?~~|`[^`\n]+?`|\[[^\]\n]+\]\(https?:\/\/[^\s)]+\))/g;
+  let last = 0, m;
+  while ((m = re.exec(text))) {
+    if (m.index > last) parent.append(text.slice(last, m.index));
+    const s = m[0];
+    let node;
+    if (s.startsWith("**")) { node = document.createElement("b"); mdInline(s.slice(2, -2), node); }
+    else if (s.startsWith("~~")) { node = document.createElement("s"); mdInline(s.slice(2, -2), node); }
+    else if (s.startsWith("`")) { node = document.createElement("code"); node.textContent = s.slice(1, -1); }
+    else if (s.startsWith("[")) {
+      const k = s.indexOf("](");
+      node = document.createElement("a");
+      node.textContent = s.slice(1, k);
+      const url = s.slice(k + 2, -1);
+      node.href = url;
+      node.onclick = (e) => { e.preventDefault(); tg?.openLink ? tg.openLink(url) : window.open(url, "_blank", "noopener"); };
+    } else { node = document.createElement("i"); mdInline(s.slice(1, -1), node); }
+    parent.append(node);
+    last = m.index + s.length;
+  }
+  if (last < text.length) parent.append(text.slice(last));
+}
+function mdRender(text) {
+  const box = document.createDocumentFragment();
+  text.split(/```/).forEach((chunk, idx) => {
+    if (idx % 2) { // блок кода
+      const pre = document.createElement("pre"), code = document.createElement("code");
+      code.textContent = chunk.replace(/^[^\n]*\n/, "").replace(/\n$/, "") || chunk;
+      pre.append(code);
+      box.append(pre);
+      return;
+    }
+    let list = null, para = null;
+    const flush = () => { list = null; para = null; };
+    chunk.split("\n").forEach((raw) => {
+      const line = raw.trimEnd();
+      const li = /^\s*(?:[-•*]|(\d+)[.)])\s+(.*)$/.exec(line);
+      if (!line.trim()) return flush();
+      if (li) {
+        const kind = li[1] ? "ol" : "ul";
+        if (!list || list.tagName.toLowerCase() !== kind) { list = document.createElement(kind); box.append(list); }
+        para = null;
+        const item = document.createElement("li");
+        mdInline(li[2], item);
+        list.append(item);
+        return;
+      }
+      list = null;
+      const head = /^#{1,3}\s+(.*)$/.exec(line);
+      if (head) { para = null; const p = document.createElement("p"), b = document.createElement("b"); mdInline(head[1], b); p.append(b); box.append(p); return; }
+      if (!para) { para = document.createElement("p"); box.append(para); } else para.append(document.createElement("br"));
+      mdInline(line, para);
+    });
+  });
+  return box;
+}
+function aiBubble(cls, text, md) {
+  const m = el("div", "ai-m " + cls + (md ? " md" : ""));
+  if (md) m.append(mdRender(text)); else m.textContent = text;
   $("#ai-msgs").append(m);
   $("#ai-msgs").scrollTop = 1e6;
   return m;
@@ -1421,7 +1487,7 @@ async function aiSend(text) {
   try {
     const r = await api("ai_chat", { messages: AIH.slice(-12) });
     wait.remove();
-    aiBubble("bot", r.reply);
+    aiBubble("bot", r.reply, true);
     AIH.push({ role: "assistant", content: r.reply });
   } catch (e) {
     wait.remove();

@@ -521,6 +521,10 @@ async function main(event) {
       .slice(0, HW_MAX_FILES)
       .filter((f) => f && typeof f.file_id === "string" && ["photo", "video", "document"].includes(f.kind))
       .map((f) => ({ file_id: f.file_id.slice(0, 250), kind: f.kind, name: String(f.name || "").slice(0, 80) }));
+    // если часть вложений отсеялась (битый file_id, лишние), не отправляем молча без них
+    if (body.nfiles !== undefined && Number(body.nfiles) !== files.length) {
+      return { error: "Не все вложения загрузились. Загрузи их заново и повтори" };
+    }
     if (!text && !files.length) return { error: "Добавь текст, фото, видео или файл" };
     return { subject, sg, text, files, sch };
   };

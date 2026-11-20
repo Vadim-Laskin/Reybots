@@ -259,6 +259,7 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
     <input type="file" id="hw-video" accept="video/*" multiple>
     <input type="file" id="hw-file" multiple>
     <div id="hw-files"></div>
+    <div id="hw-warn" hidden style="color:var(--red);font-size:13px;margin:6px 2px 0">Одно из вложений не загрузилось. Удали его (корзина) или добавь заново, иначе оно не попадёт в домашку.</div>
     <div class="muted">До 8 вложений, каждое до 15 МБ. Нужно добавить хотя бы текст или одно вложение.</div>
     <button class="btn" id="hw-send" disabled><span class="i" data-i="send"></span><span id="hw-send-t">Отправить</span></button>
     <button class="btn ghost" id="hw-cancel" hidden><span class="i" data-i="close"></span>Отмена</button>
@@ -882,9 +883,11 @@ async function hwUpload(entry, file) {
 
 function updateHwSend() {
   const busy = HWF.some((f) => f.state === "up");
+  const bad = HWF.some((f) => f.state === "err"); // не даём отправить текст, молча потеряв вложение
+  $("#hw-warn").hidden = !bad;
   const hasFile = HWF.some((f) => f.state === "ok");
   const sgOk = $("#hw-sg-box").hidden || $("#hw-sg").value;
-  $("#hw-send").disabled = !($("#hw-subject").value && sgOk && ($("#hw-text").value.trim() || hasFile) && !busy);
+  $("#hw-send").disabled = !($("#hw-subject").value && sgOk && ($("#hw-text").value.trim() || hasFile) && !busy && !bad);
 }
 
 // предмет идёт по подгруппам (в расписании есть «1 подгруппа» / «2 подгруппа»)?
@@ -970,6 +973,7 @@ function addHwFiles(list, kind) {
       } catch (err) {
         e.state = "err";
         e.err = err.message;
+        fail(err);
       }
       renderHwFiles();
       updateHwSend();
@@ -1080,9 +1084,10 @@ $("#hw-text").oninput = updateHwSend;
 $("#hw-send").onclick = async () => {
   const btn = $("#hw-send");
   btn.disabled = true;
-  const files = HWF.filter((f) => f.state === "ok").map((f) => ({ file_id: f.file_id, kind: f.kind, name: f.name }));
+  if (HWF.some((f) => f.state !== "ok")) { updateHwSend(); return fail(new Error("Не все вложения загрузились")); }
+  const files = HWF.map((f) => ({ file_id: f.file_id, kind: f.kind, name: f.name }));
   try {
-    const data = { subject: $("#hw-subject").value, sg: $("#hw-sg-box").hidden ? 0 : Number($("#hw-sg").value), text: $("#hw-text").value, files };
+    const data = { subject: $("#hw-subject").value, sg: $("#hw-sg-box").hidden ? 0 : Number($("#hw-sg").value), text: $("#hw-text").value, files, nfiles: HWF.length };
     if (HWE) {
       const r = await api("hw_edit", { id: HWE, ...data });
       HW = HW.map((x) => (x.id === HWE ? r.item : x));

@@ -92,13 +92,20 @@ input[type=file]{display:none}
 #err{display:none;background:var(--errbg);color:var(--red);border-radius:14px;padding:12px;margin-bottom:12px;font-size:14px}
 #ok{display:none;background:var(--okbg);color:var(--green);border-radius:14px;padding:12px;margin-bottom:12px;font-size:14px}
 
-.nt{background:var(--card);border:1.5px solid var(--line);border-radius:20px;padding:16px;margin-bottom:14px}
-.nt b{display:block;font-size:16px;margin-bottom:4px}
-.nt span{display:block;font-size:13px;color:var(--muted)}
-.nt .row{display:flex;gap:8px;margin-top:12px}
-.nt .row button{flex:1;border:0;border-radius:14px;padding:12px;font:inherit;font-weight:700;background:var(--accent);color:#fff}
-.nt .row button.g{background:var(--line);color:var(--text)}
 .nt-pref{display:block;width:100%;margin-top:14px;background:none;border:0;color:var(--muted);font:inherit;font-size:13px;text-align:center;padding:8px}
+.ntw{position:fixed;inset:0;z-index:90}
+.ntw[hidden]{display:none}
+.ntb{position:absolute;inset:0;background:rgba(0,0,0,.55);opacity:0;transition:opacity .3s ease}
+.nts{position:absolute;left:0;right:0;bottom:0;background:var(--card);border-radius:26px 26px 0 0;border-top:1.5px solid var(--line);padding:12px 18px calc(var(--bot,24px) + 14px);transform:translateY(105%);transition:transform .38s cubic-bezier(.2,.85,.25,1)}
+.ntw.open .ntb{opacity:1}
+.ntw.open .nts{transform:none}
+.nts .grab{width:40px;height:4px;border-radius:2px;background:var(--line);margin:0 auto 16px}
+.nts b{display:block;font-size:19px;margin-bottom:6px}
+.nts span{display:block;font-size:14px;color:var(--muted);line-height:1.4}
+.nts .row{display:flex;gap:10px;margin-top:20px}
+.nts .row[hidden]{display:none}
+.nts .row button{flex:1;border:0;border-radius:16px;padding:15px 10px;font:inherit;font-weight:700;background:var(--accent);color:#fff}
+.nts .row button.g{background:var(--line);color:var(--text)}
 .now{background:var(--card);border:1.5px solid var(--line);border-radius:20px;padding:16px;margin-bottom:14px;cursor:pointer}
 .now.live{border-color:var(--green)}
 .now-h{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
@@ -223,13 +230,6 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
     <div class="now-h"><span class="i" data-i="clock"></span><span id="now-t"></span></div>
     <div id="now-b"></div>
     <div class="bar" id="now-bar" hidden><i></i></div>
-  </div>
-
-  <div class="nt" id="nt" hidden>
-    <b>Уведомления об изменениях пар</b>
-    <span>Хочешь, чтобы бот писал тебе, когда админ отменит пару или отпустит раньше?</span>
-    <div class="row" id="nt-main"><button id="nt-yes">Да</button><button class="g" id="nt-no">Нет</button></div>
-    <div class="row" id="nt-more" hidden><button class="g" id="nt-never">Не показывать больше</button><button class="g" id="nt-hide">Скрыть сейчас</button></div>
   </div>
 
   <div class="menu">
@@ -474,6 +474,16 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
   </div>
 </div>
 
+<div class="ntw" id="nt" hidden>
+  <div class="ntb" id="nt-bg"></div>
+  <div class="nts">
+    <div class="grab"></div>
+    <b>Уведомления об изменениях пар</b>
+    <span>Хочешь, чтобы бот писал тебе, когда преподаватель отменит пару или отпустит раньше?</span>
+    <div class="row" id="nt-main"><button id="nt-yes">Да</button><button class="g" id="nt-no">Нет</button></div>
+    <div class="row" id="nt-more" hidden><button class="g" id="nt-never">Не показывать больше</button><button class="g" id="nt-hide">Скрыть сейчас</button></div>
+  </div>
+</div>
 <script>
 const tg = window.Telegram?.WebApp;
 if (tg?.initData) document.documentElement.classList.add("in-tg");
@@ -1977,7 +1987,8 @@ $("#now").onclick = () => $("#go-schedule").click();
 const ntHidden = () => { try { return sessionStorage.getItem("nt-hide") === "1"; } catch { return false; } };
 function renderNt() {
   if (!INFO) return;
-  $("#nt").hidden = INFO.notif !== 0 || ntHidden();
+  const on = INFO.notif === 0 && !ntHidden();
+  if (on) setTimeout(() => ntShow(true), 500); else ntShow(false);
   let pref = $("#nt-pref");
   if (!pref) {
     pref = document.createElement("button");
@@ -1988,6 +1999,20 @@ function renderNt() {
   pref.hidden = INFO.notif === 0;
   pref.textContent = INFO.notif === 1 ? "Уведомления об изменениях пар включены · Отключить" : "Уведомления об изменениях пар выключены · Включить";
 }
+function ntShow(on) {
+  const w = $("#nt");
+  if (on) {
+    if (!w.hidden) return;
+    w.hidden = false;
+    requestAnimationFrame(() => requestAnimationFrame(() => w.classList.add("open")));
+  } else {
+    if (w.hidden) return;
+    w.classList.remove("open");
+    setTimeout(() => { if (!w.classList.contains("open")) { w.hidden = true; $("#nt-more").hidden = true; $("#nt-main").hidden = false; } }, 400);
+  }
+}
+document.body.append($("#nt"));
+$("#nt-bg").onclick = () => $("#nt-hide").click();
 async function ntSet(v) {
   try { await api("notif_set", { value: v }); INFO.notif = v; renderNt(); }
   catch (e) { fail(e); }
@@ -1995,7 +2020,7 @@ async function ntSet(v) {
 $("#nt-yes").onclick = () => ntSet(1);
 $("#nt-no").onclick = () => { $("#nt-main").hidden = true; $("#nt-more").hidden = false; };
 $("#nt-never").onclick = () => ntSet(-1);
-$("#nt-hide").onclick = () => { try { sessionStorage.setItem("nt-hide", "1"); } catch {} $("#nt-more").hidden = true; $("#nt-main").hidden = false; renderNt(); };
+$("#nt-hide").onclick = () => { try { sessionStorage.setItem("nt-hide", "1"); } catch {} renderNt(); };
 
 api("info")
   .then(async (j) => {

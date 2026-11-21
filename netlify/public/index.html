@@ -32,12 +32,19 @@ main{padding:0 16px}
 .pair.cancel{background:var(--redbg)}
 .pair.past{opacity:.4}
 .entry.other{opacity:.4}
-#nt{margin:10px 12px 0;background:var(--card);border:1.5px solid var(--line);border-radius:16px;padding:14px}
-#nt b{display:block;font-size:15px;margin-bottom:3px}
-#nt span{display:block;font-size:13px;color:var(--muted)}
-#nt .row{display:flex;gap:8px;margin-top:10px}
-#nt .row button{flex:1;border:0;border-radius:12px;padding:11px;font:inherit;font-weight:700;background:var(--accent);color:#fff}
-#nt .row button.g{background:var(--line);color:var(--text)}
+.ntw{position:fixed;inset:0;z-index:90}
+.ntw[hidden]{display:none}
+.ntb{position:absolute;inset:0;background:rgba(0,0,0,.55);opacity:0;transition:opacity .3s ease}
+.nts{position:absolute;left:0;right:0;bottom:0;background:var(--card);border-radius:26px 26px 0 0;border-top:1.5px solid var(--line);padding:12px 18px calc(var(--bot,24px) + 14px);transform:translateY(105%);transition:transform .38s cubic-bezier(.2,.85,.25,1)}
+.ntw.open .ntb{opacity:1}
+.ntw.open .nts{transform:none}
+.nts .grab{width:40px;height:4px;border-radius:2px;background:var(--line);margin:0 auto 16px}
+.nts b{display:block;font-size:19px;margin-bottom:6px}
+.nts span{display:block;font-size:14px;color:var(--muted);line-height:1.4}
+.nts .row{display:flex;gap:10px;margin-top:20px}
+.nts .row[hidden]{display:none}
+.nts .row button{flex:1;border:0;border-radius:16px;padding:15px 10px;font:inherit;font-weight:700;background:var(--accent);color:#fff}
+.nts .row button.g{background:var(--line);color:var(--text)}
 .pair.now{outline:2px solid var(--green)}
 .pair.next{outline:1.5px dashed var(--accent)}
 .num{width:54px;flex:none;text-align:center;border-right:1px solid var(--line);padding-right:12px}
@@ -68,14 +75,18 @@ main{padding:0 16px}
   <div id="warn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4M12 17h.01"/></svg><span id="warn-t"></span></div>
   <div id="tabs"></div>
 </header>
-<div id="nt" hidden>
-  <b>Уведомления об изменениях пар</b>
-  <span>Хочешь, чтобы бот писал тебе, когда админ отменит пару или отпустит раньше?</span>
-  <div class="row" id="nt-main"><button id="nt-yes">Да</button><button class="g" id="nt-no">Нет</button></div>
-  <div class="row" id="nt-more" hidden><button class="g" id="nt-never">Не показывать больше</button><button class="g" id="nt-hide">Скрыть сейчас</button></div>
-</div>
 <main id="list"><div id="msg">Загрузка…</div></main>
 
+<div class="ntw" id="nt" hidden>
+  <div class="ntb" id="nt-bg"></div>
+  <div class="nts">
+    <div class="grab"></div>
+    <b>Уведомления об изменениях пар</b>
+    <span>Хочешь, чтобы бот писал тебе, когда преподаватель отменит пару или отпустит раньше?</span>
+    <div class="row" id="nt-main"><button id="nt-yes">Да</button><button class="g" id="nt-no">Нет</button></div>
+    <div class="row" id="nt-more" hidden><button class="g" id="nt-never">Не показывать больше</button><button class="g" id="nt-hide">Скрыть сейчас</button></div>
+  </div>
+</div>
 <script>
 const tg = window.Telegram?.WebApp;
 if (tg) {
@@ -109,7 +120,21 @@ function nskNow() {
 let DATA = null, lastCur = null, MYSG = 0, NOTIF = null;
 // подгруппа пользователя (из кабинета); если не открыто из Telegram — не используем
 const ntHidden = () => { try { return sessionStorage.getItem("nt-hide") === "1"; } catch { return false; } };
-function renderNt() { $("#nt").hidden = NOTIF !== 0 || ntHidden(); }
+function ntShow(on) {
+  const w = $("#nt");
+  if (on) {
+    if (!w.hidden) return;
+    w.hidden = false;
+    requestAnimationFrame(() => requestAnimationFrame(() => w.classList.add("open")));
+  } else {
+    if (w.hidden) return;
+    w.classList.remove("open");
+    setTimeout(() => { if (!w.classList.contains("open")) { w.hidden = true; $("#nt-more").hidden = true; $("#nt-main").hidden = false; } }, 400);
+  }
+}
+document.body.append($("#nt"));
+$("#nt-bg").onclick = () => $("#nt-hide").click();
+function renderNt() { const on = NOTIF === 0 && !ntHidden(); if (on) setTimeout(() => ntShow(true), 500); else ntShow(false); }
 async function ntSet(v) {
   try {
     const r = await fetch("/.netlify/functions/cabinet", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "notif_set", value: v, initData: tg.initData }) });
@@ -120,7 +145,7 @@ async function ntSet(v) {
 $("#nt-yes").onclick = () => ntSet(1);
 $("#nt-no").onclick = () => { $("#nt-main").hidden = true; $("#nt-more").hidden = false; };
 $("#nt-never").onclick = () => ntSet(-1);
-$("#nt-hide").onclick = () => { try { sessionStorage.setItem("nt-hide", "1"); } catch {} $("#nt-more").hidden = true; $("#nt-main").hidden = false; renderNt(); };
+$("#nt-hide").onclick = () => { try { sessionStorage.setItem("nt-hide", "1"); } catch {} renderNt(); };
 async function loadMySg() {
   if (!tg?.initData) return;
   try {

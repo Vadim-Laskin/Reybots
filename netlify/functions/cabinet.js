@@ -49,9 +49,82 @@ async function groqStt(buf, mime) {
     return String((await r.json()).text || "").trim();
   } finally { clearTimeout(timer); }
 }
+
+/* ---------- озвучка через Сбер SaluteSpeech (сертификаты НУЦ Минцифры подключаем только для запросов к Сберу) ---------- */
+const https = require("https");
+const tlsMod = require("tls");
+const SBER_CA_URLS = ["https://gu-st.ru/content/Other/doc/russian_trusted_root_ca_pem.crt", "https://gu-st.ru/content/Other/doc/russian_trusted_root_ca.cer"];
+let sberCa = null, sberTok = { v: "", exp: 0 };
+function toPem(buf) {
+  const s = buf.toString("utf8");
+  if (/BEGIN CERTIFICATE/.test(s)) return s;
+  return "-----BEGIN CERTIFICATE-----\n" + buf.toString("base64").match(/.{1,64}/g).join("\n") + "\n-----END CERTIFICATE-----\n"; // DER -> PEM
+}
+async function sberCaList() {
+  if (sberCa) return sberCa;
+  let pem = (process.env.SBER_CA_PEM || "").replace(/\\n/g, "\n").trim();
+  if (!pem) {
+    for (const u of SBER_CA_URLS) {
+      try {
+        const r = await fetch(u, { signal: AbortSignal.timeout(5000) });
+        if (!r.ok) continue;
+        pem = toPem(Buffer.from(await r.arrayBuffer()));
+        break;
+      } catch {}
+    }
+  }
+  if (!pem) { const e = new Error("Не удалось получить сертификат Минцифры для Сбера. Добавь его текстом в SBER_CA_PEM"); e.status = 502; throw e; }
+  sberCa = [...tlsMod.rootCertificates, pem];
+  return sberCa;
+}
+async function sberReq(url, { method = "POST", headers = {}, body = "" } = {}) {
+  const ca = await sberCaList();
+  const u = new URL(url);
+  return new Promise((resolve, reject) => {
+    const req = https.request({ method, host: u.hostname, port: u.port || 443, path: u.pathname + u.search, headers: { ...headers, "Content-Length": Buffer.byteLength(body) }, ca, timeout: 9000 }, (res) => {
+      const parts = [];
+      res.on("data", (c) => parts.push(c));
+      res.on("end", () => resolve({ status: res.statusCode, buf: Buffer.concat(parts) }));
+    });
+    req.on("timeout", () => req.destroy(new Error("Сбер не ответил вовремя")));
+    req.on("error", reject);
+    req.end(body);
+  });
+}
+async function sberToken() {
+  if (sberTok.v && sberTok.exp - Date.now() > 60000) return sberTok.v;
+  const key = (process.env.SBER_SALUTE_KEY || "").trim();
+  const r = await sberReq("https://ngw.devices.sberbank.ru:9443/api/v2/oauth", {
+    headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json", RqUID: crypto.randomUUID(), Authorization: "Basic " + key },
+    body: "scope=" + encodeURIComponent((process.env.SBER_SCOPE || "SALUTE_SPEECH_PERS").trim()),
+  });
+  if (r.status !== 200) {
+    const e = new Error(r.status === 401 || r.status === 400 ? "Ключ Сбера не подходит (проверь SBER_SALUTE_KEY и SBER_SCOPE)" : "Сбер не выдал доступ (" + r.status + ")");
+    e.status = 502;
+    throw e;
+  }
+  const j = JSON.parse(r.buf.toString("utf8"));
+  sberTok = { v: j.access_token, exp: Number(j.expires_at) || Date.now() + 25 * 60000 };
+  return sberTok.v;
+}
+async function sberTts(text) {
+  const voice = (process.env.SBER_VOICE || "May_24000").trim();
+  const go = async () => sberReq(`https://smartspeech.sber.ru/rest/v1/text:synthesize?format=wav16&voice=${encodeURIComponent(voice)}`, {
+    headers: { Authorization: "Bearer " + (await sberToken()), "Content-Type": "application/text" },
+    body: text,
+  });
+  let r = await go();
+  if (r.status === 401) { sberTok = { v: "", exp: 0 }; r = await go(); }
+  if (r.status !== 200) {
+    const e = new Error(r.status === 429 ? "Голос устал, подожди немного" : "Озвучка Сбера не получилась (" + r.status + ")");
+    e.status = r.status === 429 ? 429 : 502;
+    throw e;
+  }
+  return { buf: r.buf, mime: "audio/wav" };
+}
 async function elevenTts(text) {
   const key = (process.env.ELEVENLABS_API_KEY || "").trim();
-  if (!key) { const e = new Error("Голос пока не настроен: нужен ELEVENLABS_API_KEY в Netlify"); e.status = 503; throw e; }
+  if (!key) { const e = new Error("Голос пока не настроен: нужен SBER_SALUTE_KEY в Netlify"); e.status = 503; throw e; }
   const voice = (process.env.ELEVENLABS_VOICE_ID || "EXAVITQu4vr4xnSDxMaL").trim();
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 9000);
@@ -71,8 +144,12 @@ async function elevenTts(text) {
       e.status = r.status === 429 ? 429 : 502;
       throw e;
     }
-    return Buffer.from(await r.arrayBuffer());
+    return { buf: Buffer.from(await r.arrayBuffer()), mime: "audio/mpeg" };
   } finally { clearTimeout(timer); }
+}
+async function speak(text) {
+  if ((process.env.SBER_SALUTE_KEY || "").trim()) return sberTts(text);
+  return elevenTts(text);
 }
 
 const AI_LIMIT = 15; // сообщений за 5 минут на человека
@@ -266,7 +343,7 @@ async function main(event) {
       bd: p.bd || "",
       notif: p.notif === 1 || p.notif === -1 ? p.notif : 0,
       ai: admin || AI_FOR_ALL,
-      voice: !!(process.env.ELEVENLABS_API_KEY || "").trim(),
+      voice: !!((process.env.SBER_SALUTE_KEY || "") + (process.env.ELEVENLABS_API_KEY || "")).trim(),
       aiName: ai.NAME,
     });
   }
@@ -796,8 +873,8 @@ async function main(event) {
       }
       const text = String(body.text || "").replace(/\s+/g, " ").trim().slice(0, 350);
       if (!text) return out(400, { error: "Нечего озвучивать" });
-      const buf = await elevenTts(text);
-      return out(200, { audio: buf.toString("base64"), mime: "audio/mpeg" });
+      const a = await speak(text);
+      return out(200, { audio: a.buf.toString("base64"), mime: a.mime });
     } catch (e) {
       return out(e.status || 502, { error: e.message });
     }

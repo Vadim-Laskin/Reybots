@@ -124,7 +124,7 @@ async function sberTts(text) {
 }
 async function elevenTts(text) {
   const key = (process.env.ELEVENLABS_API_KEY || "").trim();
-  if (!key) { const e = new Error("Голос пока не настроен: нужен SBER_SALUTE_KEY в Netlify"); e.status = 503; throw e; }
+  if (!key) { const e = new Error("Голос пока не настроен: нужен YANDEX_API_KEY в Netlify"); e.status = 503; throw e; }
   const voice = (process.env.ELEVENLABS_VOICE_ID || "EXAVITQu4vr4xnSDxMaL").trim();
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 9000);
@@ -147,7 +147,35 @@ async function elevenTts(text) {
     return { buf: Buffer.from(await r.arrayBuffer()), mime: "audio/mpeg" };
   } finally { clearTimeout(timer); }
 }
+async function yandexTts(text) {
+  const key = (process.env.YANDEX_API_KEY || "").trim();
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 9000);
+  try {
+    const form = new URLSearchParams({
+      text, lang: "ru-RU", format: "mp3",
+      voice: (process.env.YANDEX_VOICE || "alena").trim(),
+      emotion: (process.env.YANDEX_EMOTION || "good").trim(),
+      speed: "1.0",
+    });
+    const fid = (process.env.YANDEX_FOLDER_ID || "").trim();
+    if (fid) form.set("folderId", fid);
+    const r = await fetch("https://tts.api.cloud.yandex.net/speech/v1/tts:synthesize", {
+      method: "POST",
+      headers: { Authorization: "Api-Key " + key, "Content-Type": "application/x-www-form-urlencoded" },
+      body: form,
+      signal: ctl.signal,
+    });
+    if (!r.ok) {
+      const e = new Error(r.status === 401 || r.status === 403 ? "Ключ Яндекса не подходит или нет прав (нужна роль ai.speechkit-tts.user)" : r.status === 429 ? "Голос устал, подожди немного" : "Озвучка Яндекса не получилась (" + r.status + ")");
+      e.status = r.status === 429 ? 429 : 502;
+      throw e;
+    }
+    return { buf: Buffer.from(await r.arrayBuffer()), mime: "audio/mpeg" };
+  } finally { clearTimeout(timer); }
+}
 async function speak(text) {
+  if ((process.env.YANDEX_API_KEY || "").trim()) return yandexTts(text);
   if ((process.env.SBER_SALUTE_KEY || "").trim()) return sberTts(text);
   return elevenTts(text);
 }
@@ -343,7 +371,7 @@ async function main(event) {
       bd: p.bd || "",
       notif: p.notif === 1 || p.notif === -1 ? p.notif : 0,
       ai: admin || AI_FOR_ALL,
-      voice: !!((process.env.SBER_SALUTE_KEY || "") + (process.env.ELEVENLABS_API_KEY || "")).trim(),
+      voice: !!((process.env.YANDEX_API_KEY || "") + (process.env.SBER_SALUTE_KEY || "") + (process.env.ELEVENLABS_API_KEY || "")).trim(),
       aiName: ai.NAME,
     });
   }

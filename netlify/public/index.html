@@ -44,6 +44,7 @@ main{padding:0 16px}
 .r{font-size:14px;margin-top:2px}
 .badge{display:inline-block;margin-top:10px;font-size:13px;font-weight:700;color:var(--green)}
 .badge.soft{color:var(--accent)}
+.st .badge{display:block}
 .bar{height:4px;border-radius:2px;background:var(--line);margin-top:6px}
 .bar i{display:block;height:100%;background:var(--green);border-radius:2px}
 #msg{padding:40px 16px;text-align:center;color:var(--muted)}
@@ -91,6 +92,8 @@ function nskNow() {
 }
 
 let DATA = null, lastCur = null;
+// правки админа для «Идёт / следующая»: отмена пары или «отпустили раньше»
+const ovOf = (date, num, sg) => ((DATA?.over?.[date] || {})[num] || []).find((o) => (o.sg || 0) === sg);
 
 function build() {
   const tabs = $("#tabs"), list = $("#list");
@@ -127,6 +130,7 @@ if (DATA.stale) {
       c.dataset.start = p.start;
       c.dataset.end = p.end;
       c.dataset.cancel = allCancel ? "1" : "";
+      c.dataset.num = p.num;
       const num = el("div", "num");
       num.append(el("b", null, p.num), el("span", null, p.start), el("span", null, p.end));
       const info = el("div", "info");
@@ -157,7 +161,17 @@ function tick() {
     const st = c.querySelector(".st");
     st.replaceChildren();
     c.classList.remove("now", "past", "next");
-    const date = c.dataset.date, s = toMin(c.dataset.start), e = toMin(c.dataset.end), cancel = c.dataset.cancel;
+    const date = c.dataset.date, s = toMin(c.dataset.start), num = c.dataset.num;
+    let e = toMin(c.dataset.end), cancel = c.dataset.cancel;
+    const notes = [];
+    const all = ovOf(date, num, 0);
+    if (all && all.t === "cancel") { cancel = "1"; notes.push("Пару отменили"); }
+    else if (all && all.t === "early" && toMin(all.end) > s && toMin(all.end) < e) { e = toMin(all.end); notes.push(`Отпустили раньше: до ${all.end}`); }
+    else if (all && all.t === "early") { cancel = "1"; notes.push("Пару отменили"); }
+    [1, 2].forEach((g) => {
+      const o = ovOf(date, num, g);
+      if (o) notes.push(`${g} подгр.: ${o.t === "cancel" ? "пару отменили" : "отпустили до " + o.end}`);
+    });
     const state =
       date < now.date ? "past" : date > now.date ? "future" :
       now.min >= e ? "past" : now.min >= s ? "now" : "future";
@@ -174,6 +188,8 @@ function tick() {
       c.classList.add("next");
       st.append(el("div", "badge soft", `Следующая · через ${fmt(s - now.min)}`));
     }
+    // пометки админа показываем у всех непрошедших пар
+    if (state !== "past") notes.forEach((t) => st.append(el("div", "badge soft", t)));
   });
   document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("today", t.dataset.date === now.date));
 }

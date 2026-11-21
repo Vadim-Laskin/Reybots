@@ -1372,7 +1372,7 @@ async function loadSchedule() {
   } catch (e) {
     console.log("schedule load failed:", e.message);
   }
-  try { OVER = (await api("sch_over")).over || {}; } catch {}
+  OVER = SCH?.over || {};
   renderNow();
   renderBells();
 }

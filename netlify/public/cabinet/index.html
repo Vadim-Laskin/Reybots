@@ -1418,13 +1418,7 @@ function renderNow() {
     extra = `Начало в ${next.start}, через ${fmtMin(toMin(next.start) - n.min)}`;
   } else {
     title = list.length ? "На сегодня всё" : "Сегодня занятий нет";
-    if (list.length) {
-      const nd = SCH.days.find((d) => d.date > n.date && applyOv(activePairs(d), d.date).length);
-      if (nd) {
-        pair = applyOv(activePairs(nd), nd.date)[0];
-        extra = `Ближайшая пара: ${nd.weekday.toLowerCase()}, ${nd.label}, в ${pair.start}`;
-      } else extra = "Ближайших занятий в расписании нет";
-    }
+    // «На сегодня всё»: ближайшую пару не показываем
   }
 
   box.classList.toggle("live", !!live);

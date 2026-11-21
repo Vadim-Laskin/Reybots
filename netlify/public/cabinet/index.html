@@ -73,6 +73,13 @@ h1{font-size:26px}
 .btn.ghost{background:var(--line);color:var(--text)}
 .in-tg .link[data-back]{display:none} /* в Telegram есть своя кнопка «Назад» */
 .link{display:inline-flex;align-items:center;gap:6px;background:none;border:0;color:var(--accent);font:inherit;margin-bottom:14px;padding:0}
+.utbl-w{overflow-x:auto;margin:10px -16px 12px;padding:0 16px;scrollbar-width:none}
+.utbl{border-collapse:collapse;width:100%;font-size:13px}
+.utbl th{text-align:left;font-size:10px;letter-spacing:.03em;text-transform:uppercase;color:var(--muted);font-weight:700;padding:8px 6px;background:var(--bg)}
+.utbl td{padding:11px 6px;border-top:1px solid var(--line);vertical-align:top}
+.utbl td small{display:block;color:var(--muted);font-size:12px}
+.utbl .y{color:var(--green);font-weight:700}
+.utbl .n{color:var(--muted)}
 .muted{color:var(--muted);font-size:13px;margin-top:4px;line-height:1.4}
 .h3{font-weight:700;margin:16px 0 8px}
 
@@ -410,6 +417,15 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
   <div id="ovr-list"></div>
 </div>
 
+<div id="users" class="screen" hidden>
+  <button class="link" data-back><span class="i" data-i="back"></span>Назад</button>
+  <div class="crumbs">Админ-панель › Участники › Таблица</div>
+  <h1>Пользователи</h1>
+  <div class="hi" id="users-sum"></div>
+  <div class="utbl-w"><table class="utbl"><thead><tr><th>Имя</th><th>Подгр.</th><th>ДР</th><th>Уведомл.</th><th>Был</th></tr></thead><tbody id="users-body"></tbody></table></div>
+  <div class="muted">Здесь только те, кто хотя бы раз открывал кабинет. «Уведомл.»: да — подписан на сообщения об изменениях пар, нет — отключил, «—» — ещё не отвечал.</div>
+</div>
+
 <div id="people" class="screen" hidden>
   <button class="link" data-back><span class="i" data-i="back"></span>Назад</button>
   <div class="crumbs">Админ-панель › Участники › Подгруппы</div>
@@ -625,7 +641,7 @@ async function togglePlay(id, btn) {
 
 /* ---------- навигация ---------- */
 // куда ведёт «Назад» с вложенных экранов (по умолчанию на главную)
-const PARENT = { hw: "hwlist", add: "mine", admin: "apanel", upd: "apanel", ovr: "apanel", hwadmin: "apanel", people: "apanel", requests: "apanel" };
+const PARENT = { hw: "hwlist", add: "mine", admin: "apanel", upd: "apanel", ovr: "apanel", hwadmin: "apanel", people: "apanel", users: "apanel", requests: "apanel" };
 function show(id) {
   stopAudio();
   document.querySelectorAll(".screen").forEach((s) => (s.hidden = s.id !== id));
@@ -982,6 +998,43 @@ function renderPeople() {
     });
     c.append(seg);
     box.append(c);
+  });
+}
+
+/* ---------- таблица пользователей (только админ) ---------- */
+async function openUsers() {
+  show("users");
+  const body = $("#users-body");
+  body.replaceChildren();
+  $("#users-sum").textContent = "Загрузка…";
+  try {
+    PEOPLE = (await api("people")).people;
+    renderUsers();
+  } catch (e) { $("#users-sum").textContent = ""; fail(e); }
+}
+function renderUsers() {
+  const body = $("#users-body");
+  body.replaceChildren();
+  const on = PEOPLE.filter((p) => p.notif === 1).length;
+  $("#users-sum").textContent = `Всего: ${PEOPLE.length} · уведомления включили: ${on}`;
+  const ago = (ts) => {
+    if (!ts) return "—";
+    const m = Math.floor((Date.now() - ts) / 60000);
+    if (m < 1) return "только что";
+    if (m < 60) return m + " мин назад";
+    if (m < 1440) return Math.floor(m / 60) + " ч назад";
+    return Math.floor(m / 1440) + " дн назад";
+  };
+  PEOPLE.forEach((p) => {
+    const tr = document.createElement("tr");
+    const name = document.createElement("td");
+    name.append(p.name || "Без имени");
+    const sm = el("small", null, (p.username ? "@" + p.username : "без username") + (INFO && p.id === INFO.id ? " · это ты" : ""));
+    name.append(sm);
+    const bd = /^\d{2}-\d{2}$/.test(p.bd || "") ? p.bd.slice(3) + "." + p.bd.slice(0, 2) : "—";
+    const nt = p.notif === 1 ? el("td", "y", "да") : p.notif === -1 ? el("td", "n", "нет") : el("td", "n", "—");
+    tr.append(name, el("td", null, p.sg ? String(p.sg) : "—"), el("td", null, bd), nt, el("td", "n", ago(p.ts)));
+    body.append(tr);
   });
 }
 
@@ -1680,6 +1733,7 @@ const ADMIN_TREE = [
   {
     title: "Участники",
     rows: [
+      { icon: "users", title: "Пользователи", desc: "Таблица: подгруппа, ДР, уведомления", open: openUsers },
       { icon: "users", title: "Подгруппы", desc: "Кто в какой подгруппе", open: openPeople },
     ],
   },

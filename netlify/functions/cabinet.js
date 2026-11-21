@@ -190,8 +190,8 @@ async function main(event) {
     const name = user.first_name || "";
     const username = user.username || "";
     let p = await getPerson(st, user.id);
-    if (!p || p.name !== name || p.username !== username) {
-      p = { ...(p || { sg: 0 }), id: user.id, name, username, ts: Date.now() };
+    if (!p || p.name !== name || p.username !== username || Date.now() - (p.seen || 0) > 600000) {
+      p = { ...(p || { sg: 0 }), id: user.id, name, username, ts: Date.now(), seen: Date.now() };
       try {
         await st.setJSON(personKey(user.id), p);
       } catch (e) {
@@ -270,7 +270,7 @@ async function main(event) {
     }
     list.sort((a, b) => String(a.name).localeCompare(String(b.name), "ru"));
     return out(200, {
-      people: list.map((p) => ({ id: p.id, name: p.name, username: p.username, sg: p.sg || 0 })),
+      people: list.map((p) => ({ id: p.id, name: p.name, username: p.username, sg: p.sg || 0, bd: p.bd || "", notif: p.notif === 1 || p.notif === -1 ? p.notif : 0, ts: p.seen || p.ts || 0 })),
     });
   }
 

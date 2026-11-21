@@ -31,6 +31,7 @@ main{padding:0 16px}
 .pair{display:flex;gap:14px;background:var(--card);border-radius:18px;padding:14px;margin-bottom:10px}
 .pair.cancel{background:var(--redbg)}
 .pair.past{opacity:.4}
+.entry.other{opacity:.4}
 .pair.now{outline:2px solid var(--green)}
 .pair.next{outline:1.5px dashed var(--accent)}
 .num{width:54px;flex:none;text-align:center;border-right:1px solid var(--line);padding-right:12px}
@@ -93,7 +94,18 @@ function nskNow() {
   return { date: d.toISOString().slice(0, 10), min: d.getUTCHours() * 60 + d.getUTCMinutes() };
 }
 
-let DATA = null, lastCur = null;
+let DATA = null, lastCur = null, MYSG = 0;
+// подгруппа пользователя (из кабинета); если не открыто из Telegram — не используем
+async function loadMySg() {
+  if (!tg?.initData) return;
+  try {
+    const r = await fetch("/.netlify/functions/cabinet", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "info", initData: tg.initData }) });
+    if (!r.ok) return;
+    const j = await r.json();
+    const g = Number(j.sg) || 0;
+    if (g !== MYSG) { MYSG = g; if (DATA) build(); }
+  } catch {}
+}
 // правки админа для «Идёт / следующая»: отмена пары или «отпустили раньше»
 const ovOf = (date, num, sg) => ((DATA?.over?.[date] || {})[num] || []).find((o) => (o.sg || 0) === sg);
 
@@ -133,11 +145,13 @@ if (DATA.stale) {
       c.dataset.end = p.end;
       c.dataset.cancel = allCancel ? "1" : "";
       c.dataset.num = p.num;
+      // пара только для другой подгруппы — показываем как прошедшую
+      c.dataset.other = MYSG && p.entries.length && p.entries.every((e) => e.sg && e.sg !== MYSG) ? "1" : "";
       const num = el("div", "num");
       num.append(el("b", null, p.num), el("span", null, p.start), el("span", null, p.end));
       const info = el("div", "info");
       p.entries.forEach((e, i) => {
-        const b = el("div", "entry");
+        const b = el("div", "entry" + (MYSG && e.sg && e.sg !== MYSG ? " other" : ""));
         const lab = e.sg ? `${e.sg} подгруппа` : p.sub ? "по подгруппам" : "";
         if (lab) b.append(el("div", "sg", lab));
         b.append(el("div", e.cancelled ? "s red" : "s", e.subject));
@@ -174,7 +188,7 @@ function tick() {
       const o = ovOf(date, num, g);
       if (o) notes.push(`${g} подгр.: ${o.t === "cancel" ? "пару отменили" : "отпустили до " + o.end}`);
     });
-    const state =
+    const state = c.dataset.other ? "past" :
       date < now.date ? "past" : date > now.date ? "future" :
       now.min >= e ? "past" : now.min >= s ? "now" : "future";
     if (state === "past") c.classList.add("past");
@@ -246,9 +260,10 @@ async function load() {
 
 $("#refresh").onclick = load;
 window.addEventListener("scroll", onScroll, { passive: true });
-document.addEventListener("visibilitychange", () => { if (!document.hidden) { tick(); load(); } });
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { tick(); load(); loadMySg(); } });
 setInterval(tick, 30000);
 setInterval(load, 5 * 60000);
+loadMySg();
 load();
 </script>
 </body>

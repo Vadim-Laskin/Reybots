@@ -1,12 +1,14 @@
-"""Сервис озвучки для Мурзика на Silero TTS (русский, v4). Для Hugging Face Space (Docker)."""
+"""Сервис озвучки для Мурзика на Silero TTS (русский, v4). Для Hugging Face Space (SDK: Gradio)."""
 import hmac
 import io
 import os
 import re
 import wave
 
+import gradio as gr
 import numpy as np
 import torch
+import uvicorn
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
@@ -34,11 +36,6 @@ def clean(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()[:400]
 
 
-@app.get("/")
-def health():
-    return {"ok": True}
-
-
 @app.post("/tts")
 def tts(req: Req, x_token: str = Header(default="")):
     if not TOKEN or not hmac.compare_digest(x_token, TOKEN):
@@ -56,3 +53,12 @@ def tts(req: Req, x_token: str = Header(default="")):
         w.setframerate(SAMPLE_RATE)
         w.writeframes(pcm.tobytes())
     return Response(content=buf.getvalue(), media_type="audio/wav")
+
+
+# Gradio нужен только для того, чтобы Space считался рабочим; сама озвучка идёт через /tts
+with gr.Blocks() as demo:
+    gr.Markdown("Murzik TTS работает.")
+app = gr.mount_gradio_app(app, demo, path="/")
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=7860)

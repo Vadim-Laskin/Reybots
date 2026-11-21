@@ -669,7 +669,7 @@ async function main(event) {
     const rk = "ai-rate-" + user.id;
     let hits = [];
     try { hits = ((await st.get(rk, { type: "json" })) || []).filter((t) => Date.now() - t < 5 * 60 * 1000); } catch {}
-    if (hits.length >= AI_LIMIT) return out(429, { error: "Мурзик устал, подожди пару минут" });
+    if (hits.length >= AI_LIMIT) return out(429, { error: "Мурзик устал, подожди пару минут", fatigue: 1 });
     hits.push(Date.now());
     try { await st.setJSON(rk, hits); } catch {}
 
@@ -714,9 +714,9 @@ async function main(event) {
         } else if (c.name === "clear_birthday") actions.push({ type: "bd_clear" });
       }
       const reply = r.text || (actions.length ? "Подтверди действие кнопкой ниже." : "Не совсем понял, что нужно сделать. Уточни, пожалуйста: для идеи нужен текст (от 5 символов), для даты рождения число и месяц.");
-      return out(200, { reply, actions: actions.slice(0, 3) });
+      return out(200, { reply, actions: actions.slice(0, 3), fatigue: Math.max(r.fatigue || 0, hits.length / AI_LIMIT) });
     } catch (e) {
-      return out(e.status || 502, { error: e.message + (e.diag && admin ? " " + e.diag + ` [адрес сайта: ${event.headers?.host || "?"}]` : "") });
+      return out(e.status || 502, { fatigue: e.status === 429 ? 1 : undefined, error: e.message + (e.diag && admin ? " " + e.diag + ` [адрес сайта: ${event.headers?.host || "?"}]` : "") });
     }
   }
 

@@ -179,7 +179,9 @@ async function speak(text) {
   if ((process.env.YANDEX_API_KEY || "").trim()) tries.push(yandexTts);
   if ((process.env.SBER_SALUTE_KEY || "").trim()) tries.push(sberTts);
   if ((process.env.ELEVENLABS_API_KEY || "").trim()) tries.push(elevenTts);
-  tries.push(async (t) => require("../../lib/edgetts").synth(t)); // бесплатный голос Edge: без ключей, он же запасной
+  // голос Edge Microsoft сейчас закрывает доступ (403), по умолчанию выключен; включается переменной EDGE_TTS=1
+  if (process.env.EDGE_TTS === "1") tries.push(async (t) => require("../../lib/edgetts").synth(t));
+  if (!tries.length) { const e = new Error("Голос пока не настроен: нет ключа озвучки"); e.status = 503; throw e; }
   let err;
   for (const f of tries) {
     try { return await f(text); } catch (e) { err = e; console.log("tts failed:", e.message); }

@@ -175,9 +175,16 @@ async function yandexTts(text) {
   } finally { clearTimeout(timer); }
 }
 async function speak(text) {
-  if ((process.env.YANDEX_API_KEY || "").trim()) return yandexTts(text);
-  if ((process.env.SBER_SALUTE_KEY || "").trim()) return sberTts(text);
-  return elevenTts(text);
+  const tries = [];
+  if ((process.env.YANDEX_API_KEY || "").trim()) tries.push(yandexTts);
+  if ((process.env.SBER_SALUTE_KEY || "").trim()) tries.push(sberTts);
+  if ((process.env.ELEVENLABS_API_KEY || "").trim()) tries.push(elevenTts);
+  tries.push(async (t) => require("../../lib/edgetts").synth(t)); // бесплатный голос Edge: без ключей, он же запасной
+  let err;
+  for (const f of tries) {
+    try { return await f(text); } catch (e) { err = e; console.log("tts failed:", e.message); }
+  }
+  throw err;
 }
 
 const AI_LIMIT = 15; // сообщений за 5 минут на человека
@@ -371,7 +378,7 @@ async function main(event) {
       bd: p.bd || "",
       notif: p.notif === 1 || p.notif === -1 ? p.notif : 0,
       ai: admin || AI_FOR_ALL,
-      voice: !!((process.env.YANDEX_API_KEY || "") + (process.env.SBER_SALUTE_KEY || "") + (process.env.ELEVENLABS_API_KEY || "")).trim(),
+      voice: true,
       aiName: ai.NAME,
     });
   }

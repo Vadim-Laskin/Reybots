@@ -80,6 +80,11 @@ h1{font-size:26px}
 .utbl td small{display:block;color:var(--muted);font-size:12px}
 .utbl .y{color:var(--green);font-weight:700}
 .utbl .n{color:var(--muted)}
+.boot{position:fixed;inset:0;z-index:200;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;transition:opacity .35s ease}
+.boot.off{opacity:0;pointer-events:none}
+.boot i{width:44px;height:44px;border-radius:50%;border:4px solid var(--line);border-top-color:var(--accent);animation:bootspin .8s linear infinite}
+.boot span{color:var(--muted);font-size:15px}
+@keyframes bootspin{to{transform:rotate(360deg)}}
 .muted{color:var(--muted);font-size:13px;margin-top:4px;line-height:1.4}
 .h3{font-weight:700;margin:16px 0 8px}
 
@@ -226,6 +231,7 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
 </style>
 </head>
 <body>
+<div class="boot" id="boot"><i></i><span>Загрузка…</span></div>
 <div id="err"></div>
 <div id="ok"></div>
 
@@ -2077,6 +2083,13 @@ $("#nt-no").onclick = () => { $("#nt-main").hidden = true; $("#nt-more").hidden 
 $("#nt-never").onclick = () => ntSet(-1);
 $("#nt-hide").onclick = () => { try { sessionStorage.setItem("nt-hide", "1"); } catch {} renderNt(); };
 
+function hideBoot() {
+  const bt = $("#boot");
+  if (!bt || bt.classList.contains("off")) return;
+  bt.classList.add("off");
+  setTimeout(() => bt.remove(), 400);
+}
+setTimeout(hideBoot, 15000);
 api("info")
   .then(async (j) => {
     INFO = j;
@@ -2093,7 +2106,8 @@ api("info")
     await refresh();
     renderApanel();
   })
-  .catch((e) => { $("#hi").textContent = ""; fail(e); });
+  .catch((e) => { $("#hi").textContent = ""; fail(e); })
+  .finally(hideBoot);
 
 loadSchedule();
 setInterval(renderNow, 30000);

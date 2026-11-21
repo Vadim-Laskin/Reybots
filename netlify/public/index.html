@@ -119,7 +119,8 @@ function nskNow() {
 
 let DATA = null, lastCur = null, MYSG = 0, NOTIF = null;
 // подгруппа пользователя (из кабинета); если не открыто из Telegram — не используем
-const ntHidden = () => { try { return sessionStorage.getItem("nt-hide") === "1"; } catch { return false; } };
+let ntSkip = false; // закрыли касанием мимо кнопок: только до следующего открытия
+const ntHidden = () => ntSkip || (() => { try { return sessionStorage.getItem("nt-hide") === "1"; } catch { return false; } })();
 function ntShow(on) {
   const w = $("#nt");
   if (on) {
@@ -133,7 +134,7 @@ function ntShow(on) {
   }
 }
 document.body.append($("#nt"));
-$("#nt-bg").onclick = () => $("#nt-hide").click();
+$("#nt-bg").onclick = () => { ntSkip = true; renderNt(); };
 function renderNt() { const on = NOTIF === 0 && !ntHidden(); if (on) setTimeout(() => ntShow(true), 500); else ntShow(false); }
 async function ntSet(v) {
   try {

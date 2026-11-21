@@ -1984,7 +1984,8 @@ $("#go-schedule").onclick = () => {
 $("#now").onclick = () => $("#go-schedule").click();
 
 /* ---------- вывеска про уведомления об изменениях пар ---------- */
-const ntHidden = () => { try { return sessionStorage.getItem("nt-hide") === "1"; } catch { return false; } };
+let ntSkip = false; // закрыли касанием мимо кнопок: только до следующего открытия
+const ntHidden = () => ntSkip || (() => { try { return sessionStorage.getItem("nt-hide") === "1"; } catch { return false; } })();
 function renderNt() {
   if (!INFO) return;
   const on = INFO.notif === 0 && !ntHidden();
@@ -2012,7 +2013,7 @@ function ntShow(on) {
   }
 }
 document.body.append($("#nt"));
-$("#nt-bg").onclick = () => $("#nt-hide").click();
+$("#nt-bg").onclick = () => { ntSkip = true; renderNt(); };
 async function ntSet(v) {
   try { await api("notif_set", { value: v }); INFO.notif = v; renderNt(); }
   catch (e) { fail(e); }

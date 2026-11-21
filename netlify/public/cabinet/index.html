@@ -85,6 +85,15 @@ h1{font-size:26px}
 .boot i{width:44px;height:44px;border-radius:50%;border:4px solid var(--line);border-top-color:var(--accent);animation:bootspin .8s linear infinite}
 .boot span{color:var(--muted);font-size:15px}
 @keyframes bootspin{to{transform:rotate(360deg)}}
+.bdn{background:var(--card);border:1.5px solid var(--amber);border-radius:20px;padding:14px 16px;margin-bottom:14px}
+.bdn-t{display:flex;gap:12px;align-items:center}
+.bdn-t .i{color:var(--amber);flex:none;width:26px;height:26px}
+.bdn-t b{display:block;font-size:15px}
+.bdn-t span:not(.i){display:block;font-size:13px;color:var(--muted);margin-top:2px}
+.bdn .row{display:flex;gap:8px;margin-top:12px}
+.bdn .row button{flex:1;border:0;border-radius:14px;padding:12px 8px;font:inherit;font-weight:700;background:var(--accent);color:#fff}
+.bdn .row button.g{background:var(--line);color:var(--text)}
+.bdn[hidden],.bdn .row button[hidden]{display:none}
 .muted{color:var(--muted);font-size:13px;margin-top:4px;line-height:1.4}
 .h3{font-weight:700;margin:16px 0 8px}
 
@@ -243,6 +252,11 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
     <div class="now-h"><span class="i" data-i="clock"></span><span id="now-t"></span></div>
     <div id="now-b"></div>
     <div class="bar" id="now-bar" hidden><i></i></div>
+  </div>
+
+  <div class="bdn" id="bdn" hidden>
+    <div class="bdn-t"><span class="i" data-i="gift"></span><div><b>Не указана дата рождения</b><span>Добавь её, чтобы группа могла тебя поздравить</span></div></div>
+    <div class="row"><button id="bdn-add">Добавить</button><button class="g" id="bdn-ai" hidden>Через Мурзика</button></div>
   </div>
 
   <div class="menu">
@@ -1489,7 +1503,19 @@ function renderBd() {
   $("#bd-cur").textContent = bd ? `Сейчас указано: ${bdLabel(bd)}` : "Дата пока не указана.";
   $("#bd-clear").hidden = !bd;
   $("#bd-sub").textContent = bd ? `Указано: ${bdLabel(bd)}` : "Укажи свою дату";
+  // напоминание на главной, пока дата не указана
+  if (INFO) {
+    $("#bdn").hidden = !!bd;
+    $("#bdn-ai").hidden = !INFO.ai;
+  }
 }
+$("#bdn-add").onclick = () => $("#go-bd").click();
+$("#bdn-ai").onclick = () => {
+  openAi();
+  const t = $("#ai-in");
+  t.value = "Мой день рождения: ";
+  t.focus();
+};
 async function loadBdList() {
   const box = $("#bd-list");
   try {
@@ -1668,8 +1694,8 @@ function aiAction(a) {
       let done;
       if (a.type === "sg") { await api("sg_self", { sg: a.sg }); INFO.sg = a.sg; updateHi(); renderNow(); done = a.sg ? `Готово: у тебя ${a.sg} подгруппа` : "Готово: подгруппа убрана"; }
       else if (a.type === "idea") { await api("idea_add", { text: a.text }); done = "Готово: идея отправлена, статус смотри в «Улучшениях»"; }
-      else if (a.type === "bd") { const r = await api("bd_set", { day: a.day, month: a.month }); INFO.bd = r.bd; done = `Готово: день рождения ${a.day} ${MONTHS_RU[a.month - 1]}`; }
-      else { await api("bd_clear"); INFO.bd = ""; done = "Готово: дата рождения убрана"; }
+      else if (a.type === "bd") { const r = await api("bd_set", { day: a.day, month: a.month }); INFO.bd = r.bd; renderBd(); done = `Готово: день рождения ${a.day} ${MONTHS_RU[a.month - 1]}`; }
+      else { await api("bd_clear"); INFO.bd = ""; renderBd(); done = "Готово: дата рождения убрана"; }
       finish("✓ " + done, "done");
       AIH.push({ role: "assistant", content: done });
     } catch (e) {

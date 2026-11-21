@@ -1962,6 +1962,7 @@ async function vOpen() {
   $("#vchat").hidden = false;
   tg?.BackButton.show();
   vEmo("calm"); vSet("idle", "");
+  api("voice_wake").catch(() => {});
   // разблокируем звук по нажатию пользователя
   try {
     V.ctx = V.ctx || new (window.AudioContext || window.webkitAudioContext)();

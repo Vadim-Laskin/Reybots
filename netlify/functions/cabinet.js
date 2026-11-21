@@ -174,11 +174,35 @@ async function yandexTts(text) {
     return { buf: Buffer.from(await r.arrayBuffer()), mime: "audio/mpeg" };
   } finally { clearTimeout(timer); }
 }
+// Silero на бесплатном Hugging Face Space: SILERO_URL (адрес Space), SILERO_TOKEN (общий секрет), SILERO_VOICE (по умолчанию xenia)
+async function sileroTts(text) {
+  const base = (process.env.SILERO_URL || "").trim().replace(/\/+$/, "");
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 9000);
+  try {
+    const r = await fetch(base + "/tts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-token": (process.env.SILERO_TOKEN || "").trim() },
+      body: JSON.stringify({ text, speaker: (process.env.SILERO_VOICE || "xenia").trim() }),
+      signal: ctl.signal,
+    });
+    if (!r.ok) {
+      const e = new Error(r.status === 401 ? "Silero: неверный SILERO_TOKEN" : r.status === 503 || r.status === 502 ? "Silero ещё просыпается, повтори через минуту" : "Silero не ответил (" + r.status + ")");
+      e.status = 502;
+      throw e;
+    }
+    return { buf: Buffer.from(await r.arrayBuffer()), mime: "audio/wav" };
+  } catch (e) {
+    if (e.name === "AbortError") { const x = new Error("Silero просыпается (бесплатный хостинг засыпает), повтори через минуту"); x.status = 502; throw x; }
+    throw e;
+  } finally { clearTimeout(timer); }
+}
 async function speak(text) {
   const tries = [];
   if ((process.env.YANDEX_API_KEY || "").trim()) tries.push(yandexTts);
   if ((process.env.SBER_SALUTE_KEY || "").trim()) tries.push(sberTts);
   if ((process.env.ELEVENLABS_API_KEY || "").trim()) tries.push(elevenTts);
+  if ((process.env.SILERO_URL || "").trim()) tries.push(sileroTts);
   // голос Edge Microsoft сейчас закрывает доступ (403), по умолчанию выключен; включается переменной EDGE_TTS=1
   if (process.env.EDGE_TTS === "1") tries.push(async (t) => require("../../lib/edgetts").synth(t));
   if (!tries.length) { const e = new Error("Голос пока не настроен: нет ключа озвучки"); e.status = 503; throw e; }
@@ -893,6 +917,13 @@ async function main(event) {
   }
 
   /* ---------- ИИ-помощник ---------- */
+  if (body.action === "voice_wake") {
+    // будим бесплатный хостинг Silero, пока человек начинает говорить
+    const base = (process.env.SILERO_URL || "").trim();
+    if (base && (admin || (AI_FOR_ALL && (await isMember(user.id))))) fetch(base, { signal: AbortSignal.timeout(7000) }).catch(() => {});
+    return out(200, { ok: true });
+  }
+
   if (body.action === "voice_stt" || body.action === "voice_tts") {
     if (!(admin || (AI_FOR_ALL && (await isMember(user.id))))) return out(403, { error: "ИИ пока доступен только админу" });
     const rk = "voice-rate-" + user.id;

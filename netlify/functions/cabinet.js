@@ -286,6 +286,16 @@ async function main(event) {
     return out(200, { ok: true });
   }
 
+  // участник ставит себе подгруппу (через ИИ-помощника, после подтверждения)
+  if (body.action === "sg_self") {
+    if (!(await isMember(user.id))) return out(403, { error: "Только для участников группы" });
+    const sg = Number(body.sg);
+    if (![0, 1, 2].includes(sg)) return out(400, { error: "Подгруппа 1, 2 или без подгруппы" });
+    const p = (await getPerson(st, user.id)) || { sg: 0 };
+    await st.setJSON(personKey(user.id), { ...p, id: user.id, name: user.first_name || p.name || "", username: user.username || p.username || "", sg, ts: Date.now() });
+    return out(200, { sg });
+  }
+
   /* ---------- улучшения ---------- */
   if (body.action === "ideas") {
     const ideas = await loadIdeas(st);
@@ -684,11 +694,27 @@ async function main(event) {
     } catch {}
     const context = ai.buildContext({
       now: { ...nw, dateMs: Date.parse(nw.date + "T00:00:00Z") },
-      person: { name: user.first_name || "", sg: p.sg || 0 },
+      person: { name: user.first_name || "", sg: p.sg || 0, bd: p.bd || "" },
       schedule: sch, homework, materials, ideas, birthdays,
     });
     try {
-      return out(200, { reply: await ai.chat(messages, context) });
+      const r = await ai.chat(messages, context);
+      // ИИ ничего не меняет сам: он только предлагает действия, человек подтверждает кнопкой
+      const actions = [];
+      for (const c of r.calls) {
+        const a = c.args || {};
+        if (c.name === "set_subgroup" && [0, 1, 2].includes(Number(a.subgroup))) actions.push({ type: "sg", sg: Number(a.subgroup) });
+        else if (c.name === "send_idea") {
+          const text = String(a.text || "").replace(/\s+/g, " ").trim();
+          if (text.length >= 5 && text.length <= 300) actions.push({ type: "idea", text });
+        } else if (c.name === "set_birthday") {
+          const day = Number(a.day), month = Number(a.month);
+          const maxDay = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
+          if (Number.isInteger(day) && Number.isInteger(month) && month >= 1 && month <= 12 && day >= 1 && day <= maxDay) actions.push({ type: "bd", day, month });
+        } else if (c.name === "clear_birthday") actions.push({ type: "bd_clear" });
+      }
+      const reply = r.text || (actions.length ? "Подтверди действие кнопкой ниже." : "Не совсем понял, что нужно сделать. Уточни, пожалуйста: для идеи нужен текст (от 5 символов), для даты рождения число и месяц.");
+      return out(200, { reply, actions: actions.slice(0, 3) });
     } catch (e) {
       return out(e.status || 502, { error: e.message + (e.diag && admin ? " " + e.diag + ` [адрес сайта: ${event.headers?.host || "?"}]` : "") });
     }

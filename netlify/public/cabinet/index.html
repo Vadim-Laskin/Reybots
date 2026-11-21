@@ -169,6 +169,17 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
 .ai-form textarea{flex:1;resize:none;height:46px;min-height:46px;max-height:110px;margin:0;padding:11px 12px;box-sizing:border-box}
 .ai-form button{width:46px;border:0;border-radius:14px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center}
 .ai-form button:disabled{opacity:.45}
+.ai-form[hidden],.ai-sug[hidden]{display:none}
+.ai-act{align-self:flex-start;max-width:92%;border:1px solid var(--accent);border-radius:14px;padding:10px 12px;background:var(--card);font-size:14.5px}
+.ai-act .row{display:flex;gap:8px;margin-top:9px}
+.ai-act button{flex:1;border:0;border-radius:10px;padding:9px;font:inherit;font-weight:600;background:var(--accent);color:#fff}
+.ai-act button.ghost{background:rgba(127,127,127,.22);color:var(--text)}
+.ai-act button:disabled{opacity:.5}
+.ai-act .done{color:var(--green,#3ecf8e);font-weight:600}
+.ai-intro{align-self:stretch;background:var(--card);border-radius:16px;padding:14px 15px;font-size:14.5px;line-height:1.4}
+.ai-intro h3{margin:0 0 8px;font-size:17px}
+.ai-intro ul{margin:0 0 12px;padding-left:19px}.ai-intro li{margin:5px 0}
+.ai-intro button{width:100%;border:0;border-radius:12px;padding:12px;font:inherit;font-weight:700;background:var(--accent);color:#fff}
 .hwf-n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}
 .hwf .sq{width:34px;height:34px}
 
@@ -400,7 +411,7 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
 <div id="aichat" hidden>
   <div class="ai-box">
     <div class="ai-head">
-      <b id="ai-name">Мурзик<small>ИИ-кот группы · тест</small></b>
+      <b id="ai-name">Мурзик<small>ИИ-кот · тест</small></b>
       <button class="sq" id="ai-x" aria-label="Закрыть"><span class="i" data-i="close"></span></button>
     </div>
     <div class="ai-msgs" id="ai-msgs"></div>
@@ -1391,7 +1402,7 @@ $("#bd-clear").onclick = () => ask("Убрать дату рождения?", as
 
 /* ---------- ИИ-кот Мурзик ---------- */
 let AIH = [], AIBUSY = false;
-const AI_HELLO = "Мяу! Я Мурзик, ИИ-кот группы. Могу рассказать про расписание, домашку, материалы и дни рождения, а ещё просто поболтать. Но с самой домашкой помогаю плохо, я же кот.";
+const AI_HELLO = "Мяу! Я Мурзик, ИИ-кот. Могу рассказать про расписание, домашку, материалы и дни рождения, а ещё просто поболтать. Но с самой домашкой помогаю плохо, я же кот.";
 const AI_SUG = ["Что завтра по расписанию?", "Какая домашка задана?", "Когда ближайший день рождения?"];
 /* простой безопасный разбор разметки: **жирный**, *курсив*, ~~зачёркнутый~~, `код`, ссылки, списки, блоки кода (всё собирается через DOM, без innerHTML) */
 function mdInline(text, parent) {
@@ -1458,15 +1469,75 @@ function aiBubble(cls, text, md) {
   $("#ai-msgs").scrollTop = 1e6;
   return m;
 }
+function aiStart() {
+  $("#ai-msgs").replaceChildren();
+  $("#ai-form").hidden = false;
+  $("#ai-sug").hidden = false;
+  aiBubble("bot", AI_HELLO);
+  const box = $("#ai-sug");
+  box.replaceChildren();
+  AI_SUG.forEach((s) => { const b = el("button", null, s); b.type = "button"; b.onclick = () => aiSend(s); box.append(b); });
+}
+// предупреждение перед первым диалогом
+function aiIntro() {
+  $("#ai-form").hidden = true;
+  $("#ai-sug").hidden = true;
+  const c = el("div", "ai-intro");
+  c.append(el("h3", null, "Прежде чем начать"));
+  const ul = el("ul");
+  [
+    "Мурзик — искусственный интеллект и может ошибаться. Важное (расписание, сроки, оценки) проверяй сам.",
+    "Не пиши ему пароли, паспортные данные и чужие личные данные.",
+    "Он видит расписание, домашку, материалы, дни рождения и твои заявки. Админских данных у него нет.",
+    "Может предложить поставить тебе подгруппу, отправить идею для бота или указать день рождения, но только после твоего нажатия «Подтвердить».",
+    "Код он не пишет, с домашкой помогает плохо и отвечает в рамках законов РФ.",
+  ].forEach((t) => ul.append(el("li", null, t)));
+  const b = el("button", null, "Понятно, начать");
+  b.onclick = () => { try { localStorage.setItem("mur-intro", "1"); } catch {} aiStart(); };
+  c.append(ul, b);
+  $("#ai-msgs").append(c);
+}
 function openAi() {
   if (!INFO?.ai) return;
   $("#aichat").hidden = false;
   tg?.BackButton.show();
   if (!$("#ai-msgs").children.length) {
-    aiBubble("bot", AI_HELLO);
-    const box = $("#ai-sug");
-    AI_SUG.forEach((s) => { const b = el("button", null, s); b.type = "button"; b.onclick = () => aiSend(s); box.append(b); });
+    let seen = false;
+    try { seen = localStorage.getItem("mur-intro") === "1"; } catch {}
+    seen ? aiStart() : aiIntro();
   }
+}
+// карточка «подтверди действие»: ИИ только предлагает, выполняет человек
+function aiAction(a) {
+  const label = a.type === "sg" ? (a.sg ? `Поставить тебе ${a.sg} подгруппу?` : "Убрать подгруппу (расписание для всех)?")
+    : a.type === "idea" ? `Отправить идею от твоего имени: «${a.text}»?`
+    : a.type === "bd" ? `Указать день рождения: ${a.day} ${MONTHS_RU[a.month - 1]}?`
+    : "Убрать дату рождения?";
+  const c = el("div", "ai-act");
+  c.append(el("div", null, label));
+  const row = el("div", "row");
+  const ok = el("button", null, "Подтвердить"), no = el("button", "ghost", "Отмена");
+  const finish = (txt, cls) => { c.replaceChildren(el("div", cls || "muted", txt)); };
+  ok.onclick = async () => {
+    ok.disabled = no.disabled = true;
+    try {
+      let done;
+      if (a.type === "sg") { await api("sg_self", { sg: a.sg }); INFO.sg = a.sg; updateHi(); renderNow(); done = a.sg ? `Готово: у тебя ${a.sg} подгруппа` : "Готово: подгруппа убрана"; }
+      else if (a.type === "idea") { await api("idea_add", { text: a.text }); done = "Готово: идея отправлена, статус смотри в «Улучшениях»"; }
+      else if (a.type === "bd") { const r = await api("bd_set", { day: a.day, month: a.month }); INFO.bd = r.bd; done = `Готово: день рождения ${a.day} ${MONTHS_RU[a.month - 1]}`; }
+      else { await api("bd_clear"); INFO.bd = ""; done = "Готово: дата рождения убрана"; }
+      finish("✓ " + done, "done");
+      AIH.push({ role: "assistant", content: done });
+    } catch (e) {
+      ok.disabled = no.disabled = false;
+      c.append(el("div", "muted", e.message));
+    }
+  };
+  no.onclick = () => { finish("Отменено"); AIH.push({ role: "assistant", content: "Пользователь отменил действие." }); };
+  row.append(ok, no);
+  c.append(row);
+  $("#ai-msgs").append(c);
+  $("#ai-msgs").scrollTop = 1e6;
 }
 function closeAi() {
   $("#aichat").hidden = true;
@@ -1489,6 +1560,7 @@ async function aiSend(text) {
     wait.remove();
     aiBubble("bot", r.reply, true);
     AIH.push({ role: "assistant", content: r.reply });
+    (r.actions || []).forEach(aiAction);
   } catch (e) {
     wait.remove();
     aiBubble("err", e.message);

@@ -383,6 +383,15 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
   <div id="upd-list"></div>
 </div>
 
+<div id="ovr" class="screen" hidden>
+  <button class="link" data-back><span class="i" data-i="back"></span>Назад</button>
+  <div class="crumbs">Админ-панель › Расписание › Отмена пар</div>
+  <h1>Отмена пар</h1>
+  <div class="hi">Если преподаватель отменил пару или отпустил раньше, отметьте это здесь. Изменится только блок «Идёт / следующая пара» в Кабинете, само расписание и посты бота остаются как есть.</div>
+  <div class="chips" id="ovr-tabs"></div>
+  <div id="ovr-list"></div>
+</div>
+
 <div id="people" class="screen" hidden>
   <button class="link" data-back><span class="i" data-i="back"></span>Назад</button>
   <div class="crumbs">Админ-панель › Участники › Подгруппы</div>
@@ -579,7 +588,7 @@ async function togglePlay(id, btn) {
 
 /* ---------- навигация ---------- */
 // куда ведёт «Назад» с вложенных экранов (по умолчанию на главную)
-const PARENT = { hw: "hwlist", add: "mine", admin: "apanel", upd: "apanel", hwadmin: "apanel", people: "apanel", requests: "apanel" };
+const PARENT = { hw: "hwlist", add: "mine", admin: "apanel", upd: "apanel", ovr: "apanel", hwadmin: "apanel", people: "apanel", requests: "apanel" };
 function show(id) {
   stopAudio();
   document.querySelectorAll(".screen").forEach((s) => (s.hidden = s.id !== id));
@@ -1260,12 +1269,29 @@ function pairLines(p) {
   return frag;
 }
 
+// правки админа (отмена пары, «отпустили раньше»): только для блока «Идёт / следующая пара»
+let OVER = {};
+function applyOv(list, date) {
+  const day = OVER[date] || {};
+  const out = [];
+  list.forEach((p) => {
+    const all = day[p.num] || [];
+    const o = all.find((x) => x.sg && x.sg === mySg()) || all.find((x) => !x.sg);
+    if (!o) return out.push(p);
+    if (o.t === "cancel") return;
+    if (toMin(o.end) <= toMin(p.start)) return;
+    if (toMin(o.end) < toMin(p.end)) out.push({ ...p, end: o.end, early: true });
+    else out.push(p);
+  });
+  return out;
+}
+
 function renderNow() {
   const box = $("#now");
   if (!SCH?.days?.length) { box.hidden = true; return; }
   const n = nsk();
   const today = SCH.days.find((d) => d.date === n.date);
-  const list = today ? activePairs(today) : [];
+  const list = today ? applyOv(activePairs(today), n.date) : [];
   const live = list.find((p) => toMin(p.start) <= n.min && n.min < toMin(p.end));
   const next = list.find((p) => toMin(p.start) > n.min);
 
@@ -1283,9 +1309,9 @@ function renderNow() {
   } else {
     title = list.length ? "На сегодня всё" : "Сегодня занятий нет";
     if (list.length) {
-      const nd = SCH.days.find((d) => d.date > n.date && activePairs(d).length);
+      const nd = SCH.days.find((d) => d.date > n.date && applyOv(activePairs(d), d.date).length);
       if (nd) {
-        pair = activePairs(nd)[0];
+        pair = applyOv(activePairs(nd), nd.date)[0];
         extra = `Ближайшая пара: ${nd.weekday.toLowerCase()}, ${nd.label}, в ${pair.start}`;
       } else extra = "Ближайших занятий в расписании нет";
     }
@@ -1297,6 +1323,7 @@ function renderNow() {
   b.replaceChildren();
   if (pair) b.append(pairLines(pair));
   if (extra) b.append(el("div", "now-x", extra));
+  if (pair?.early) b.append(el("div", "now-m", `Отпустили раньше: пара до ${pair.end}`));
   if (SCH.stale) b.append(el("div", "now-m", "Сайт natk.ru недоступен, данные могут быть устаревшими"));
   const bar = $("#now-bar");
   bar.hidden = pct == null;
@@ -1345,6 +1372,7 @@ async function loadSchedule() {
   } catch (e) {
     console.log("schedule load failed:", e.message);
   }
+  try { OVER = (await api("sch_over")).over || {}; } catch {}
   renderNow();
   renderBells();
 }
@@ -1619,6 +1647,12 @@ const ADMIN_TREE = [
     ],
   },
   {
+    title: "Расписание",
+    rows: [
+      { icon: "calendar", title: "Отмена пар", desc: "Отменить пару или отпустить раньше", open: openOvr },
+    ],
+  },
+  {
     title: "Рассылка",
     rows: [
       { icon: "send", title: "Обновление", desc: "Сообщение в группу с картинкой", open: openUpd },
@@ -1631,6 +1665,87 @@ const ADMIN_TREE = [
     ],
   },
 ];
+
+/* ---------- админ: отмена пар ---------- */
+let OVD = "today";
+const hhmm = (m) => String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
+function ovrDate() {
+  const n = nsk();
+  return OVD === "today" ? n.date : new Date(Date.parse(n.date + "T00:00:00Z") + 864e5).toISOString().slice(0, 10);
+}
+async function ovrSet(date, num, sg, type, end) {
+  try {
+    OVER = (await api("sch_set", { date, num, sg, type, end })).over || {};
+    renderNow();
+    renderOvr();
+  } catch (e) { fail(e); }
+}
+function renderOvr() {
+  const tabs = $("#ovr-tabs");
+  tabs.replaceChildren();
+  [["today", "Сегодня"], ["tomorrow", "Завтра"]].forEach(([k, label]) => {
+    const b = el("button", "chip" + (OVD === k ? " on" : ""), label);
+    b.onclick = () => { OVD = k; renderOvr(); };
+    tabs.append(b);
+  });
+  const date = ovrDate(), box = $("#ovr-list");
+  box.replaceChildren();
+  const day = SCH?.days?.find((d) => d.date === date);
+  const pairs = (day?.pairs || []).filter((p) => p.entries.some((e) => !e.cancelled));
+  if (!pairs.length) return box.append(el("div", "muted", "На этот день пар в расписании нет."));
+  pairs.forEach((p) => {
+    const c = el("div", "card");
+    const head = el("div", "row");
+    head.append(el("b", null, `${p.num}-я пара · ${p.start}–${p.end}`));
+    c.append(head);
+    p.entries.filter((e) => !e.cancelled).forEach((e) => c.append(el("div", "muted", (e.sg ? `${e.sg} подгр. · ` : "") + e.subject)));
+    const subs = [...new Set(p.entries.filter((e) => !e.cancelled && e.sg).map((e) => e.sg))];
+    // для кого: всем или одной подгруппе (только если в паре есть деление)
+    let sg = 0;
+    const cur = () => (OVER[date]?.[p.num] || []).find((o) => o.sg === sg);
+    const st = el("div", "now-m");
+    const row = el("div", "seg"), tm = el("input"), act = el("div", "row");
+    tm.type = "time";
+    const mid = toMin(p.start) + Math.round((toMin(p.end) - toMin(p.start)) / 2 / 5) * 5;
+    const draw = () => {
+      const o = cur();
+      st.textContent = o ? (o.t === "cancel" ? "Сейчас: пара отменена" : `Сейчас: отпустили в ${o.end}`) : "Сейчас: идёт по расписанию";
+      tm.value = o?.end || hhmm(mid);
+      row.querySelectorAll("button").forEach((b, i) => b.classList.toggle("on", [0, ...subs.sort()][i] === sg));
+    };
+    if (subs.length) {
+      [0, ...subs.sort()].forEach((v) => {
+        const b = el("button", "", v ? `${v} подгр.` : "Всем");
+        b.onclick = () => { sg = v; draw(); };
+        row.append(b);
+      });
+      c.append(row);
+    }
+    const cancel = el("button", "btn ghost", "Отменить"), early = el("button", "btn ghost", "Отпустили в"), clear = el("button", "btn ghost", "Вернуть");
+    cancel.onclick = () => ovrSet(date, p.num, sg, "cancel");
+    early.onclick = () => ovrSet(date, p.num, sg, "early", tm.value);
+    clear.onclick = () => ovrSet(date, p.num, sg, "clear");
+    [cancel, early, clear].forEach((b) => { b.style.padding = "11px 12px"; b.style.fontSize = "14px"; });
+    cancel.style.flex = clear.style.flex = "1 1 40%";
+    early.style.flex = "0 0 auto";
+    tm.style.cssText = "flex:1 1 90px;margin:0;height:42px;box-sizing:border-box;font-size:16px;min-width:0";
+    act.append(early, tm, cancel, clear);
+    act.style.flexWrap = "wrap";
+    act.style.gap = "8px";
+    act.style.marginTop = "8px";
+    c.append(st, act);
+    draw();
+    box.append(c);
+  });
+}
+async function openOvr() {
+  if (!INFO?.isAdmin) return;
+  OVD = "today";
+  renderOvr();
+  show("ovr");
+  await loadSchedule();
+  renderOvr();
+}
 
 /* ---------- рассылка обновлений ---------- */
 function renderUpd(items) {

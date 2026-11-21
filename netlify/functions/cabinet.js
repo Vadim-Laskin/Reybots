@@ -296,6 +296,37 @@ async function main(event) {
     return out(200, { sg });
   }
 
+  /* ---------- отмена пар для блока «Идёт / следующая пара» ---------- */
+  // правки только для виджета в Кабинете: расписание на сайте и посты бота они не меняют
+  if (body.action === "sch_over" || body.action === "sch_set") {
+    const nw = nskInfo();
+    let over = {};
+    try { over = (await st.get("schover", { type: "json" })) || {}; } catch {}
+    // старые даты выбрасываем
+    Object.keys(over).forEach((d) => { if (d < nw.date) delete over[d]; });
+    if (body.action === "sch_over") return out(200, { over });
+    if (!admin) return out(403, { error: "Только для админа" });
+    const date = String(body.date || "");
+    const num = String(body.num || "");
+    const sg = Number(body.sg || 0);
+    if (![nw.date, nw.tomorrow].includes(date)) return out(400, { error: "Можно менять только сегодня и завтра" });
+    if (!/^\d{1,2}$/.test(num)) return out(400, { error: "Плохой номер пары" });
+    if (![0, 1, 2].includes(sg)) return out(400, { error: "Плохая подгруппа" });
+    const t = String(body.type || "");
+    const list = ((over[date] || {})[num] || []).filter((o) => o.sg !== sg);
+    if (t === "cancel") list.push({ sg, t: "cancel" });
+    else if (t === "early") {
+      const m = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(String(body.end || ""));
+      if (!m) return out(400, { error: "Укажи время в виде 10:15" });
+      list.push({ sg, t: "early", end: m[1].padStart(2, "0") + ":" + m[2] });
+    } else if (t !== "clear") return out(400, { error: "Неизвестное действие" });
+    over[date] = over[date] || {};
+    if (list.length) over[date][num] = list; else delete over[date][num];
+    if (!Object.keys(over[date]).length) delete over[date];
+    await st.setJSON("schover", over);
+    return out(200, { over });
+  }
+
   /* ---------- улучшения ---------- */
   if (body.action === "ideas") {
     const ideas = await loadIdeas(st);

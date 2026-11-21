@@ -345,7 +345,8 @@ async function main(event) {
         const { blobs } = await st.list({ prefix: "person-" });
         const people = (await Promise.all(blobs.map((b) => st.get(b.key, { type: "json" }).catch(() => null)))).filter(Boolean);
         const to = people.filter((x) => x.notif === 1 && x.id !== user.id && (!sg || !x.sg || x.sg === sg));
-        await Promise.all(to.map((x) => dm(x.id, text)));
+        // не держим ответ админу дольше 4 с, даже если Telegram тормозит
+        await Promise.race([Promise.all(to.map((x) => dm(x.id, text))), new Promise((r) => setTimeout(r, 4000))]);
       } catch (e) {
         console.log("notify failed:", e.message);
       }

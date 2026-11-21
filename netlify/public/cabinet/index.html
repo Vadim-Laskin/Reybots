@@ -147,6 +147,10 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
 .ai-box{width:100%;max-width:520px;height:min(82vh,640px);background:var(--bg);border-radius:20px 20px 0 0;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 -8px 30px rgba(0,0,0,.4)}
 .ai-head{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);background:var(--card)}
 .ai-head b{flex:1;font-size:16px}
+#upd-banner{position:fixed;left:12px;right:12px;top:calc(10px + env(safe-area-inset-top));z-index:80;display:flex;align-items:center;gap:10px;background:var(--accent);color:#fff;border-radius:14px;padding:10px 12px;box-shadow:0 6px 20px rgba(0,0,0,.35);font-size:14px}
+#upd-banner[hidden]{display:none}
+#upd-banner span{flex:1}
+#upd-banner button{border:0;border-radius:10px;padding:8px 14px;font:inherit;font-weight:700;background:#fff;color:#222}
 .ai-tired{width:72px;height:7px;border-radius:5px;background:rgba(127,127,127,.28);overflow:hidden;margin-right:2px}
 .ai-tired i{display:block;height:100%;width:0;border-radius:5px;background:hsl(130,65%,45%);transition:width .6s,background .6s}
 .ai-head small{display:block;font-weight:400;color:var(--muted);font-size:12px}
@@ -425,6 +429,8 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
     </form>
   </div>
 </div>
+
+<div id="upd-banner" hidden><span>Вышло обновление Кабинета</span><button id="upd-go">Обновить</button></div>
 
 <div id="imgv" hidden><img alt=""></div>
 
@@ -1846,6 +1852,56 @@ loadSchedule();
 setInterval(renderNow, 30000);
 setInterval(loadSchedule, 5 * 60000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) loadSchedule(); });
+
+/* ---------- живое обновление: данные и новая версия без ручной перезагрузки ---------- */
+const curScreen = () => document.querySelector(".screen:not([hidden])")?.id;
+// не трогаем экран, пока человек что-то вводит или смотрит диалог
+const userBusy = () => !$("#aichat").hidden || !$("#imgv").hidden || !$("#modal").hidden || ["add", "hw", "upd"].includes(curScreen());
+let liveAt = 0, liveBusy = false;
+async function liveRefresh(force) {
+  if (document.hidden || liveBusy || !INFO) return;
+  if (!force && Date.now() - liveAt < 8000) return;
+  if (userBusy()) return;
+  liveBusy = true; liveAt = Date.now();
+  try {
+    const s = curScreen();
+    if (s === "home") await Promise.all([loadSchedule(), refreshIdeas(), refreshHw()]);
+    else if (s === "ideas" || s === "requests") await refreshIdeas();
+    else if (s === "hwlist" || s === "hwadmin") await refreshHw();
+    else if (s === "mat") { MAT = (await api("mat_list")).items; renderMat(); }
+    else if (s === "bd") await loadBdList();
+    else if (s === "mine") await refresh();
+    else if (s === "bells") await loadSchedule();
+  } catch (e) { console.log("live refresh:", e.message); }
+  liveBusy = false;
+}
+// новая версия страницы: сравниваем отпечаток index.html
+const pageSig = async () => {
+  const t = await (await fetch("/cabinet/index.html", { cache: "no-store" })).text();
+  let h = 0;
+  for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0;
+  return h + ":" + t.length;
+};
+let SIG = null;
+async function checkVersion() {
+  if (document.hidden) return;
+  try {
+    const sig = await pageSig();
+    if (SIG === null) { SIG = sig; return; }
+    if (sig === SIG) return;
+    // тихо перезагружаемся только с главного экрана; иначе предлагаем кнопкой
+    if (curScreen() === "home" && !userBusy()) location.reload();
+    else $("#upd-banner").hidden = false;
+  } catch {}
+}
+$("#upd-go").onclick = () => location.reload();
+checkVersion();
+setInterval(() => liveRefresh(), 25000);
+setInterval(checkVersion, 2 * 60000);
+const onResume = () => { liveRefresh(true); checkVersion(); };
+document.addEventListener("visibilitychange", () => { if (!document.hidden) onResume(); });
+window.addEventListener("focus", onResume);
+try { tg?.onEvent("activated", onResume); } catch {}
 </script>
 </body>
 </html>

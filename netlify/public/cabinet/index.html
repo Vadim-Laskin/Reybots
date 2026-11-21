@@ -106,6 +106,8 @@ h1{font-size:26px}
 #vchat .v-face{flex:1;width:100%;display:flex;align-items:center;justify-content:center;min-height:0}
 #vchat .v-face svg{width:min(92vw,56vh);height:auto;max-height:100%;overflow:visible}
 #vchat .v-cap{min-height:64px;max-width:88%;text-align:center;font-size:16px;line-height:1.35;color:rgba(255,255,255,.85);padding:0 8px 10px;transition:opacity .3s}
+#vchat .v-err{max-width:88%;text-align:center;font-size:12px;line-height:1.3;color:#ffb4a8;padding:0 8px 8px}
+#vchat .v-err[hidden]{display:none}
 #vchat .v-bot{width:100%;display:flex;justify-content:center;padding:6px 0 calc(var(--bot) + 18px)}
 #vchat .v-mic{position:relative;width:78px;height:78px;border:0;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(139,123,255,.45)}
 #vchat .v-mic svg{width:34px;height:34px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;position:relative}
@@ -564,6 +566,7 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
     </svg>
   </div>
   <div class="v-cap" id="v-cap"></div>
+  <div class="v-err" id="v-err" hidden></div>
   <div class="v-bot"><button class="v-mic" id="v-mic" aria-label="Микрофон"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button></div>
 </div>
 
@@ -1995,6 +1998,7 @@ function vClose() {
   drawTired();
 }
 function vErr(msg, emo) {
+  $("#v-err").hidden = true;
   vEmo(emo || "sad");
   vSet("idle", msg);
 }
@@ -2081,8 +2085,10 @@ async function vSend(blob) {
     let audio = null;
     try { audio = await api("voice_tts", { text: r.reply }); }
     catch (e) {
-      if (!V.ttsWarned) { V.ttsWarned = true; $("#v-cap").textContent = e.message; await new Promise((r2) => setTimeout(r2, 1800)); }
+      $("#v-err").hidden = false;
+      $("#v-err").textContent = "Голос не сработал: " + e.message;
     }
+    if (audio) $("#v-err").hidden = true;
     if (!V.on || id !== V.busy) return;
     if (!audio) { vSet("idle", r.reply + hint); setTimeout(() => { if (V.on && V.st === "idle" && id === V.busy) vListen(); }, Math.min(9000, 1500 + r.reply.length * 55)); return; }
     await vSpeak(audio, r.reply + hint, id);

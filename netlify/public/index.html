@@ -32,6 +32,12 @@ main{padding:0 16px}
 .pair.cancel{background:var(--redbg)}
 .pair.past{opacity:.4}
 .entry.other{opacity:.4}
+#nt{margin:10px 12px 0;background:var(--card);border:1.5px solid var(--line);border-radius:16px;padding:14px}
+#nt b{display:block;font-size:15px;margin-bottom:3px}
+#nt span{display:block;font-size:13px;color:var(--muted)}
+#nt .row{display:flex;gap:8px;margin-top:10px}
+#nt .row button{flex:1;border:0;border-radius:12px;padding:11px;font:inherit;font-weight:700;background:var(--accent);color:#fff}
+#nt .row button.g{background:var(--line);color:var(--text)}
 .pair.now{outline:2px solid var(--green)}
 .pair.next{outline:1.5px dashed var(--accent)}
 .num{width:54px;flex:none;text-align:center;border-right:1px solid var(--line);padding-right:12px}
@@ -62,6 +68,12 @@ main{padding:0 16px}
   <div id="warn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4M12 17h.01"/></svg><span id="warn-t"></span></div>
   <div id="tabs"></div>
 </header>
+<div id="nt" hidden>
+  <b>Уведомления об изменениях пар</b>
+  <span>Хочешь, чтобы бот писал тебе, когда админ отменит пару или отпустит раньше?</span>
+  <div class="row" id="nt-main"><button id="nt-yes">Да</button><button class="g" id="nt-no">Нет</button></div>
+  <div class="row" id="nt-more" hidden><button class="g" id="nt-never">Не показывать больше</button><button class="g" id="nt-hide">Скрыть сейчас</button></div>
+</div>
 <main id="list"><div id="msg">Загрузка…</div></main>
 
 <script>
@@ -94,14 +106,29 @@ function nskNow() {
   return { date: d.toISOString().slice(0, 10), min: d.getUTCHours() * 60 + d.getUTCMinutes() };
 }
 
-let DATA = null, lastCur = null, MYSG = 0;
+let DATA = null, lastCur = null, MYSG = 0, NOTIF = null;
 // подгруппа пользователя (из кабинета); если не открыто из Telegram — не используем
+const ntHidden = () => { try { return sessionStorage.getItem("nt-hide") === "1"; } catch { return false; } };
+function renderNt() { $("#nt").hidden = NOTIF !== 0 || ntHidden(); }
+async function ntSet(v) {
+  try {
+    const r = await fetch("/.netlify/functions/cabinet", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "notif_set", value: v, initData: tg.initData }) });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    NOTIF = v; renderNt();
+  } catch (e) { alert("Не получилось сохранить: " + e.message); }
+}
+$("#nt-yes").onclick = () => ntSet(1);
+$("#nt-no").onclick = () => { $("#nt-main").hidden = true; $("#nt-more").hidden = false; };
+$("#nt-never").onclick = () => ntSet(-1);
+$("#nt-hide").onclick = () => { try { sessionStorage.setItem("nt-hide", "1"); } catch {} $("#nt-more").hidden = true; $("#nt-main").hidden = false; renderNt(); };
 async function loadMySg() {
   if (!tg?.initData) return;
   try {
     const r = await fetch("/.netlify/functions/cabinet", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "info", initData: tg.initData }) });
     if (!r.ok) return;
     const j = await r.json();
+    NOTIF = Number(j.notif) || 0;
+    renderNt();
     const g = Number(j.sg) || 0;
     if (g !== MYSG) { MYSG = g; if (DATA) build(); }
   } catch {}

@@ -92,6 +92,13 @@ input[type=file]{display:none}
 #err{display:none;background:var(--errbg);color:var(--red);border-radius:14px;padding:12px;margin-bottom:12px;font-size:14px}
 #ok{display:none;background:var(--okbg);color:var(--green);border-radius:14px;padding:12px;margin-bottom:12px;font-size:14px}
 
+.nt{background:var(--card);border:1.5px solid var(--line);border-radius:20px;padding:16px;margin-bottom:14px}
+.nt b{display:block;font-size:16px;margin-bottom:4px}
+.nt span{display:block;font-size:13px;color:var(--muted)}
+.nt .row{display:flex;gap:8px;margin-top:12px}
+.nt .row button{flex:1;border:0;border-radius:14px;padding:12px;font:inherit;font-weight:700;background:var(--accent);color:#fff}
+.nt .row button.g{background:var(--line);color:var(--text)}
+.nt-pref{display:block;width:100%;margin-top:14px;background:none;border:0;color:var(--muted);font:inherit;font-size:13px;text-align:center;padding:8px}
 .now{background:var(--card);border:1.5px solid var(--line);border-radius:20px;padding:16px;margin-bottom:14px;cursor:pointer}
 .now.live{border-color:var(--green)}
 .now-h{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
@@ -216,6 +223,13 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
     <div class="now-h"><span class="i" data-i="clock"></span><span id="now-t"></span></div>
     <div id="now-b"></div>
     <div class="bar" id="now-bar" hidden><i></i></div>
+  </div>
+
+  <div class="nt" id="nt" hidden>
+    <b>Уведомления об изменениях пар</b>
+    <span>Хочешь, чтобы бот писал тебе, когда админ отменит пару или отпустит раньше?</span>
+    <div class="row" id="nt-main"><button id="nt-yes">Да</button><button class="g" id="nt-no">Нет</button></div>
+    <div class="row" id="nt-more" hidden><button class="g" id="nt-never">Не показывать больше</button><button class="g" id="nt-hide">Скрыть сейчас</button></div>
   </div>
 
   <div class="menu">
@@ -1959,6 +1973,30 @@ $("#go-schedule").onclick = () => {
 };
 $("#now").onclick = () => $("#go-schedule").click();
 
+/* ---------- вывеска про уведомления об изменениях пар ---------- */
+const ntHidden = () => { try { return sessionStorage.getItem("nt-hide") === "1"; } catch { return false; } };
+function renderNt() {
+  if (!INFO) return;
+  $("#nt").hidden = INFO.notif !== 0 || ntHidden();
+  let pref = $("#nt-pref");
+  if (!pref) {
+    pref = document.createElement("button");
+    pref.id = "nt-pref"; pref.className = "nt-pref";
+    pref.onclick = () => ntSet(INFO.notif === 1 ? -1 : 1);
+    $("#home").append(pref);
+  }
+  pref.hidden = INFO.notif === 0;
+  pref.textContent = INFO.notif === 1 ? "Уведомления об изменениях пар включены · Отключить" : "Уведомления об изменениях пар выключены · Включить";
+}
+async function ntSet(v) {
+  try { await api("notif_set", { value: v }); INFO.notif = v; renderNt(); }
+  catch (e) { fail(e); }
+}
+$("#nt-yes").onclick = () => ntSet(1);
+$("#nt-no").onclick = () => { $("#nt-main").hidden = true; $("#nt-more").hidden = false; };
+$("#nt-never").onclick = () => ntSet(-1);
+$("#nt-hide").onclick = () => { try { sessionStorage.setItem("nt-hide", "1"); } catch {} $("#nt-more").hidden = true; $("#nt-main").hidden = false; renderNt(); };
+
 api("info")
   .then(async (j) => {
     INFO = j;
@@ -1967,6 +2005,7 @@ api("info")
     $("#cat").hidden = !j.ai;
     if (j.aiName) $("#ai-name").firstChild.textContent = j.aiName;
     renderBd();
+    renderNt();
     window.Festive?.birthday(j.bd ? j.bd : "");
     renderNow();
     refreshIdeas().catch((e) => console.log("ideas load failed:", e.message));

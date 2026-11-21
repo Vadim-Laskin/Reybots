@@ -205,6 +205,7 @@ async function main(event) {
       appLink: process.env.APP_LINK || "",
       sg: p.sg || 0,
       bd: p.bd || "",
+      notif: p.notif === 1 || p.notif === -1 ? p.notif : 0,
       ai: admin || AI_FOR_ALL,
       aiName: ai.NAME,
     });
@@ -296,6 +297,15 @@ async function main(event) {
     return out(200, { sg });
   }
 
+  /* ---------- уведомления об изменениях пар: 1 — да, -1 — выключены, 0 — ещё не отвечал ---------- */
+  if (body.action === "notif_set") {
+    const v = Number(body.value);
+    if (![1, -1, 0].includes(v)) return out(400, { error: "Плохое значение" });
+    const p = (await getPerson(st, user.id)) || { sg: 0 };
+    await st.setJSON(personKey(user.id), { ...p, id: user.id, name: user.first_name || p.name || "", username: user.username || p.username || "", notif: v, ts: Date.now() });
+    return out(200, { notif: v });
+  }
+
   /* ---------- отмена пар для блока «Идёт / следующая пара» ---------- */
   // правки только для виджета в Кабинете: расписание на сайте и посты бота они не меняют
   if (body.action === "sch_over" || body.action === "sch_set") {
@@ -324,6 +334,22 @@ async function main(event) {
     if (list.length) over[date][num] = list; else delete over[date][num];
     if (!Object.keys(over[date]).length) delete over[date];
     await st.setJSON("schover", over);
+    if (t !== "clear") {
+      // сообщаем подписавшимся (бот может писать только тем, кто его запускал)
+      try {
+        const [yy, mm, dd] = date.split("-");
+        const when = date === nw.date ? "сегодня" : "завтра";
+        const who = sg ? `${sg} подгруппа: ` : "";
+        const what = t === "cancel" ? "пару отменили" : `пару отпускают раньше, до ${list[list.length - 1].end}`;
+        const text = `📢 Изменение в расписании (${when}, ${dd}.${mm})\n${who}${num} пара — ${what}.`;
+        const { blobs } = await st.list({ prefix: "person-" });
+        const people = (await Promise.all(blobs.map((b) => st.get(b.key, { type: "json" }).catch(() => null)))).filter(Boolean);
+        const to = people.filter((x) => x.notif === 1 && x.id !== user.id && (!sg || !x.sg || x.sg === sg));
+        await Promise.all(to.map((x) => dm(x.id, text)));
+      } catch (e) {
+        console.log("notify failed:", e.message);
+      }
+    }
     return out(200, { over });
   }
 

@@ -94,6 +94,27 @@ h1{font-size:26px}
 .bdn .row button{flex:1;border:0;border-radius:14px;padding:12px 8px;font:inherit;font-weight:700;background:var(--accent);color:#fff}
 .bdn .row button.g{background:var(--line);color:var(--text)}
 .bdn[hidden],.bdn .row button[hidden]{display:none}
+.ai-form .vb{background:var(--line);color:var(--text)}
+.ai-form .vb[hidden]{display:none}
+.ai-form .vb svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+#vchat{position:fixed;inset:0;z-index:150;display:flex;flex-direction:column;align-items:center;background:radial-gradient(120% 80% at 50% 30%,#2a2147 0%,#14121f 60%,#0b0a12 100%);color:#fff;overflow:hidden;touch-action:manipulation}
+#vchat[hidden]{display:none}
+#vchat .v-top{width:100%;display:flex;justify-content:space-between;align-items:center;padding:calc(14px + var(--tg-safe-area-inset-top,0px) + var(--tg-content-safe-area-inset-top,0px)) 16px 0}
+#vchat .v-x{width:44px;height:44px;border:0;border-radius:50%;background:rgba(255,255,255,.12);color:#fff;display:flex;align-items:center;justify-content:center}
+#vchat .v-x .i{width:22px;height:22px}
+#vchat .v-st{font-size:14px;letter-spacing:.04em;color:rgba(255,255,255,.7)}
+#vchat .v-face{flex:1;width:100%;display:flex;align-items:center;justify-content:center;min-height:0}
+#vchat .v-face svg{width:min(92vw,56vh);height:auto;max-height:100%;overflow:visible}
+#vchat .v-cap{min-height:64px;max-width:88%;text-align:center;font-size:16px;line-height:1.35;color:rgba(255,255,255,.85);padding:0 8px 10px;transition:opacity .3s}
+#vchat .v-bot{width:100%;display:flex;justify-content:center;padding:6px 0 calc(var(--bot) + 18px)}
+#vchat .v-mic{position:relative;width:78px;height:78px;border:0;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(139,123,255,.45)}
+#vchat .v-mic svg{width:34px;height:34px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;position:relative}
+#vchat .v-mic::before{content:"";position:absolute;inset:0;border-radius:50%;background:var(--accent);opacity:.35;transform:scale(var(--lvl,1));transition:transform .08s linear}
+#vchat[data-s=listen] .v-mic{background:#ff5d6c}
+#vchat[data-s=listen] .v-mic::before{background:#ff5d6c}
+#vchat[data-s=think] .v-mic,#vchat[data-s=speak] .v-mic{background:rgba(255,255,255,.18);box-shadow:none}
+#vchat[data-s=think] .v-mic::before,#vchat[data-s=speak] .v-mic::before{display:none}
+.mc .fx{opacity:0;transition:opacity .25s}
 .muted{color:var(--muted);font-size:13px;margin-top:4px;line-height:1.4}
 .h3{font-weight:700;margin:16px 0 8px}
 
@@ -488,9 +509,62 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
     <div class="ai-sug" id="ai-sug"></div>
     <form class="ai-form" id="ai-form">
       <textarea id="ai-in" rows="1" maxlength="1000" placeholder="Спроси Мурзика"></textarea>
+      <button id="ai-voice" class="vb" type="button" aria-label="Голосовой чат" hidden><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
       <button id="ai-send" type="submit" aria-label="Отправить"><span class="i" data-i="send"></span></button>
     </form>
   </div>
+</div>
+
+<div id="vchat" hidden data-s="idle">
+  <div class="v-top"><button class="v-x" id="v-x" aria-label="Закрыть"><span class="i" data-i="close"></span></button><span class="v-st" id="v-st"></span><span style="width:44px"></span></div>
+  <div class="v-face">
+    <svg class="mc" id="mc" viewBox="0 0 400 400" aria-label="Мурзик">
+      <g id="mc-all">
+        <ellipse cx="200" cy="378" rx="120" ry="12" fill="#000" opacity=".25"/>
+        <g id="mc-body">
+          <path id="mc-eL" d="M62 168 L84 28 L176 98 Z" fill="#f2a24a" stroke="#d9852c" stroke-width="4" stroke-linejoin="round"/>
+          <path d="M88 138 L98 60 L148 98 Z" fill="#ffb7b7"/>
+          <path id="mc-eR" d="M338 168 L316 28 L224 98 Z" fill="#f2a24a" stroke="#d9852c" stroke-width="4" stroke-linejoin="round"/>
+          <path d="M312 138 L302 60 L252 98 Z" fill="#ffb7b7"/>
+          <ellipse cx="200" cy="230" rx="152" ry="132" fill="#f7ae57" stroke="#d9852c" stroke-width="4"/>
+          <path d="M200 108 v34 M168 114 l8 28 M232 114 l-8 28" stroke="#d9852c" stroke-width="9" stroke-linecap="round" fill="none"/>
+          <path d="M52 220 q22 4 34 -6 M54 250 q22 -2 34 -14 M348 220 q-22 4 -34 -6 M346 250 q-22 -2 -34 -14" stroke="#d9852c" stroke-width="8" stroke-linecap="round" fill="none"/>
+          <ellipse cx="200" cy="290" rx="78" ry="54" fill="#ffe6c7"/>
+          <ellipse id="mc-ckL" cx="106" cy="262" rx="26" ry="15" fill="#ff8aa0" class="fx"/>
+          <ellipse id="mc-ckR" cx="294" cy="262" rx="26" ry="15" fill="#ff8aa0" class="fx"/>
+          <g id="mc-eyeL" transform="translate(144 208)">
+            <ellipse class="w" rx="34" ry="38" fill="#fff"/>
+            <circle class="p" r="19" fill="#2a1d3a"/><circle class="h" cx="6" cy="-8" r="6" fill="#fff"/><circle class="h2" cx="-7" cy="8" r="3" fill="#fff"/>
+            <path class="happy fx" d="M-30 6 Q0 -34 30 6" stroke="#2a1d3a" stroke-width="9" stroke-linecap="round" fill="none"/>
+            <path class="heart fx" d="M0 14 C-26 -4 -16 -24 0 -12 C16 -24 26 -4 0 14Z" fill="#ff4d79"/>
+          </g>
+          <g id="mc-eyeR" transform="translate(256 208)">
+            <ellipse class="w" rx="34" ry="38" fill="#fff"/>
+            <circle class="p" r="19" fill="#2a1d3a"/><circle class="h" cx="6" cy="-8" r="6" fill="#fff"/><circle class="h2" cx="-7" cy="8" r="3" fill="#fff"/>
+            <path class="happy fx" d="M-30 6 Q0 -34 30 6" stroke="#2a1d3a" stroke-width="9" stroke-linecap="round" fill="none"/>
+            <path class="heart fx" d="M0 14 C-26 -4 -16 -24 0 -12 C16 -24 26 -4 0 14Z" fill="#ff4d79"/>
+          </g>
+          <path id="mc-lidL" d="M104 196 Q144 184 184 196 L184 146 L104 146Z" fill="#f7ae57" class="fx"/>
+          <path id="mc-lidR" d="M216 196 Q256 184 296 196 L296 146 L216 146Z" fill="#f7ae57" class="fx"/>
+          <path id="mc-bL" d="M108 160 Q144 148 178 160" stroke="#8a4f12" stroke-width="8" stroke-linecap="round" fill="none"/>
+          <path id="mc-bR" d="M222 160 Q256 148 292 160" stroke="#8a4f12" stroke-width="8" stroke-linecap="round" fill="none"/>
+          <path d="M184 262 h32 l-16 18Z" fill="#ff7f9d" stroke="#e0607f" stroke-width="3" stroke-linejoin="round"/>
+          <path d="M200 280 v8" stroke="#8a4f12" stroke-width="4" stroke-linecap="round"/>
+          <g id="mc-mouth"><path id="mc-m" d="" fill="none" stroke="#8a4f12" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><ellipse id="mc-tg" cx="200" cy="310" rx="16" ry="9" fill="#ff8aa0" class="fx"/></g>
+          <path d="M96 286 l-62 -10 M96 300 l-66 6 M96 314 l-56 20 M304 286 l62 -10 M304 300 l66 6 M304 314 l56 20" stroke="#fff" stroke-width="3" stroke-linecap="round" opacity=".9"/>
+          <path id="mc-tear" d="M122 244 q-10 18 0 26 q10 -8 0 -26Z" fill="#6fc7ff" class="fx"/>
+        </g>
+        <g id="mc-fx">
+          <text id="mc-q" x="318" y="64" font-size="64" font-weight="800" fill="#ffd84a" class="fx">?</text>
+          <text id="mc-z" x="316" y="70" font-size="56" font-weight="800" fill="#9ec5ff" class="fx">z<tspan font-size="38" dx="2" dy="-26">z</tspan></text>
+          <text id="mc-hrt" x="320" y="70" font-size="52" fill="#ff4d79" class="fx">♥</text>
+          <text id="mc-ex" x="324" y="70" font-size="64" font-weight="800" fill="#ff9d42" class="fx">!</text>
+        </g>
+      </g>
+    </svg>
+  </div>
+  <div class="v-cap" id="v-cap"></div>
+  <div class="v-bot"><button class="v-mic" id="v-mic" aria-label="Микрофон"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button></div>
 </div>
 
 <div id="upd-banner" hidden><span>Вышло обновление Кабинета</span><button id="upd-go">Обновить</button></div>
@@ -669,6 +743,7 @@ function show(id) {
   window.scrollTo(0, 0);
 }
 function back() {
+  if (!$("#vchat").hidden) return vClose();
   if (!$("#aichat").hidden) return closeAi();
   if (!$("#imgv").hidden) { $("#imgv").hidden = true; return; }
   if (!$("#modal").hidden) return closeModal();
@@ -1746,6 +1821,303 @@ $("#ai-form").onsubmit = (e) => {
 };
 $("#ai-in").onkeydown = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("#ai-form").requestSubmit(); } };
 
+/* ---------- голосовой чат с Мурзиком ---------- */
+const V = { on: false, st: "idle", emo: "calm", emoAt: 0, open: 0, ctx: null, an: null, A: null, stream: null, rec: null, chunks: [], mic: null, level: 0, mouth: 0, run: false, busy: 0, pending: [], blink: 0, nextBlink: 0, look: { x: 0, y: 0, tx: 0, ty: 0, at: 0 }, ear: 0, ttsWarned: false };
+const EMO_SET = {
+  happy:    { smile: 0.9, brow: -6, browY: -6, eye: "happy", cheeks: 1 },
+  sad:      { smile: -0.9, brow: 16, browY: 4, eye: "sad", tear: 1 },
+  surprised:{ smile: 0, brow: 0, browY: -16, eye: "wide", ex: 1, mouthMin: 0.4 },
+  angry:    { smile: -0.5, brow: -20, browY: 8, eye: "angry" },
+  think:    { smile: 0.1, brow: -8, browY: -4, eye: "look", q: 1 },
+  love:     { smile: 0.8, brow: 0, browY: -4, eye: "heart", cheeks: 1, hrt: 1 },
+  sleepy:   { smile: 0, brow: 6, browY: 6, eye: "sleepy", z: 1 },
+  calm:     { smile: 0.35, brow: 0, browY: 0, eye: "normal" },
+};
+const vq = (s) => document.querySelector("#mc " + s);
+const VCAP = { idle: "Нажми на микрофон", listen: "Слушаю…", think: "Думаю…", speak: "" };
+function vSet(st, cap) {
+  V.st = st;
+  $("#vchat").dataset.s = st;
+  $("#v-st").textContent = { idle: "", listen: "Слушаю", think: "Думаю", speak: "Говорит" }[st];
+  if (cap !== undefined) $("#v-cap").textContent = cap; else if (st === "idle" || st === "listen") $("#v-cap").textContent = VCAP[st];
+}
+function vEmo(e) { V.emo = EMO_SET[e] ? e : "calm"; V.emoAt = performance.now(); }
+
+/* лицо: один цикл отрисовки, пока открыт голосовой чат */
+function vDraw(t) {
+  if (!V.on) { V.run = false; return; }
+  const E = EMO_SET[V.emo] || EMO_SET.calm;
+  const sp = V.st === "speak";
+  // рот: громкость голоса -> раскрытие, плавно (быстро открывается, медленнее закрывается)
+  const target = sp ? Math.min(1, Math.max(0, V.level)) : 0;
+  V.mouth += (target - V.mouth) * (target > V.mouth ? 0.6 : 0.3);
+  const o = V.mouth;
+  const smile = E.smile * (sp ? 0.5 : 1);
+  const cy = 286 - smile * 9;
+  const L = 160, R = 240;
+  let d;
+  if (o < 0.07) {
+    // закрытый рот «ω» с улыбкой/грустью
+    const k = smile * 9;
+    d = `M${L} ${cy - 2} Q${(L + 200) / 2} ${cy + 12 + k * -0.3 + (smile < 0 ? -10 : 0)} 200 ${cy - 4} Q${(R + 200) / 2} ${cy + 12 + k * -0.3 + (smile < 0 ? -10 : 0)} ${R} ${cy - 2}`;
+    vq("#mc-m").setAttribute("fill", "none");
+    vq("#mc-tg").style.opacity = 0;
+  } else {
+    const w = 1 - o * 0.25;             // чем шире открыт, тем чуть уже
+    const l = 200 - 40 * w, r = 200 + 40 * w;
+    const top = 296 - smile * 4, bot = top + o * 62;
+    d = `M${l} ${cy} Q200 ${top + 2} ${r} ${cy} Q200 ${bot + o * 26} ${l} ${cy}Z`;
+    vq("#mc-m").setAttribute("fill", "#5a1a2a");
+    vq("#mc-tg").style.opacity = o > 0.35 ? 1 : 0;
+    vq("#mc-tg").setAttribute("cy", String(cy + 14 + o * 26));
+    vq("#mc-tg").setAttribute("rx", String(10 + o * 14));
+  }
+  vq("#mc-m").setAttribute("d", d);
+
+  // моргание
+  if (t > V.nextBlink) { V.blink = t; V.nextBlink = t + 2000 + Math.random() * 3200; }
+  const bp = (t - V.blink) / 160;
+  let blink = bp >= 0 && bp < 1 ? Math.sin(bp * Math.PI) : 0;
+  const slp = E.eye === "sleepy" ? 0.62 : 0;
+  const closed = Math.max(blink, slp);
+  // взгляд: по умолчанию блуждает, при «мысли» вверх-вправо, при прослушивании смотрит на пользователя
+  if (t > V.look.at) { V.look.at = t + 1200 + Math.random() * 2200; V.look.tx = (Math.random() - 0.5) * 12; V.look.ty = (Math.random() - 0.5) * 8; }
+  let tx = V.look.tx, ty = V.look.ty;
+  if (E.eye === "look" || V.st === "think") { tx = 10; ty = -10; }
+  if (V.st === "listen") { tx = 0; ty = 2; }
+  V.look.x += (tx - V.look.x) * 0.12; V.look.y += (ty - V.look.y) * 0.12;
+  ["L", "R"].forEach((s) => {
+    const g = vq("#mc-eye" + s);
+    const x = s === "L" ? 144 : 256;
+    const big = E.eye === "wide" ? 1.18 : 1;
+    g.setAttribute("transform", `translate(${x} 208) scale(${big} ${big * (1 - closed * 0.92)})`);
+    const hap = E.eye === "happy", hrt = E.eye === "heart";
+    g.querySelector(".w").style.opacity = hap ? 0 : 1;
+    g.querySelector(".p").style.opacity = hap || hrt ? 0 : 1;
+    g.querySelector(".h").style.opacity = hap || hrt ? 0 : 1;
+    g.querySelector(".h2").style.opacity = hap || hrt ? 0 : 1;
+    g.querySelector(".happy").style.opacity = hap ? 1 : 0;
+    g.querySelector(".heart").style.opacity = hrt ? 1 : 0;
+    const pupil = E.eye === "wide" ? 12 : 19;
+    const p = g.querySelector(".p");
+    p.setAttribute("r", String(pupil));
+    const px = V.look.x, py = V.look.y;
+    p.setAttribute("cx", String(px)); p.setAttribute("cy", String(py));
+    g.querySelector(".h").setAttribute("cx", String(px + 6)); g.querySelector(".h").setAttribute("cy", String(py - 8));
+    g.querySelector(".h2").setAttribute("cx", String(px - 7)); g.querySelector(".h2").setAttribute("cy", String(py + 8));
+    // тяжёлые веки: грустный/злой/сонный взгляд
+    const lid = vq("#mc-lid" + s);
+    lid.style.opacity = E.eye === "angry" || E.eye === "sad" || E.eye === "sleepy" ? 1 : 0;
+    const tilt = E.eye === "angry" ? (s === "L" ? 14 : -14) : E.eye === "sad" ? (s === "L" ? -12 : 12) : 0;
+    lid.setAttribute("transform", `translate(0 ${E.eye === "sleepy" ? 8 : 0}) rotate(${tilt} ${s === "L" ? 144 : 256} 160)`);
+    // брови
+    const br = vq("#mc-b" + s);
+    const k = s === "L" ? 1 : -1;
+    br.setAttribute("transform", `translate(0 ${E.browY + (sp ? Math.sin(t / 180) * 2 * V.mouth : 0)}) rotate(${E.brow * k} ${s === "L" ? 144 : 256} 156)`);
+  });
+  vq("#mc-ckL").style.opacity = vq("#mc-ckR").style.opacity = E.cheeks ? 0.75 : 0;
+  vq("#mc-tear").style.opacity = E.tear ? 1 : 0;
+  vq("#mc-tear").setAttribute("transform", `translate(0 ${E.tear ? (t / 40) % 30 : 0})`);
+  vq("#mc-q").style.opacity = E.q ? 1 : 0;
+  vq("#mc-z").style.opacity = E.z ? 1 : 0;
+  vq("#mc-ex").style.opacity = E.ex ? 1 : 0;
+  vq("#mc-hrt").style.opacity = E.hrt ? 1 : 0;
+  vq("#mc-hrt").setAttribute("transform", E.hrt ? `translate(0 ${-((t / 25) % 24)})` : "");
+  // уши, дыхание, покачивание головой
+  const breath = Math.sin(t / 700) * 0.012;
+  const bob = sp ? Math.sin(t / 150) * 2.2 * (0.4 + V.mouth) : 0;
+  const tiltH = sp ? Math.sin(t / 420) * 2 : V.st === "think" ? 6 : V.st === "listen" ? Math.sin(t / 900) * 1.5 : 0;
+  vq("#mc-body").setAttribute("transform", `translate(200 378) rotate(${tiltH}) scale(${1 + breath} ${1 + breath * 1.4}) translate(-200 -378) translate(0 ${bob})`);
+  const ear = V.st === "listen" ? -5 : E.eye === "sad" ? 10 : (Math.sin(t / 1900) > 0.985 ? 8 : 0);
+  V.ear += (ear - V.ear) * 0.2;
+  vq("#mc-eL").setAttribute("transform", `rotate(${V.ear} 100 150)`);
+  vq("#mc-eR").setAttribute("transform", `rotate(${-V.ear} 300 150)`);
+  // уровень для кольца микрофона
+  $("#v-mic").style.setProperty("--lvl", String(1 + Math.min(0.5, V.level * 0.9)));
+  requestAnimationFrame(vDraw);
+}
+
+/* громкость из аналайзера */
+function vLevel() {
+  if (!V.an) return 0;
+  const buf = new Uint8Array(V.an.fftSize);
+  V.an.getByteTimeDomainData(buf);
+  let s = 0;
+  for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; s += v * v; }
+  return Math.sqrt(s / buf.length);
+}
+setInterval(() => {
+  if (!V.on) return;
+  if (V.st === "speak" && V.an) V.level = Math.min(1, Math.max(0, (vLevel() - 0.015) * 7.5));
+  else if (V.st !== "listen") V.level = 0;
+}, 33);
+
+async function vOpen() {
+  if (!INFO?.ai) return;
+  V.on = true; V.pending = [];
+  $("#aichat").hidden = true;
+  $("#vchat").hidden = false;
+  tg?.BackButton.show();
+  vEmo("calm"); vSet("idle", "");
+  // разблокируем звук по нажатию пользователя
+  try {
+    V.ctx = V.ctx || new (window.AudioContext || window.webkitAudioContext)();
+    await V.ctx.resume();
+    V.A = V.A || new Audio();
+    V.A.setAttribute("playsinline", "");
+    if (!V.src) {
+      V.src = V.ctx.createMediaElementSource(V.A);
+      V.an = V.ctx.createAnalyser();
+      V.an.fftSize = 512;
+      V.src.connect(V.an);
+      V.an.connect(V.ctx.destination);
+    }
+    V.A.src = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAABErAAABAAgAZGF0YQAAAAA=";
+    await V.A.play().catch(() => {});
+  } catch {}
+  if (!V.run) { V.run = true; requestAnimationFrame(vDraw); }
+  vListen();
+}
+function vStopRec() {
+  try { if (V.rec && V.rec.state !== "inactive") { V.rec.onstop = null; V.rec.stop(); } } catch {}
+  V.rec = null;
+  V.listenId = (V.listenId || 0) + 1;
+}
+function vClose() {
+  V.on = false;
+  vStopRec();
+  try { V.A && V.A.pause(); } catch {}
+  try { V.stream?.getTracks().forEach((t) => t.stop()); } catch {}
+  V.stream = null; V.micSrc = null; V.micAn = null;
+  $("#vchat").hidden = true;
+  V.pending.forEach(aiAction); V.pending = [];
+  $("#aichat").hidden = false;
+  drawTired();
+}
+function vErr(msg, emo) {
+  vEmo(emo || "sad");
+  vSet("idle", msg);
+}
+
+/* слушаем: запись + свой детектор тишины, потом отправка */
+async function vListen() {
+  if (!V.on) return;
+  try { V.A.pause(); } catch {}
+  vStopRec();
+  const myId = V.listenId;
+  try {
+    if (!V.stream || !V.stream.active) {
+      V.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+      V.micSrc = V.ctx.createMediaStreamSource(V.stream);
+      V.micAn = V.ctx.createAnalyser();
+      V.micAn.fftSize = 512;
+      V.micSrc.connect(V.micAn);
+    }
+  } catch (e) {
+    return vErr("Нет доступа к микрофону. Разреши его в настройках Telegram и открой голосовой чат снова.", "sad");
+  }
+  if (!V.on || myId !== V.listenId) return;
+  const mimes = ["audio/webm;codecs=opus", "audio/mp4", "audio/ogg;codecs=opus", "audio/webm"];
+  const mime = mimes.find((m) => window.MediaRecorder && MediaRecorder.isTypeSupported(m)) || "";
+  let rec;
+  try { rec = new MediaRecorder(V.stream, mime ? { mimeType: mime } : undefined); } catch { return vErr("Запись голоса не поддерживается на этом устройстве", "sad"); }
+  V.rec = rec; V.chunks = [];
+  rec.ondataavailable = (e) => { if (e.data.size) V.chunks.push(e.data); };
+  vEmo("calm"); vSet("listen");
+  const startedAt = performance.now();
+  let heard = false, lastVoice = 0, noise = 0.012, n = 0;
+  rec.start(250);
+  const buf = new Uint8Array(V.micAn.fftSize);
+  const tick = setInterval(() => {
+    if (!V.on || V.rec !== rec) return clearInterval(tick);
+    V.micAn.getByteTimeDomainData(buf);
+    let s = 0;
+    for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; s += v * v; }
+    const lv = Math.sqrt(s / buf.length);
+    V.level = Math.min(1, lv * 6);
+    const now = performance.now();
+    if (n < 6) { noise = Math.max(noise, lv * 1.2); n++; }       // первые ~0.3 с: фон
+    const thr = Math.max(0.03, noise * 2.2);
+    if (lv > thr) { heard = true; lastVoice = now; }
+    if (heard && now - lastVoice > 1200) finish();
+    else if (!heard && now - startedAt > 9000) { clearInterval(tick); vStopRec(); vSet("idle", "Не слышу тебя. Нажми на микрофон и скажи что-нибудь."); }
+    else if (now - startedAt > 20000) finish();
+  }, 100);
+  const finish = () => {
+    clearInterval(tick);
+    rec.onstop = async () => {
+      V.level = 0;
+      if (!V.on || V.rec !== rec) return;
+      V.rec = null;
+      const blob = new Blob(V.chunks, { type: rec.mimeType || mime || "audio/webm" });
+      if (blob.size < 3000) return vListen();
+      vSend(blob);
+    };
+    try { rec.stop(); } catch {}
+  };
+  V.finishNow = () => { if (V.rec === rec && heard) finish(); else if (V.rec === rec) { clearInterval(tick); vStopRec(); vSet("idle", VCAP.idle); } };
+}
+const blobB64 = (blob) => new Promise((res, rej) => { const f = new FileReader(); f.onload = () => res(String(f.result).split(",")[1] || ""); f.onerror = rej; f.readAsDataURL(blob); });
+
+async function vSend(blob) {
+  const id = ++V.busy;
+  vEmo("think"); vSet("think", "");
+  try {
+    const stt = await api("voice_stt", { audio: await blobB64(blob), mime: blob.type });
+    if (!V.on || id !== V.busy) return;
+    const text = (stt.text || "").trim();
+    if (text.length < 2) { vSet("listen", "Не расслышал, повтори"); return vListen(); }
+    $("#v-cap").textContent = text;
+    aiBubble("me", text);
+    AIH.push({ role: "user", content: text });
+    const r = await api("ai_chat", { messages: AIH.slice(-12), voice: true });
+    if (!V.on || id !== V.busy) return;
+    AIH.push({ role: "assistant", content: r.reply });
+    aiBubble("bot", r.reply, true);
+    if (typeof r.fatigue === "number") setTired(r.fatigue);
+    (r.actions || []).forEach((a) => V.pending.push(a));
+    const hint = r.actions?.length ? " (Действие подтверди в текстовом чате.)" : "";
+    vEmo(r.emotion || "calm");
+    let audio = null;
+    try { audio = await api("voice_tts", { text: r.reply }); }
+    catch (e) {
+      if (!V.ttsWarned) { V.ttsWarned = true; $("#v-cap").textContent = e.message; await new Promise((r2) => setTimeout(r2, 1800)); }
+    }
+    if (!V.on || id !== V.busy) return;
+    if (!audio) { vSet("idle", r.reply + hint); setTimeout(() => { if (V.on && V.st === "idle" && id === V.busy) vListen(); }, Math.min(9000, 1500 + r.reply.length * 55)); return; }
+    await vSpeak(audio, r.reply + hint, id);
+  } catch (e) {
+    if (!V.on || id !== V.busy) return;
+    if (e.status === 429) setTired(1);
+    AIH.length && AIH[AIH.length - 1].role === "user" && AIH.pop();
+    vErr(e.message, "sad");
+  }
+}
+async function vSpeak(audio, caption, id) {
+  const bin = atob(audio.audio);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const url = URL.createObjectURL(new Blob([bytes], { type: audio.mime || "audio/mpeg" }));
+  const A = V.A;
+  A.onended = A.onerror = () => {
+    URL.revokeObjectURL(url);
+    V.level = 0;
+    if (V.on && id === V.busy && V.st === "speak") { vEmo("calm"); vListen(); }
+  };
+  A.src = url;
+  try { await V.ctx.resume(); await A.play(); } catch { return vErr("Не удалось проиграть звук. Нажми на микрофон, чтобы продолжить.", "sad"); }
+  vSet("speak", caption);
+}
+
+$("#ai-voice").onclick = vOpen;
+$("#v-x").onclick = vClose;
+$("#v-mic").onclick = () => {
+  if (V.st === "listen") return V.finishNow && V.finishNow();
+  if (V.st === "speak" || V.st === "think") { V.busy++; try { V.A.pause(); } catch {} V.level = 0; }
+  vListen();
+};
+document.addEventListener("visibilitychange", () => { if (document.hidden && V.on) { vStopRec(); try { V.A.pause(); } catch {} V.busy++; vSet("idle", VCAP.idle); } });
+
 /* ---------- админ-панель: разделы и подразделы ---------- */
 // чтобы добавить подраздел, достаточно добавить строку в rows нужного раздела
 const ADMIN_TREE = [
@@ -2116,6 +2488,7 @@ api("info")
     updateHi();
     $("#go-apanel").hidden = !j.isAdmin;
     $("#cat").hidden = !j.ai;
+    $("#ai-voice").hidden = !j.ai;
     if (j.aiName) $("#ai-name").firstChild.textContent = j.aiName;
     renderBd();
     renderNt();

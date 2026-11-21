@@ -16,6 +16,65 @@ const { sendUpdate } = require("../../lib/update");
 const ai = require("../../lib/ai");
 // пока ИИ только для админа; чтобы открыть всем участникам — переменная окружения AI_FOR_ALL=1
 const AI_FOR_ALL = process.env.AI_FOR_ALL === "1";
+const VOICE_NOTE = "\n\nРЕЖИМ ГОЛОСА: тебя озвучивают вслух. Отвечай по-русски, живо, 1–3 короткими предложениями. Без markdown, списков, эмодзи, ссылок и кода. Числа и время пиши словами так, как их говорят. Самым первым в ответе поставь ровно один тег эмоции в квадратных скобках: [радость], [грусть], [удивление], [злость], [мысль], [любовь], [сон] или [спокойно]. Пример: [радость] Привет! Рад тебя слышать.";
+const EMO = { "радость": "happy", "грусть": "sad", "удивление": "surprised", "злость": "angry", "мысль": "think", "любовь": "love", "сон": "sleepy", "спокойно": "calm" };
+// достаём тег эмоции и чистим текст для озвучки
+function voiceReply(raw) {
+  let t = String(raw || "").trim(), emo = "calm";
+  const m = /^\s*\[([а-яё]+)\]\s*/i.exec(t);
+  if (m) { emo = EMO[m[1].toLowerCase()] || "calm"; t = t.slice(m[0].length); }
+  t = t.replace(/\[[а-яё]+\]/gi, "").replace(/[*_`#>~]/g, "").replace(/\p{Extended_Pictographic}/gu, "").replace(/\s+/g, " ").trim();
+  return { text: t, emotion: emo };
+}
+async function groqStt(buf, mime) {
+  const key = (process.env.GROQ_API_KEY || "").trim();
+  if (!key) { const e = new Error("ИИ пока не настроен"); e.status = 503; throw e; }
+  const ext = /mp4|m4a|aac/.test(mime) ? "m4a" : /ogg/.test(mime) ? "ogg" : "webm";
+  const fd = new FormData();
+  fd.append("file", new Blob([buf], { type: mime || "audio/webm" }), "voice." + ext);
+  fd.append("model", process.env.GROQ_STT_MODEL || "whisper-large-v3-turbo");
+  fd.append("language", "ru");
+  fd.append("temperature", "0");
+  fd.append("response_format", "json");
+  fd.append("prompt", "Разговор с котом Мурзиком про расписание, домашку, пары, РЭУ.");
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 9000);
+  try {
+    const r = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", { method: "POST", headers: { Authorization: "Bearer " + key }, body: fd, signal: ctl.signal });
+    if (!r.ok) {
+      const e = new Error(r.status === 429 ? "Мурзик устал слушать, подожди минутку" : "Не получилось распознать речь (" + r.status + ")");
+      e.status = r.status === 429 ? 429 : 502;
+      throw e;
+    }
+    return String((await r.json()).text || "").trim();
+  } finally { clearTimeout(timer); }
+}
+async function elevenTts(text) {
+  const key = (process.env.ELEVENLABS_API_KEY || "").trim();
+  if (!key) { const e = new Error("Голос пока не настроен: нужен ELEVENLABS_API_KEY в Netlify"); e.status = 503; throw e; }
+  const voice = (process.env.ELEVENLABS_VOICE_ID || "EXAVITQu4vr4xnSDxMaL").trim();
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 9000);
+  try {
+    const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voice)}?output_format=mp3_44100_64`, {
+      method: "POST",
+      headers: { "xi-api-key": key, "Content-Type": "application/json", Accept: "audio/mpeg" },
+      body: JSON.stringify({
+        text,
+        model_id: process.env.ELEVENLABS_MODEL || "eleven_multilingual_v2",
+        voice_settings: { stability: 0.4, similarity_boost: 0.75, style: 0.35, use_speaker_boost: true },
+      }),
+      signal: ctl.signal,
+    });
+    if (!r.ok) {
+      const e = new Error(r.status === 401 ? "Ключ ElevenLabs не подходит" : r.status === 429 ? "Голос устал, подожди немного" : "Озвучка не получилась (" + r.status + ")");
+      e.status = r.status === 429 ? 429 : 502;
+      throw e;
+    }
+    return Buffer.from(await r.arrayBuffer());
+  } finally { clearTimeout(timer); }
+}
+
 const AI_LIMIT = 15; // сообщений за 5 минут на человека
 const UPD_KEY = "updates";
 const UPD_MAX = 3500;
@@ -207,6 +266,7 @@ async function main(event) {
       bd: p.bd || "",
       notif: p.notif === 1 || p.notif === -1 ? p.notif : 0,
       ai: admin || AI_FOR_ALL,
+      voice: !!(process.env.ELEVENLABS_API_KEY || "").trim(),
       aiName: ai.NAME,
     });
   }
@@ -719,6 +779,30 @@ async function main(event) {
   }
 
   /* ---------- ИИ-помощник ---------- */
+  if (body.action === "voice_stt" || body.action === "voice_tts") {
+    if (!(admin || (AI_FOR_ALL && (await isMember(user.id))))) return out(403, { error: "ИИ пока доступен только админу" });
+    const rk = "voice-rate-" + user.id;
+    let hits = [];
+    try { hits = ((await st.get(rk, { type: "json" })) || []).filter((t) => Date.now() - t < 5 * 60 * 1000); } catch {}
+    if (hits.length >= 60) return out(429, { error: "Мурзик устал, подожди пару минут" });
+    hits.push(Date.now());
+    try { await st.setJSON(rk, hits); } catch {}
+    try {
+      if (body.action === "voice_stt") {
+        const raw = String(body.audio || "");
+        if (!raw || raw.length > 2.4e6) return out(400, { error: "Запись слишком длинная" });
+        const text = await groqStt(Buffer.from(raw, "base64"), String(body.mime || "audio/webm").slice(0, 40));
+        return out(200, { text });
+      }
+      const text = String(body.text || "").replace(/\s+/g, " ").trim().slice(0, 350);
+      if (!text) return out(400, { error: "Нечего озвучивать" });
+      const buf = await elevenTts(text);
+      return out(200, { audio: buf.toString("base64"), mime: "audio/mpeg" });
+    } catch (e) {
+      return out(e.status || 502, { error: e.message });
+    }
+  }
+
   if (body.action === "ai_chat") {
     if (!(admin || (AI_FOR_ALL && (await isMember(user.id))))) return out(403, { error: "ИИ пока доступен только админу" });
     const messages = ai.cleanMessages(body.messages);
@@ -756,7 +840,7 @@ async function main(event) {
       schedule: sch, homework, materials, ideas, birthdays,
     });
     try {
-      const r = await ai.chat(messages, context);
+      const r = await ai.chat(messages, context + (body.voice ? VOICE_NOTE : ""));
       // ИИ ничего не меняет сам: он только предлагает действия, человек подтверждает кнопкой
       const actions = [];
       for (const c of r.calls) {
@@ -772,7 +856,12 @@ async function main(event) {
         } else if (c.name === "clear_birthday") actions.push({ type: "bd_clear" });
       }
       const reply = r.text || (actions.length ? "Подтверди действие кнопкой ниже." : "Не совсем понял, что нужно сделать. Уточни, пожалуйста: для идеи нужен текст (от 5 символов), для даты рождения число и месяц.");
-      return out(200, { reply, actions: actions.slice(0, 3), fatigue: Math.max(r.fatigue || 0, hits.length / AI_LIMIT) });
+      const fat = Math.max(r.fatigue || 0, hits.length / AI_LIMIT);
+      if (body.voice) {
+        const v = voiceReply(reply);
+        return out(200, { reply: v.text || reply, emotion: v.emotion, actions: actions.slice(0, 3), fatigue: fat });
+      }
+      return out(200, { reply, actions: actions.slice(0, 3), fatigue: fat });
     } catch (e) {
       return out(e.status || 502, { fatigue: e.status === 429 ? 1 : undefined, error: e.message + (e.diag && admin ? " " + e.diag + ` [адрес сайта: ${event.headers?.host || "?"}]` : "") });
     }

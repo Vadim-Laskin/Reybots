@@ -23,6 +23,8 @@ try { matchMedia("(prefers-color-scheme: light)").addEventListener("change", app
 :root{--bg:#0e1014;--card:#1a1d26;--accent:#8b7bff;--red:#ff5d6c;--green:#4ade80;--text:#eceef5;--muted:#8b90a0;--line:#2a2e3a;--amber:#f5b942;--blue:#4cc2ff;--errbg:#2a1a20;--okbg:#14251c;color-scheme:dark}
 :root[data-theme=light]{--bg:#f2f3f7;--card:#ffffff;--accent:#6c5ce7;--red:#d92d40;--green:#15803d;--text:#14161c;--muted:#6b7080;--line:#e4e6ee;--amber:#a16207;--blue:#0369a1;--errbg:#fde8ea;--okbg:#e3f5e9;color-scheme:light}
 *{box-sizing:border-box;margin:0}
+*{-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+input,textarea,[contenteditable],.ai-msgs,.ai-msgs *,.sel,.sel *{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
 [hidden]{display:none !important}
 html,body{background:var(--bg);color:var(--text);font-family:-apple-system,"Segoe UI",Roboto,sans-serif}
 /* нижний отступ под системные кнопки Android: в полноэкранном режиме Telegram их не вычитает сам */

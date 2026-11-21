@@ -9,6 +9,8 @@
 <style>
 :root{--bg:#0e1014;--card:#1a1d26;--redbg:#2a1a20;--accent:#8b7bff;--red:#ff5d6c;--green:#4ade80;--text:#eceef5;--muted:#8b90a0;--line:#2a2e3a}
 *{box-sizing:border-box;margin:0}
+*{-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+input,textarea,[contenteditable],.ai-msgs,.ai-msgs *,.sel,.sel *{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
 html,body{background:var(--bg);color:var(--text);font-family:-apple-system,"Segoe UI",Roboto,sans-serif}
 body{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 28px)}
 header{position:sticky;top:0;z-index:5;background:var(--bg);padding:calc(var(--tg-safe-area-inset-top,0px) + var(--tg-content-safe-area-inset-top,0px) + 12px) 16px 6px}

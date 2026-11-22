@@ -1993,7 +1993,7 @@ function vClose() {
   vStopRec();
   try { V.A && V.A.pause(); window.speechSynthesis && speechSynthesis.cancel(); } catch {}
   try { V.stream?.getTracks().forEach((t) => t.stop()); } catch {}
-  V.stream = null; V.micSrc = null; V.micAn = null;
+  V.stream = null; V.micSrc = null; V.micAn = null; V.micDest = null;
   $("#vchat").hidden = true;
   V.pending.forEach(aiAction); V.pending = [];
   $("#aichat").hidden = false;
@@ -2014,10 +2014,16 @@ async function vListen() {
   try {
     if (!V.stream || !V.stream.active) {
       V.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+      // усиливаем тихую речь: усилитель + компрессор, и записываем уже усиленный звук
       V.micSrc = V.ctx.createMediaStreamSource(V.stream);
+      const gain = V.ctx.createGain();
+      gain.gain.value = 4;
+      const comp = V.ctx.createDynamicsCompressor();
+      comp.threshold.value = -40; comp.knee.value = 20; comp.ratio.value = 6; comp.attack.value = 0.003; comp.release.value = 0.25;
       V.micAn = V.ctx.createAnalyser();
       V.micAn.fftSize = 512;
-      V.micSrc.connect(V.micAn);
+      V.micDest = V.ctx.createMediaStreamDestination();
+      V.micSrc.connect(gain); gain.connect(comp); comp.connect(V.micAn); comp.connect(V.micDest);
     }
   } catch (e) {
     return vErr("Нет доступа к микрофону. Разреши его в настройках Telegram и открой голосовой чат снова.", "sad");
@@ -2026,12 +2032,12 @@ async function vListen() {
   const mimes = ["audio/webm;codecs=opus", "audio/mp4", "audio/ogg;codecs=opus", "audio/webm"];
   const mime = mimes.find((m) => window.MediaRecorder && MediaRecorder.isTypeSupported(m)) || "";
   let rec;
-  try { rec = new MediaRecorder(V.stream, mime ? { mimeType: mime } : undefined); } catch { return vErr("Запись голоса не поддерживается на этом устройстве", "sad"); }
+  try { rec = new MediaRecorder(V.micDest.stream, mime ? { mimeType: mime } : undefined); } catch { return vErr("Запись голоса не поддерживается на этом устройстве", "sad"); }
   V.rec = rec; V.chunks = [];
   rec.ondataavailable = (e) => { if (e.data.size) V.chunks.push(e.data); };
   vEmo("calm"); vSet("listen");
   const startedAt = performance.now();
-  let heard = false, lastVoice = 0, noise = 0.012, n = 0;
+  let heard = false, lastVoice = 0, noise = 1, n = 0;
   rec.start(250);
   const buf = new Uint8Array(V.micAn.fftSize);
   const tick = setInterval(() => {
@@ -2040,13 +2046,13 @@ async function vListen() {
     let s = 0;
     for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; s += v * v; }
     const lv = Math.sqrt(s / buf.length);
-    V.level = Math.min(1, lv * 6);
+    V.level = Math.min(1, lv * 3);
     const now = performance.now();
-    if (n < 6) { noise = Math.max(noise, lv * 1.2); n++; }       // первые ~0.3 с: фон
-    const thr = Math.max(0.03, noise * 2.2);
+    if (n < 6) { noise = Math.min(noise, lv); n++; }             // первые ~0.6 с: самый тихий момент = фон
+    const thr = Math.min(0.05, Math.max(0.012, (n < 6 ? 0.02 : noise) * 2.5));
     if (lv > thr) { heard = true; lastVoice = now; }
     if (heard && now - lastVoice > 1200) finish();
-    else if (!heard && now - startedAt > 9000) { clearInterval(tick); vStopRec(); vSet("idle", "Не слышу тебя. Нажми на микрофон и скажи что-нибудь."); }
+    else if (!heard && now - startedAt > 12000) { clearInterval(tick); vStopRec(); vSet("idle", "Не слышу тебя. Нажми на микрофон и скажи что-нибудь."); }
     else if (now - startedAt > 20000) finish();
   }, 100);
   const finish = () => {

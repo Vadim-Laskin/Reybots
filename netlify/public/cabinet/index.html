@@ -1950,7 +1950,7 @@ function vLevel() {
   return Math.sqrt(s / buf.length);
 }
 setInterval(() => {
-  if (!V.on) return;
+  if (!V.on || V.local) return;
   if (V.st === "speak" && V.an) V.level = Math.min(1, Math.max(0, (vLevel() - 0.015) * 7.5));
   else if (V.st !== "listen") V.level = 0;
 }, 33);
@@ -1963,6 +1963,7 @@ async function vOpen() {
   tg?.BackButton.show();
   vEmo("calm"); vSet("idle", "");
   api("voice_wake").catch(() => {});
+  try { speechSynthesis.getVoices(); } catch {}
   // разблокируем звук по нажатию пользователя
   try {
     V.ctx = V.ctx || new (window.AudioContext || window.webkitAudioContext)();
@@ -1990,7 +1991,7 @@ function vStopRec() {
 function vClose() {
   V.on = false;
   vStopRec();
-  try { V.A && V.A.pause(); } catch {}
+  try { V.A && V.A.pause(); window.speechSynthesis && speechSynthesis.cancel(); } catch {}
   try { V.stream?.getTracks().forEach((t) => t.stop()); } catch {}
   V.stream = null; V.micSrc = null; V.micAn = null;
   $("#vchat").hidden = true;
@@ -2084,13 +2085,17 @@ async function vSend(blob) {
     const hint = r.actions?.length ? " (Действие подтверди в текстовом чате.)" : "";
     vEmo(r.emotion || "calm");
     let audio = null;
-    try { audio = await api("voice_tts", { text: r.reply }); }
-    catch (e) {
-      $("#v-err").hidden = false;
-      $("#v-err").textContent = "Голос не сработал: " + e.message;
+    // сначала голос с сервера; если его нет — голос самого телефона
+    if (!V.useLocal) {
+      try { audio = await api("voice_tts", { text: r.reply }); }
+      catch (e) {
+        if (window.speechSynthesis) V.useLocal = true;
+        else { $("#v-err").hidden = false; $("#v-err").textContent = "Голос не сработал: " + e.message; }
+      }
     }
     if (audio) $("#v-err").hidden = true;
     if (!V.on || id !== V.busy) return;
+    if (!audio && V.useLocal && window.speechSynthesis) { $("#v-err").hidden = true; return vSpeakLocal(r.reply, r.reply + hint, id); }
     if (!audio) { vSet("idle", r.reply + hint); setTimeout(() => { if (V.on && V.st === "idle" && id === V.busy) vListen(); }, Math.min(9000, 1500 + r.reply.length * 55)); return; }
     await vSpeak(audio, r.reply + hint, id);
   } catch (e) {
@@ -2100,7 +2105,41 @@ async function vSend(blob) {
     vErr(e.message, "sad");
   }
 }
+/* голос самого телефона (системный синтезатор): запасной вариант без сервера */
+function vVoice() {
+  const all = speechSynthesis.getVoices().filter((v) => /^ru/i.test(v.lang));
+  const score = (v) => (/google|yandex|milena|alena|katya|svetlana|pavel|microsoft/i.test(v.name) ? 2 : 0) + (v.localService ? 0 : 1) + (/female|женск|alena|milena|katya|svetlana/i.test(v.name) ? 1 : 0);
+  return all.sort((a, b) => score(b) - score(a))[0] || null;
+}
+function vSpeakLocal(text, caption, id) {
+  const clean = text.replace(/[*_`#>~]/g, "").replace(/\p{Extended_Pictographic}/gu, "");
+  const u = new SpeechSynthesisUtterance(clean);
+  u.lang = "ru-RU"; u.rate = 1.02; u.pitch = 1.15;
+  const v = vVoice();
+  if (v) { u.voice = v; u.lang = v.lang; }
+  let pulse = 0, iv = null;
+  const stop = () => { clearInterval(iv); V.level = 0; V.local = false; };
+  u.onstart = () => {
+    V.local = true;
+    vSet("speak", caption);
+    // у системного голоса нет звукового потока для анализа, поэтому рот двигается в такт словам и слогам
+    iv = setInterval(() => {
+      if (V.st !== "speak") return;
+      pulse = Math.max(0, pulse - 0.06);
+      const t = performance.now() / 1000;
+      V.level = Math.min(0.85, 0.08 + pulse * 0.3 + Math.abs(Math.sin(t * 11)) * 0.4 * (0.3 + pulse * 0.7));
+    }, 33);
+  };
+  u.onboundary = () => { pulse = 1; };
+  const end = () => { stop(); if (V.on && id === V.busy && V.st === "speak") { vEmo("calm"); vListen(); } };
+  u.onend = end;
+  u.onerror = end;
+  try { speechSynthesis.cancel(); speechSynthesis.speak(u); } catch { return vErr("Не удалось озвучить ответ", "sad"); }
+  // если синтезатор не запустился, не зависаем
+  setTimeout(() => { if (V.on && id === V.busy && V.st === "think") { try { speechSynthesis.cancel(); } catch {} vSet("idle", caption); setTimeout(() => { if (V.on && V.st === "idle" && id === V.busy) vListen(); }, 3000); } }, 4000);
+}
 async function vSpeak(audio, caption, id) {
+  V.local = false;
   const bin = atob(audio.audio);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
@@ -2120,7 +2159,7 @@ $("#ai-voice").onclick = vOpen;
 $("#v-x").onclick = vClose;
 $("#v-mic").onclick = () => {
   if (V.st === "listen") return V.finishNow && V.finishNow();
-  if (V.st === "speak" || V.st === "think") { V.busy++; try { V.A.pause(); } catch {} V.level = 0; }
+  if (V.st === "speak" || V.st === "think") { V.busy++; try { V.A.pause(); speechSynthesis.cancel(); } catch {} V.level = 0; }
   vListen();
 };
 document.addEventListener("visibilitychange", () => { if (document.hidden && V.on) { vStopRec(); try { V.A.pause(); } catch {} V.busy++; vSet("idle", VCAP.idle); } });

@@ -1990,6 +1990,7 @@ function vStopRec() {
 }
 function vClose() {
   V.on = false;
+  V.stopPlay && V.stopPlay();
   vStopRec();
   try { V.A && V.A.pause(); window.speechSynthesis && speechSynthesis.cancel(); } catch {}
   try { V.stream?.getTracks().forEach((t) => t.stop()); } catch {}
@@ -2090,20 +2091,22 @@ async function vSend(blob) {
     (r.actions || []).forEach((a) => V.pending.push(a));
     const hint = r.actions?.length ? " (Действие подтверди в текстовом чате.)" : "";
     vEmo(r.emotion || "calm");
-    let audio = null;
-    // сначала голос с сервера; если его нет — голос самого телефона
+    // сначала голос с сервера (по предложениям: первое начинает звучать быстро); если его нет — голос самого телефона
+    let ok = false;
     if (!V.useLocal) {
-      try { audio = await api("voice_tts", { text: r.reply }); }
-      catch (e) {
+      try {
+        ok = await vSpeakChunks(vChunks(r.reply), r.reply + hint, id);
+        $("#v-err").hidden = true;
+      } catch (e) {
         if (window.speechSynthesis) V.useLocal = true;
         else { $("#v-err").hidden = false; $("#v-err").textContent = "Голос не сработал: " + e.message; }
       }
     }
-    if (audio) $("#v-err").hidden = true;
-    if (!V.on || id !== V.busy) return;
-    if (!audio && V.useLocal && window.speechSynthesis) { $("#v-err").hidden = true; return vSpeakLocal(r.reply, r.reply + hint, id); }
-    if (!audio) { vSet("idle", r.reply + hint); setTimeout(() => { if (V.on && V.st === "idle" && id === V.busy) vListen(); }, Math.min(9000, 1500 + r.reply.length * 55)); return; }
-    await vSpeak(audio, r.reply + hint, id);
+    if (!V.on || id !== V.busy || ok) return;
+    if (V.useLocal && window.speechSynthesis) { $("#v-err").hidden = true; return vSpeakLocal(r.reply, r.reply + hint, id); }
+    vSet("idle", r.reply + hint);
+    setTimeout(() => { if (V.on && V.st === "idle" && id === V.busy) vListen(); }, Math.min(9000, 1500 + r.reply.length * 55));
+    return;
   } catch (e) {
     if (!V.on || id !== V.busy) return;
     if (e.status === 429) setTired(1);
@@ -2144,31 +2147,57 @@ function vSpeakLocal(text, caption, id) {
   // если синтезатор не запустился, не зависаем
   setTimeout(() => { if (V.on && id === V.busy && V.st === "think") { try { speechSynthesis.cancel(); } catch {} vSet("idle", caption); setTimeout(() => { if (V.on && V.st === "idle" && id === V.busy) vListen(); }, 3000); } }, 4000);
 }
-async function vSpeak(audio, caption, id) {
-  V.local = false;
-  const bin = atob(audio.audio);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  const url = URL.createObjectURL(new Blob([bytes], { type: audio.mime || "audio/mpeg" }));
-  const A = V.A;
-  A.onended = A.onerror = () => {
-    URL.revokeObjectURL(url);
-    V.level = 0;
-    if (V.on && id === V.busy && V.st === "speak") { vEmo("calm"); vListen(); }
-  };
-  A.src = url;
-  try { await V.ctx.resume(); await A.play(); } catch { return vErr("Не удалось проиграть звук. Нажми на микрофон, чтобы продолжить.", "sad"); }
-  vSet("speak", caption);
+function vChunks(text) {
+  const parts = String(text).replace(/\s+/g, " ").match(/[^.!?…]+[.!?…]*\s*/g) || [String(text)];
+  const out = [];
+  for (const p of parts) {
+    const last = out[out.length - 1];
+    if (last && last.length + p.length <= 90) out[out.length - 1] = last + p;
+    else out.push(p.trim());
+  }
+  return out.filter(Boolean).slice(0, 6);
+}
+function vPlay(audio, caption) {
+  return new Promise(async (resolve, reject) => {
+    V.local = false;
+    const bin = atob(audio.audio);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const url = URL.createObjectURL(new Blob([bytes], { type: audio.mime || "audio/mpeg" }));
+    const A = V.A;
+    let done = false;
+    const fin = () => { if (done) return; done = true; URL.revokeObjectURL(url); V.level = 0; V.stopPlay = null; resolve(); };
+    V.stopPlay = fin;
+    A.onended = A.onerror = fin;
+    A.src = url;
+    try { await V.ctx.resume(); await A.play(); } catch (e) { done = true; reject(e); return; }
+    if (caption !== null) vSet("speak", caption);
+  });
+}
+async function vSpeakChunks(chunks, caption, id) {
+  let next = api("voice_tts", { text: chunks[0] });
+  next.catch(() => {});
+  for (let i = 0; i < chunks.length; i++) {
+    let audio;
+    try { audio = await next; } catch (e) { if (i === 0) throw e; break; }
+    if (!V.on || id !== V.busy) return true;
+    next = null;
+    if (i + 1 < chunks.length) { next = api("voice_tts", { text: chunks[i + 1] }); next.catch(() => {}); }
+    try { await vPlay(audio, i === 0 ? caption : null); } catch (e) { if (i === 0) throw e; break; }
+    if (!V.on || id !== V.busy) return true;
+  }
+  if (V.on && id === V.busy && V.st === "speak") { vEmo("calm"); vListen(); }
+  return true;
 }
 
 $("#ai-voice").onclick = vOpen;
 $("#v-x").onclick = vClose;
 $("#v-mic").onclick = () => {
   if (V.st === "listen") return V.finishNow && V.finishNow();
-  if (V.st === "speak" || V.st === "think") { V.busy++; try { V.A.pause(); speechSynthesis.cancel(); } catch {} V.level = 0; }
+  if (V.st === "speak" || V.st === "think") { V.busy++; try { V.A.pause(); speechSynthesis.cancel(); } catch {} V.stopPlay && V.stopPlay(); V.level = 0; }
   vListen();
 };
-document.addEventListener("visibilitychange", () => { if (document.hidden && V.on) { vStopRec(); try { V.A.pause(); } catch {} V.busy++; vSet("idle", VCAP.idle); } });
+document.addEventListener("visibilitychange", () => { if (document.hidden && V.on) { vStopRec(); try { V.A.pause(); } catch {} V.busy++; V.stopPlay && V.stopPlay(); vSet("idle", VCAP.idle); } });
 
 /* ---------- админ-панель: разделы и подразделы ---------- */
 // чтобы добавить подраздел, достаточно добавить строку в rows нужного раздела

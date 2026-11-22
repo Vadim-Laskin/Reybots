@@ -35,7 +35,7 @@ async function groqStt(buf, mime) {
   fd.append("model", process.env.GROQ_STT_MODEL || "whisper-large-v3-turbo");
   fd.append("language", "ru");
   fd.append("temperature", "0");
-  fd.append("response_format", "json");
+  fd.append("response_format", "verbose_json");
   fd.append("prompt", "Разговор с котом Мурзиком про расписание, домашку, пары, РЭУ.");
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 9000);
@@ -46,7 +46,13 @@ async function groqStt(buf, mime) {
       e.status = r.status === 429 ? 429 : 502;
       throw e;
     }
-    return String((await r.json()).text || "").trim();
+    const j = await r.json();
+    // шум и тишина у Whisper превращаются в «Редактор субтитров…»: выбрасываем неуверенные куски и известные «галлюцинации»
+    const segs = Array.isArray(j.segments) ? j.segments : null;
+    let text = segs ? segs.filter((s) => !(s.no_speech_prob > 0.5 && s.avg_logprob < -0.5) && !(s.avg_logprob < -1.2)).map((s) => s.text).join(" ") : String(j.text || "");
+    text = text.replace(/\s+/g, " ").trim();
+    if (/редактор субтитров|корректор\s+[а-яё]\.|субтитры\s+(сделал|создал|подготов)|продолжение следует|спасибо за просмотр|подписывайтесь на канал|dimatorzok|amara\.org|thanks for watching/i.test(text)) return "";
+    return text;
   } finally { clearTimeout(timer); }
 }
 
@@ -178,7 +184,7 @@ async function yandexTts(text) {
 async function sileroTts(text) {
   const base = (process.env.SILERO_URL || "").trim().replace(/\/+$/, "");
   const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), 9000);
+  const timer = setTimeout(() => ctl.abort(), 8500);
   try {
     const r = await fetch(base + "/tts", {
       method: "POST",

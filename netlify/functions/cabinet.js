@@ -30,32 +30,37 @@ async function groqStt(buf, mime) {
   const key = (process.env.GROQ_API_KEY || "").trim();
   if (!key) { const e = new Error("ИИ пока не настроен"); e.status = 503; throw e; }
   const ext = /mp4|m4a|aac/.test(mime) ? "m4a" : /ogg/.test(mime) ? "ogg" : "webm";
-  const fd = new FormData();
-  fd.append("file", new Blob([buf], { type: mime || "audio/webm" }), "voice." + ext);
-  fd.append("model", process.env.GROQ_STT_MODEL || "whisper-large-v3-turbo");
-  fd.append("language", "ru");
-  fd.append("temperature", "0");
-  fd.append("response_format", "verbose_json");
-  fd.append("prompt", "Разговор с котом Мурзиком про расписание, домашку, пары, РЭУ.");
-  const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), 9000);
-  try {
-    const r = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", { method: "POST", headers: { Authorization: "Bearer " + key }, body: fd, signal: ctl.signal });
-    if (!r.ok) {
-      const e = new Error(r.status === 429 ? "Мурзик устал слушать, подожди минутку" : "Не получилось распознать речь (" + r.status + ")");
-      e.status = r.status === 429 ? 429 : 502;
-      throw e;
-    }
-    const j = await r.json();
-    // шум и тишина у Whisper превращаются в «Редактор субтитров…»: выбрасываем неуверенные куски и известные «галлюцинации»
-    const segs = Array.isArray(j.segments) ? j.segments : null;
-    let text = segs ? segs.filter((s) => !(s.no_speech_prob > 0.5 && s.avg_logprob < -0.5) && !(s.avg_logprob < -1.2)).map((s) => s.text).join(" ") : String(j.text || "");
-    text = text.replace(/\s+/g, " ").trim();
-    if (/редактор субтитров|корректор\s+[а-яё]\.|субтитры\s+(сделал|создал|подготов)|продолжение следует|спасибо за просмотр|подписывайтесь на канал|dimatorzok|amara\.org|thanks for watching/i.test(text)) return "";
-    return text;
-  } finally { clearTimeout(timer); }
+  // сначала точная модель, при лимите или недоступности — быстрая
+  const models = [...new Set([process.env.GROQ_STT_MODEL || "whisper-large-v3", "whisper-large-v3-turbo"])];
+  let lastStatus = 0;
+  for (const model of models) {
+    const fd = new FormData();
+    fd.append("file", new Blob([buf], { type: mime || "audio/webm" }), "voice." + ext);
+    fd.append("model", model);
+    fd.append("language", "ru");
+    fd.append("temperature", "0");
+    fd.append("response_format", "verbose_json");
+    fd.append("prompt", "Привет, Мурзик.");
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 8000);
+    try {
+      const r = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", { method: "POST", headers: { Authorization: "Bearer " + key }, body: fd, signal: ctl.signal });
+      if (!r.ok) { lastStatus = r.status; if ([404, 429, 400].includes(r.status)) continue; break; }
+      const j = await r.json();
+      // шум и тишина у Whisper превращаются в «Редактор субтитров…»: выбрасываем неуверенные куски и известные «галлюцинации»
+      const segs = Array.isArray(j.segments) ? j.segments : null;
+      let text = segs ? segs.filter((s) => !(s.no_speech_prob > 0.5 && s.avg_logprob < -0.5) && !(s.avg_logprob < -1.2)).map((s) => s.text).join(" ") : String(j.text || "");
+      text = text.replace(/\s+/g, " ").trim();
+      if (/редактор субтитров|корректор\s+[а-яё]\.|субтитры\s+(сделал|создал|подготов)|продолжение следует|спасибо за просмотр|подписывайтесь на канал|dimatorzok|amara\.org|thanks for watching/i.test(text)) return "";
+      return text;
+    } catch (e) {
+      lastStatus = 0;
+    } finally { clearTimeout(timer); }
+  }
+  const e = new Error(lastStatus === 429 ? "Мурзик устал слушать, подожди минутку" : "Не получилось распознать речь" + (lastStatus ? " (" + lastStatus + ")" : ""));
+  e.status = lastStatus === 429 ? 429 : 502;
+  throw e;
 }
-
 /* ---------- озвучка через Сбер SaluteSpeech (сертификаты НУЦ Минцифры подключаем только для запросов к Сберу) ---------- */
 const https = require("https");
 const tlsMod = require("tls");

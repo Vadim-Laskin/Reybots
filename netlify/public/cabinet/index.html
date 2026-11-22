@@ -2018,9 +2018,9 @@ async function vListen() {
       // усиливаем тихую речь: усилитель + компрессор, и записываем уже усиленный звук
       V.micSrc = V.ctx.createMediaStreamSource(V.stream);
       const gain = V.ctx.createGain();
-      gain.gain.value = 4;
+      gain.gain.value = 2;   // умеренное усиление: сильное искажает речь и ломает распознавание
       const comp = V.ctx.createDynamicsCompressor();
-      comp.threshold.value = -40; comp.knee.value = 20; comp.ratio.value = 6; comp.attack.value = 0.003; comp.release.value = 0.25;
+      comp.threshold.value = -24; comp.knee.value = 24; comp.ratio.value = 2.5; comp.attack.value = 0.01; comp.release.value = 0.3;
       V.micAn = V.ctx.createAnalyser();
       V.micAn.fftSize = 512;
       V.micDest = V.ctx.createMediaStreamDestination();

@@ -166,6 +166,15 @@ input[type=file]{display:none}
 .bell-r b{font-size:16px}
 .bell-r span{font-size:13px;color:var(--muted)}
 
+.dmf{display:grid;gap:10px;margin:4px 0 12px}
+.dmf label{display:block;font-size:12px;color:var(--muted);font-weight:600}
+.dmf select{display:block;width:100%;margin-top:4px;padding:11px 12px;border:0;border-radius:12px;background:var(--card);color:var(--text,inherit);font:inherit;font-size:15px;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none' stroke='%23999' stroke-width='2'%3E%3Cpath d='M1 1l5 5 5-5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center}
+.dmd{background:var(--card);border-radius:12px;padding:0 12px;margin-bottom:12px}
+.dmd summary{padding:12px 0;font-weight:700;font-size:14px;cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center}
+.dmd summary::-webkit-details-marker{display:none}
+.dmd summary::after{content:"";width:8px;height:8px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg);transition:transform .2s;margin:-3px 2px 0 8px}
+.dmd[open] summary::after{transform:rotate(-135deg);margin-top:3px}
+.dmd[open]{padding-bottom:6px}
 .chips{display:flex;gap:8px;overflow-x:auto;margin:4px 0 14px;scrollbar-width:none}
 .chips::-webkit-scrollbar{display:none}
 .chips button{flex:none;border:0;border-radius:999px;padding:8px 14px;background:var(--card);color:var(--muted);font:inherit;font-size:13px;font-weight:700}
@@ -456,15 +465,12 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
   <div class="crumbs">Админ-панель › Рассылка › Личная</div>
   <h1>Личная рассылка</h1>
   <div class="hi">Бот отправит сообщение только в личку, в группу ничего не уйдёт. Получит тот, кто писал боту или открывал Кабинет, иначе Telegram не даст доставить.</div>
-  <div class="cat">Уведомления об изменениях пар</div>
-  <div class="chips" id="dm-notif"></div>
-  <div class="cat">Дата рождения</div>
-  <div class="chips" id="dm-bd"></div>
-  <div class="cat">Подгруппа</div>
-  <div class="chips" id="dm-sg"></div>
-  <div class="cat">Выбрать людей</div>
-  <div class="hi" style="margin-bottom:6px">Если отметить кого-то, фильтры выше не учитываются: письмо уйдёт только отмеченным.</div>
-  <div id="dm-people"></div>
+  <div class="dmf"><label>Уведомления об изменениях пар<select id="dm-notif"></select></label>
+  <label>Дата рождения<select id="dm-bd"></select></label>
+  <label>Подгруппа<select id="dm-sg"></select></label></div>
+  <details class="dmd" id="dm-det"><summary id="dm-sum">Выбрать людей</summary>
+  <div class="hi" style="margin:8px 0 6px">Если отметить кого-то, фильтры не учитываются: сообщение уйдёт только отмеченным.</div>
+  <div id="dm-people"></div></details>
   <textarea id="dm-text" maxlength="3500" placeholder="Текст сообщения"></textarea>
   <div class="muted" id="dm-count" style="margin:4px 2px 8px">0 / 3500</div>
   <button class="btn" id="dm-send" disabled><span class="i" data-i="send"></span>Отправить</button>
@@ -2513,12 +2519,11 @@ function renderDms() {
   ];
   groups.forEach(([sel, key, opts]) => {
     const box = $(sel);
-    box.replaceChildren();
-    opts.forEach(([v, t]) => {
-      const bt = el("button", DMF[key] === v ? "on" : "", t);
-      bt.onclick = () => { DMF[key] = v; renderDms(); };
-      box.append(bt);
-    });
+    if (!box.options.length) {
+      opts.forEach(([v, t]) => { const o = document.createElement("option"); o.value = v; o.textContent = t; box.append(o); });
+      box.onchange = () => { DMF[key] = box.value; renderDms(); };
+    }
+    box.value = DMF[key];
   });
   const pl = $("#dm-people");
   pl.replaceChildren();
@@ -2535,13 +2540,14 @@ function renderDms() {
     pl.append(row);
   });
   const n = dmTargets().length;
+  $("#dm-sum").textContent = DMP.size ? `Выбрано людей: ${DMP.size}` : "Выбрать людей";
   const bt = $("#dm-send");
   bt.lastChild.textContent = `Отправить (${n})`;
   bt.disabled = !n || !$("#dm-text").value.trim();
 }
 async function openDms() {
   if (!INFO?.isAdmin) return;
-  DMP.clear();
+  DMP.clear(); DMF.notif = DMF.bd = DMF.sg = "all"; $("#dm-det").open = false;
   show("dms");
   try { PEOPLE = (await api("people")).people; } catch (e) { fail(e); }
   renderDms();

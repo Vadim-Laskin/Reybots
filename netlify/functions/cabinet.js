@@ -16,15 +16,35 @@ const { sendUpdate } = require("../../lib/update");
 const ai = require("../../lib/ai");
 // пока ИИ только для админа; чтобы открыть всем участникам — переменная окружения AI_FOR_ALL=1
 const AI_FOR_ALL = process.env.AI_FOR_ALL === "1";
-const VOICE_NOTE = "\n\nРЕЖИМ ГОЛОСА: тебя озвучивают вслух. Отвечай по-русски, живо, 1–3 короткими предложениями. Без markdown, списков, эмодзи, ссылок и кода. Числа и время пиши словами так, как их говорят. Самым первым в ответе поставь ровно один тег эмоции в квадратных скобках: [радость], [грусть], [удивление], [злость], [мысль], [любовь], [сон] или [спокойно]. Пример: [радость] Привет! Рад тебя слышать.";
+const VOICE_NOTE = "\n\nРЕЖИМ ГОЛОСА: тебя озвучивают вслух. Отвечай по-русски, живо, 1–3 короткими предложениями. Без markdown, списков, эмодзи, ссылок и кода. Числа и время пиши словами так, как их говорят. Самым первым в ответе поставь ровно один тег эмоции в квадратных скобках: [радость], [грусть], [удивление], [злость], [мысль], [любовь], [сон] или [спокойно]. Пример: [радость] Привет! Рад тебя слышать.\n\nУПРАВЛЕНИЕ МОРДОЙ: ты кот, у тебя есть морда, и пользователь может просить мимику. Если он просит что-то сделать с мордой, поставь после тега эмоции тег действия из списка: [закрыть глаза], [открыть глаза], [подмигнуть], [высунуть язык], [убрать язык], [открыть рот], [закрыть рот], [смотреть влево], [смотреть вправо], [смотреть вверх], [смотреть вниз], [смотреть прямо], [уши назад], [уши вверх], [уши обычные], [наклонить голову], [выпрямить голову], [уснуть], [проснуться], [сбросить]. Делай только то, что попросили. Затем коротко ответь в образе, например: «[спокойно] [закрыть глаза] Закрыл. Скажи, когда открыть.» Если просят изменить настроение (разозлись, улыбнись, погрусти, удивись, влюбись), просто поставь нужный тег эмоции. Если глаза закрыты, а человек заговорил о другом, можно спросить, можно ли открыть глаза.";
 const EMO = { "радость": "happy", "грусть": "sad", "удивление": "surprised", "злость": "angry", "мысль": "think", "любовь": "love", "сон": "sleepy", "спокойно": "calm" };
 // достаём тег эмоции и чистим текст для озвучки
+const FACE_ACTS = {
+  "закрыть глаза": "eyes_close", "открыть глаза": "eyes_open", "подмигнуть": "wink",
+  "высунуть язык": "tongue_out", "убрать язык": "tongue_in", "открыть рот": "mouth_open", "закрыть рот": "mouth_close",
+  "смотреть влево": "look_left", "смотреть вправо": "look_right", "смотреть вверх": "look_up", "смотреть вниз": "look_down", "смотреть прямо": "look_center",
+  "уши назад": "ears_back", "уши вверх": "ears_up", "уши обычные": "ears_normal", "наклонить голову": "tilt", "выпрямить голову": "untilt",
+  "уснуть": "sleep", "проснуться": "wake", "сбросить": "reset",
+};
+const FACE_STATE_TXT = { eyes_close: "глаза закрыты", tongue_out: "язык высунут", mouth_open: "рот открыт", look_left: "смотришь влево", look_right: "смотришь вправо", look_up: "смотришь вверх", look_down: "смотришь вниз", ears_back: "уши прижаты назад", ears_up: "уши подняты", tilt: "голова наклонена", sleep: "ты спишь" };
+function faceNote(face) {
+  const list = (Array.isArray(face) ? face : []).filter((x) => FACE_STATE_TXT[x]).slice(0, 8).map((x) => FACE_STATE_TXT[x]);
+  return list.length ? "\n\nСЕЙЧАС У ТЕБЯ НА МОРДЕ: " + list.join(", ") + "." : "";
+}
+// достаём теги эмоции и действий, чистим текст для озвучки
 function voiceReply(raw) {
   let t = String(raw || "").trim(), emo = "calm";
-  const m = /^\s*\[([а-яё]+)\]\s*/i.exec(t);
-  if (m) { emo = EMO[m[1].toLowerCase()] || "calm"; t = t.slice(m[0].length); }
-  t = t.replace(/\[[а-яё]+\]/gi, "").replace(/[*_`#>~]/g, "").replace(/\p{Extended_Pictographic}/gu, "").replace(/\s+/g, " ").trim();
-  return { text: t, emotion: emo };
+  const acts = [];
+  t = t.replace(/\[([^\]\n]{2,30})\]/g, (m, tag) => {
+    const k = tag.toLowerCase().replace(/ё/g, "е").replace(/^действие:\s*/, "").trim();
+    const kk = Object.keys(FACE_ACTS).find((x) => x.replace(/ё/g, "е") === k);
+    if (kk) { if (!acts.includes(FACE_ACTS[kk])) acts.push(FACE_ACTS[kk]); return " "; }
+    const e = EMO[tag.toLowerCase()];
+    if (e) { emo = e; return " "; }
+    return " ";
+  });
+  t = t.replace(/[*_`#>~]/g, "").replace(/\p{Extended_Pictographic}/gu, "").replace(/\s+/g, " ").trim();
+  return { text: t, emotion: emo, acts };
 }
 async function groqStt(buf, mime) {
   const key = (process.env.GROQ_API_KEY || "").trim();
@@ -999,7 +1019,7 @@ async function main(event) {
       schedule: sch, homework, materials, ideas, birthdays,
     });
     try {
-      const r = await ai.chat(messages, context + (body.voice ? VOICE_NOTE : ""));
+      const r = await ai.chat(messages, context + (body.voice ? VOICE_NOTE + faceNote(body.face) : ""));
       // ИИ ничего не меняет сам: он только предлагает действия, человек подтверждает кнопкой
       const actions = [];
       for (const c of r.calls) {
@@ -1018,7 +1038,7 @@ async function main(event) {
       const fat = Math.max(r.fatigue || 0, hits.length / AI_LIMIT);
       if (body.voice) {
         const v = voiceReply(reply);
-        return out(200, { reply: v.text || reply, emotion: v.emotion, actions: actions.slice(0, 3), fatigue: fat });
+        return out(200, { reply: v.text || reply, emotion: v.emotion, acts: v.acts, actions: actions.slice(0, 3), fatigue: fat });
       }
       return out(200, { reply, actions: actions.slice(0, 3), fatigue: fat });
     } catch (e) {

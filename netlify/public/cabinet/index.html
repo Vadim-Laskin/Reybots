@@ -539,12 +539,14 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
             <circle class="p" r="19" fill="#2a1d3a"/><circle class="h" cx="6" cy="-8" r="6" fill="#fff"/><circle class="h2" cx="-7" cy="8" r="3" fill="#fff"/>
             <path class="happy fx" d="M-30 6 Q0 -34 30 6" stroke="#2a1d3a" stroke-width="9" stroke-linecap="round" fill="none"/>
             <path class="heart fx" d="M0 14 C-26 -4 -16 -24 0 -12 C16 -24 26 -4 0 14Z" fill="#ff4d79"/>
+            <path class="shut fx" d="M-30 -2 Q0 22 30 -2" stroke="#2a1d3a" stroke-width="9" stroke-linecap="round" fill="none"/>
           </g>
           <g id="mc-eyeR" transform="translate(256 208)">
             <ellipse class="w" rx="34" ry="38" fill="#fff"/>
             <circle class="p" r="19" fill="#2a1d3a"/><circle class="h" cx="6" cy="-8" r="6" fill="#fff"/><circle class="h2" cx="-7" cy="8" r="3" fill="#fff"/>
             <path class="happy fx" d="M-30 6 Q0 -34 30 6" stroke="#2a1d3a" stroke-width="9" stroke-linecap="round" fill="none"/>
             <path class="heart fx" d="M0 14 C-26 -4 -16 -24 0 -12 C16 -24 26 -4 0 14Z" fill="#ff4d79"/>
+            <path class="shut fx" d="M-30 -2 Q0 22 30 -2" stroke="#2a1d3a" stroke-width="9" stroke-linecap="round" fill="none"/>
           </g>
           <path id="mc-lidL" d="M104 196 Q144 184 184 196 L184 146 L104 146Z" fill="#f7ae57" class="fx"/>
           <path id="mc-lidR" d="M216 196 Q256 184 296 196 L296 146 L216 146Z" fill="#f7ae57" class="fx"/>
@@ -553,6 +555,7 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
           <path d="M184 262 h32 l-16 18Z" fill="#ff7f9d" stroke="#e0607f" stroke-width="3" stroke-linejoin="round"/>
           <path d="M200 280 v8" stroke="#8a4f12" stroke-width="4" stroke-linecap="round"/>
           <g id="mc-mouth"><path id="mc-m" d="" fill="none" stroke="#8a4f12" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><ellipse id="mc-tg" cx="200" cy="310" rx="16" ry="9" fill="#ff8aa0" class="fx"/></g>
+          <g id="mc-tongue" class="fx"><path d="M178 296 Q178 346 200 346 Q222 346 222 296Z" fill="#ff7f9d" stroke="#e0607f" stroke-width="4" stroke-linejoin="round"/><path d="M200 306 v22" stroke="#e0607f" stroke-width="4" stroke-linecap="round"/></g>
           <path d="M96 286 l-62 -10 M96 300 l-66 6 M96 314 l-56 20 M304 286 l62 -10 M304 300 l66 6 M304 314 l56 20" stroke="#fff" stroke-width="3" stroke-linecap="round" opacity=".9"/>
           <path id="mc-tear" d="M122 244 q-10 18 0 26 q10 -8 0 -26Z" fill="#6fc7ff" class="fx"/>
         </g>
@@ -1825,7 +1828,7 @@ $("#ai-form").onsubmit = (e) => {
 $("#ai-in").onkeydown = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("#ai-form").requestSubmit(); } };
 
 /* ---------- голосовой чат с Мурзиком ---------- */
-const V = { on: false, st: "idle", emo: "calm", emoAt: 0, open: 0, ctx: null, an: null, A: null, stream: null, rec: null, chunks: [], mic: null, level: 0, mouth: 0, run: false, busy: 0, pending: [], blink: 0, nextBlink: 0, look: { x: 0, y: 0, tx: 0, ty: 0, at: 0 }, ear: 0, ttsWarned: false };
+const V = { tg: 0, F: { eyes: 1, wink: null, tongue: 0, mouth: 0, look: null, ears: null, tilt: 0, sleep: 0, hold: null }, eyeC: 0, eyeS: { L: 0, R: 0 }, asked: false, eyesAsk: false, on: false, st: "idle", emo: "calm", emoAt: 0, open: 0, ctx: null, an: null, A: null, stream: null, rec: null, chunks: [], mic: null, level: 0, mouth: 0, run: false, busy: 0, pending: [], blink: 0, nextBlink: 0, look: { x: 0, y: 0, tx: 0, ty: 0, at: 0 }, ear: 0, ttsWarned: false };
 const EMO_SET = {
   happy:    { smile: 0.9, brow: -6, browY: -6, eye: "happy", cheeks: 1 },
   sad:      { smile: -0.9, brow: 16, browY: 4, eye: "sad", tear: 1 },
@@ -1844,17 +1847,18 @@ function vSet(st, cap) {
   $("#v-st").textContent = { idle: "", listen: "Слушаю", think: "Думаю", speak: "Говорит" }[st];
   if (cap !== undefined) $("#v-cap").textContent = cap; else if (st === "idle" || st === "listen") $("#v-cap").textContent = VCAP[st];
 }
-function vEmo(e) { V.emo = EMO_SET[e] ? e : "calm"; V.emoAt = performance.now(); }
+function vEmo(e, force) { if (V.F.hold && !force) return; V.emo = EMO_SET[e] ? e : "calm"; V.emoAt = performance.now(); }
 
 /* лицо: один цикл отрисовки, пока открыт голосовой чат */
 function vDraw(t) {
   if (!V.on) { V.run = false; return; }
   const E = EMO_SET[V.emo] || EMO_SET.calm;
   const sp = V.st === "speak";
+  const F = V.F;
   // рот: громкость голоса -> раскрытие, плавно (быстро открывается, медленнее закрывается)
   const target = sp ? Math.min(1, Math.max(0, V.level)) : 0;
   V.mouth += (target - V.mouth) * (target > V.mouth ? 0.6 : 0.3);
-  const o = V.mouth;
+  const o = Math.max(V.mouth, F.tongue ? 0.32 : 0, F.mouth ? 0.85 : 0);
   const smile = E.smile * (sp ? 0.5 : 1);
   const cy = 286 - smile * 9;
   const L = 160, R = 240;
@@ -1876,31 +1880,41 @@ function vDraw(t) {
     vq("#mc-tg").setAttribute("rx", String(10 + o * 14));
   }
   vq("#mc-m").setAttribute("d", d);
+  V.tg += ((F.tongue ? 1 : 0) - V.tg) * 0.25;
+  const tgn = vq("#mc-tongue");
+  tgn.style.opacity = V.tg < 0.02 ? 0 : V.tg;
+  tgn.setAttribute("transform", `translate(0 ${(1 - V.tg) * -34 + (sp ? Math.sin(performance.now() / 140) * 3 : 0)})`);
 
   // моргание
   if (t > V.nextBlink) { V.blink = t; V.nextBlink = t + 2000 + Math.random() * 3200; }
   const bp = (t - V.blink) / 160;
   let blink = bp >= 0 && bp < 1 ? Math.sin(bp * Math.PI) : 0;
   const slp = E.eye === "sleepy" ? 0.62 : 0;
-  const closed = Math.max(blink, slp);
+  V.eyeC += ((F.sleep || F.eyes === 0 ? 1 : 0) - V.eyeC) * 0.22;
+  const closed = Math.max(blink, slp, V.eyeC);
   // взгляд: по умолчанию блуждает, при «мысли» вверх-вправо, при прослушивании смотрит на пользователя
   if (t > V.look.at) { V.look.at = t + 1200 + Math.random() * 2200; V.look.tx = (Math.random() - 0.5) * 12; V.look.ty = (Math.random() - 0.5) * 8; }
   let tx = V.look.tx, ty = V.look.ty;
   if (E.eye === "look" || V.st === "think") { tx = 10; ty = -10; }
   if (V.st === "listen") { tx = 0; ty = 2; }
+  if (F.look) { tx = F.look.x; ty = F.look.y; }
   V.look.x += (tx - V.look.x) * 0.12; V.look.y += (ty - V.look.y) * 0.12;
   ["L", "R"].forEach((s) => {
     const g = vq("#mc-eye" + s);
     const x = s === "L" ? 144 : 256;
     const big = E.eye === "wide" ? 1.18 : 1;
-    g.setAttribute("transform", `translate(${x} 208) scale(${big} ${big * (1 - closed * 0.92)})`);
+    V.eyeS[s] += ((F.wink === s ? 1 : 0) - V.eyeS[s]) * 0.3;
+    const cl = Math.max(closed, V.eyeS[s]);
+    g.setAttribute("transform", `translate(${x} 208) scale(${big} ${big * (1 - cl * 0.92)})`);
     const hap = E.eye === "happy", hrt = E.eye === "heart";
-    g.querySelector(".w").style.opacity = hap ? 0 : 1;
-    g.querySelector(".p").style.opacity = hap || hrt ? 0 : 1;
-    g.querySelector(".h").style.opacity = hap || hrt ? 0 : 1;
-    g.querySelector(".h2").style.opacity = hap || hrt ? 0 : 1;
-    g.querySelector(".happy").style.opacity = hap ? 1 : 0;
-    g.querySelector(".heart").style.opacity = hrt ? 1 : 0;
+    const shut = V.eyeC > 0.85 || V.eyeS[s] > 0.85;
+    g.querySelector(".w").style.opacity = hap || shut ? 0 : 1;
+    g.querySelector(".p").style.opacity = hap || hrt || shut ? 0 : 1;
+    g.querySelector(".h").style.opacity = hap || hrt || shut ? 0 : 1;
+    g.querySelector(".h2").style.opacity = hap || hrt || shut ? 0 : 1;
+    g.querySelector(".happy").style.opacity = hap && !shut ? 1 : 0;
+    g.querySelector(".heart").style.opacity = hrt && !shut ? 1 : 0;
+    g.querySelector(".shut").style.opacity = shut ? 1 : 0;
     const pupil = E.eye === "wide" ? 12 : 19;
     const p = g.querySelector(".p");
     p.setAttribute("r", String(pupil));
@@ -1929,15 +1943,109 @@ function vDraw(t) {
   // уши, дыхание, покачивание головой
   const breath = Math.sin(t / 700) * 0.012;
   const bob = sp ? Math.sin(t / 150) * 2.2 * (0.4 + V.mouth) : 0;
-  const tiltH = sp ? Math.sin(t / 420) * 2 : V.st === "think" ? 6 : V.st === "listen" ? Math.sin(t / 900) * 1.5 : 0;
+  const tiltH = (F.tilt ? 11 : 0) + (sp ? Math.sin(t / 420) * 2 : V.st === "think" ? 6 : V.st === "listen" ? Math.sin(t / 900) * 1.5 : 0);
   vq("#mc-body").setAttribute("transform", `translate(200 378) rotate(${tiltH}) scale(${1 + breath} ${1 + breath * 1.4}) translate(-200 -378) translate(0 ${bob})`);
-  const ear = V.st === "listen" ? -5 : E.eye === "sad" ? 10 : (Math.sin(t / 1900) > 0.985 ? 8 : 0);
+  const ear = F.ears === "back" ? 16 : F.ears === "up" ? -9 : V.st === "listen" ? -5 : E.eye === "sad" ? 10 : (Math.sin(t / 1900) > 0.985 ? 8 : 0);
   V.ear += (ear - V.ear) * 0.2;
   vq("#mc-eL").setAttribute("transform", `rotate(${V.ear} 100 150)`);
   vq("#mc-eR").setAttribute("transform", `rotate(${-V.ear} 300 150)`);
   // уровень для кольца микрофона
   $("#v-mic").style.setProperty("--lvl", String(1 + Math.min(0.5, V.level * 0.9)));
   requestAnimationFrame(vDraw);
+}
+
+/* ---------- управление мордой голосом: «закрой глаза», «высунь язык», «разозлись»… ---------- */
+const VRULES = [
+  [/закр[а-я]*\s+(свои\s+|оба\s+)?глаз|глаз[а-я]*\s+закр/, "eyes_close"],
+  [/откр[а-я]*\s+(свои\s+|оба\s+)?глаз|глаз[а-я]*\s+откр/, "eyes_open"],
+  [/подмигн/, "wink"],
+  [/(высун|покаж)[а-я]*\s+(свой\s+)?язык/, "tongue_out"],
+  [/(убер|убра|спрят)[а-я]*\s+(свой\s+)?язык/, "tongue_in"],
+  [/откр[а-я]*\s+(свой\s+)?(рот|пасть)/, "mouth_open"],
+  [/закр[а-я]*\s+(свой\s+)?(рот|пасть)/, "mouth_close"],
+  [/(смотр[а-я]*|посмотр[а-я]*)\s+(на\s+)?(лево|влево|налево)/, "look_left"],
+  [/(смотр[а-я]*|посмотр[а-я]*)\s+(на\s+)?(право|вправо|направо)/, "look_right"],
+  [/(смотр[а-я]*|посмотр[а-я]*)\s+(вверх|наверх)/, "look_up"],
+  [/(смотр[а-я]*|посмотр[а-я]*)\s+вниз/, "look_down"],
+  [/(смотр[а-я]*|посмотр[а-я]*)\s+(прямо|на\s+меня)/, "look_center"],
+  [/уши\s+назад|прижм[а-я]*\s+уш/, "ears_back"],
+  [/подним[а-я]*\s+уш|уши\s+(вверх|подним)/, "ears_up"],
+  [/уши\s+(обычн|нормальн)/, "ears_normal"],
+  [/наклон[а-я]*\s+голов/, "tilt"],
+  [/выпрям[а-я]*\s+голов|голов[а-я]*\s+прям/, "untilt"],
+  [/засыпай|усни(?![а-я])|поспи|ложись\s+спать|(?<![а-я])спи(?![а-я])/, "sleep"],
+  [/просыпайся|проснись|вставай/, "wake"],
+  [/улыбнись|порадуйся|радуйся|будь\s+весел/, "emo_happy"],
+  [/погрусти|грусти|расстройся|будь\s+грустн/, "emo_sad"],
+  [/удивись/, "emo_surprised"],
+  [/разозлись|злись|сердись|будь\s+злым/, "emo_angry"],
+  [/влюбись|будь\s+влюблен[а-я]*/, "emo_love"],
+  [/задумайся|сделай\s+задумчив/, "emo_think"],
+  [/сбрось|в\s+норму|успокойся|нормальное\s+лицо|как\s+обычно|верни\s+как\s+было/, "reset"],
+];
+function vCmds(text) {
+  const t = String(text).toLowerCase().replace(/ё/g, "е");
+  const out = [];
+  if (V.eyesAsk) {
+    if (/^[^а-я]*(да|ага|угу|можно|давай|конечно|открывай|открой|окей|ладно|хорошо)(?![а-я])/.test(t)) { V.eyesAsk = false; return ["eyes_open"]; }
+    if (/^[^а-я]*(нет|не надо|не нужно|подожди|рано|пока нет)(?![а-я])/.test(t)) { V.eyesAsk = false; V.asked = false; clearTimeout(V.askT); V.askT = setTimeout(vAskOpen, 40000); return []; }
+  }
+  for (const [re, code] of VRULES) if (re.test(t) && !out.includes(code)) out.push(code);
+  return out;
+}
+function vFaceCodes() {
+  const F = V.F, c = [];
+  if (F.eyes === 0) c.push("eyes_close");
+  if (F.sleep) c.push("sleep");
+  if (F.tongue) c.push("tongue_out");
+  if (F.mouth) c.push("mouth_open");
+  if (F.look) c.push(F.look.k);
+  if (F.ears === "back") c.push("ears_back");
+  if (F.ears === "up") c.push("ears_up");
+  if (F.tilt) c.push("tilt");
+  return c;
+}
+function vAct(code) {
+  const F = V.F;
+  const looks = { look_left: { x: -15, y: 0 }, look_right: { x: 15, y: 0 }, look_up: { x: 0, y: -13 }, look_down: { x: 0, y: 11 } };
+  if (code.startsWith("emo_")) { const e = code.slice(4); F.hold = null; vEmo(e, true); F.hold = e; return; }
+  switch (code) {
+    case "eyes_close": F.eyes = 0; F.sleep = 0; V.asked = false; V.eyesAsk = false; clearTimeout(V.askT); V.askT = setTimeout(vAskOpen, 22000); break;
+    case "eyes_open": F.eyes = 1; F.sleep = 0; V.eyesAsk = false; clearTimeout(V.askT); break;
+    case "wink": F.wink = Math.random() < 0.5 ? "L" : "R"; clearTimeout(V.winkT); V.winkT = setTimeout(() => { F.wink = null; }, 1400); break;
+    case "tongue_out": F.tongue = 1; break;
+    case "tongue_in": F.tongue = 0; break;
+    case "mouth_open": F.mouth = 1; break;
+    case "mouth_close": F.mouth = 0; break;
+    case "look_center": F.look = null; break;
+    case "ears_back": F.ears = "back"; break;
+    case "ears_up": F.ears = "up"; break;
+    case "ears_normal": F.ears = null; break;
+    case "tilt": F.tilt = 1; break;
+    case "untilt": F.tilt = 0; break;
+    case "sleep": F.sleep = 1; F.eyes = 0; clearTimeout(V.askT); F.hold = null; vEmo("sleepy", true); F.hold = "sleepy"; break;
+    case "wake": F.sleep = 0; F.eyes = 1; F.hold = null; vEmo("calm", true); break;
+    case "reset": Object.assign(F, { eyes: 1, wink: null, tongue: 0, mouth: 0, look: null, ears: null, tilt: 0, sleep: 0, hold: null }); clearTimeout(V.askT); V.eyesAsk = false; vEmo("calm", true); break;
+    default: if (looks[code]) F.look = { ...looks[code], k: code };
+  }
+}
+// глаза долго закрыты — Мурзик сам спрашивает, можно ли их открыть
+function vAskOpen() {
+  if (!V.on || V.F.eyes !== 0 || V.F.sleep || V.asked) return;
+  if (V.st === "speak" || V.st === "think") { V.askT = setTimeout(vAskOpen, 6000); return; }
+  V.asked = true; V.eyesAsk = true;
+  const id = ++V.busy;
+  vStopRec();
+  const text = "Можно уже открыть глаза?";
+  vSet("think", text);
+  const fallback = () => {
+    if (!V.on || id !== V.busy) return;
+    if (window.speechSynthesis) return vSpeakLocal(text, text, id);
+    vSet("idle", text);
+    setTimeout(() => { if (V.on && V.st === "idle" && id === V.busy) vListen(); }, 1500);
+  };
+  if (V.useLocal) return fallback();
+  vSpeakChunks([text], text, id).catch(fallback);
 }
 
 /* громкость из аналайзера */
@@ -1961,7 +2069,7 @@ async function vOpen() {
   $("#aichat").hidden = true;
   $("#vchat").hidden = false;
   tg?.BackButton.show();
-  vEmo("calm"); vSet("idle", "");
+  vAct("reset"); vSet("idle", "");
   api("voice_wake").catch(() => {});
   try { speechSynthesis.getVoices(); } catch {}
   // разблокируем звук по нажатию пользователя
@@ -1990,6 +2098,7 @@ function vStopRec() {
 }
 function vClose() {
   V.on = false;
+  clearTimeout(V.askT);
   V.stopPlay && V.stopPlay();
   vStopRec();
   try { V.A && V.A.pause(); window.speechSynthesis && speechSynthesis.cancel(); } catch {}
@@ -2081,15 +2190,17 @@ async function vSend(blob) {
     const text = (stt.text || "").trim();
     if (text.length < 2) { vSet("listen", "Не расслышал, повтори"); return vListen(); }
     $("#v-cap").textContent = text;
+    vCmds(text).forEach(vAct);
     aiBubble("me", text);
     AIH.push({ role: "user", content: text });
-    const r = await api("ai_chat", { messages: AIH.slice(-12), voice: true });
+    const r = await api("ai_chat", { messages: AIH.slice(-12), voice: true, face: vFaceCodes() });
     if (!V.on || id !== V.busy) return;
     AIH.push({ role: "assistant", content: r.reply });
     aiBubble("bot", r.reply, true);
     if (typeof r.fatigue === "number") setTired(r.fatigue);
     (r.actions || []).forEach((a) => V.pending.push(a));
     const hint = r.actions?.length ? " (Действие подтверди в текстовом чате.)" : "";
+    (r.acts || []).forEach(vAct);
     vEmo(r.emotion || "calm");
     // сначала голос с сервера (по предложениям: первое начинает звучать быстро); если его нет — голос самого телефона
     let ok = false;

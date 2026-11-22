@@ -451,6 +451,25 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
   <div id="upd-list"></div>
 </div>
 
+<div id="dms" class="screen" hidden>
+  <button class="link" data-back><span class="i" data-i="back"></span>Назад</button>
+  <div class="crumbs">Админ-панель › Рассылка › Личная</div>
+  <h1>Личная рассылка</h1>
+  <div class="hi">Бот отправит сообщение только в личку, в группу ничего не уйдёт. Получит тот, кто писал боту или открывал Кабинет, иначе Telegram не даст доставить.</div>
+  <div class="cat">Уведомления об изменениях пар</div>
+  <div class="chips" id="dm-notif"></div>
+  <div class="cat">Дата рождения</div>
+  <div class="chips" id="dm-bd"></div>
+  <div class="cat">Подгруппа</div>
+  <div class="chips" id="dm-sg"></div>
+  <div class="cat">Выбрать людей</div>
+  <div class="hi" style="margin-bottom:6px">Если отметить кого-то, фильтры выше не учитываются: письмо уйдёт только отмеченным.</div>
+  <div id="dm-people"></div>
+  <textarea id="dm-text" maxlength="3500" placeholder="Текст сообщения"></textarea>
+  <div class="muted" id="dm-count" style="margin:4px 2px 8px">0 / 3500</div>
+  <button class="btn" id="dm-send" disabled><span class="i" data-i="send"></span>Отправить</button>
+</div>
+
 <div id="ovr" class="screen" hidden>
   <button class="link" data-back><span class="i" data-i="back"></span>Назад</button>
   <div class="crumbs">Админ-панель › Расписание › Отмена пар</div>
@@ -2337,6 +2356,7 @@ const ADMIN_TREE = [
     title: "Рассылка",
     rows: [
       { icon: "send", title: "Обновление", desc: "Сообщение в группу с картинкой", open: openUpd },
+      { icon: "send", title: "Личная рассылка", desc: "В лс: по фильтрам или выбранным людям", open: openDms },
     ],
   },
   {
@@ -2468,6 +2488,76 @@ $("#upd-send").onclick = () => {
       renderUpd(j.items);
       note("#ok", "Отправлено в группу", 3000);
     } catch (e) { fail(e); $("#upd-send").disabled = false; }
+  });
+};
+
+/* ---------- личная рассылка ---------- */
+const DMF = { notif: "all", bd: "all", sg: "all" }, DMP = new Set();
+const dmFilt = (p) => {
+  const n = p.notif === 1 || p.notif === -1 ? p.notif : 0;
+  const hb = /^\d{2}-\d{2}$/.test(p.bd || "");
+  if (DMF.notif === "on" && n !== 1) return false;
+  if (DMF.notif === "off" && n !== -1) return false;
+  if (DMF.notif === "none" && n !== 0) return false;
+  if (DMF.bd === "set" && !hb) return false;
+  if (DMF.bd === "unset" && hb) return false;
+  if (DMF.sg !== "all" && (p.sg || 0) !== Number(DMF.sg)) return false;
+  return true;
+};
+const dmTargets = () => (DMP.size ? PEOPLE.filter((p) => DMP.has(p.id)) : PEOPLE.filter(dmFilt));
+function renderDms() {
+  const groups = [
+    ["#dm-notif", "notif", [["all", "Все"], ["on", "Включили"], ["off", "Отключили"], ["none", "Не отвечали"]]],
+    ["#dm-bd", "bd", [["all", "Все"], ["set", "ДР указана"], ["unset", "ДР не указана"]]],
+    ["#dm-sg", "sg", [["all", "Все"], ["1", "1 подгр."], ["2", "2 подгр."], ["0", "Без подгр."]]],
+  ];
+  groups.forEach(([sel, key, opts]) => {
+    const box = $(sel);
+    box.replaceChildren();
+    opts.forEach(([v, t]) => {
+      const bt = el("button", DMF[key] === v ? "on" : "", t);
+      bt.onclick = () => { DMF[key] = v; renderDms(); };
+      box.append(bt);
+    });
+  });
+  const pl = $("#dm-people");
+  pl.replaceChildren();
+  const shown = DMP.size ? null : new Set(PEOPLE.filter(dmFilt).map((p) => p.id));
+  PEOPLE.forEach((p) => {
+    const row = el("label", "card");
+    row.style.cssText = "display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:6px" + (shown && !shown.has(p.id) ? ";opacity:.4" : "");
+    const cb = document.createElement("input");
+    cb.type = "checkbox"; cb.checked = DMP.has(p.id);
+    cb.onchange = () => { cb.checked ? DMP.add(p.id) : DMP.delete(p.id); renderDms(); };
+    const t = el("div", null, p.name || "Без имени");
+    t.append(el("small", "muted", (p.username ? " @" + p.username : "")));
+    row.append(cb, t);
+    pl.append(row);
+  });
+  const n = dmTargets().length;
+  const bt = $("#dm-send");
+  bt.lastChild.textContent = `Отправить (${n})`;
+  bt.disabled = !n || !$("#dm-text").value.trim();
+}
+async function openDms() {
+  if (!INFO?.isAdmin) return;
+  DMP.clear();
+  show("dms");
+  try { PEOPLE = (await api("people")).people; } catch (e) { fail(e); }
+  renderDms();
+}
+$("#dm-text").oninput = () => { $("#dm-count").textContent = $("#dm-text").value.length + " / 3500"; renderDms(); };
+$("#dm-send").onclick = () => {
+  const text = $("#dm-text").value.trim(), n = dmTargets().length;
+  if (!text || !n) return;
+  ask(`Отправить в личку: ${n} чел.?`, async () => {
+    $("#dm-send").disabled = true;
+    try {
+      const j = await api("dm_send", { text, filter: DMF, ids: [...DMP] });
+      $("#dm-text").value = ""; $("#dm-count").textContent = "0 / 3500";
+      note("#ok", `Доставлено: ${j.sent}` + (j.failed ? `, не дошло: ${j.failed}` : ""), 4500);
+    } catch (e) { fail(e); }
+    renderDms();
   });
 };
 

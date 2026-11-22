@@ -744,6 +744,52 @@ async function main(event) {
     return out(200, { ok: true, items: items.slice(0, 10) });
   }
 
+  /* ---------- личная рассылка (только в лс) ---------- */
+  if (body.action === "dm_send") {
+    if (!admin) return out(403, { error: "Только для админа" });
+    const text = String(body.text || "").trim();
+    if (!text) return out(400, { error: "Напиши текст" });
+    if (text.length > 3500) return out(400, { error: "Слишком длинно, максимум 3500 символов" });
+    const f = body.filter || {};
+    const ids = Array.isArray(body.ids) ? body.ids.map(String).filter((x) => /^\d{1,20}$/.test(x)) : [];
+    let list = [];
+    try {
+      const { blobs } = await st.list({ prefix: "person-" });
+      list = (await Promise.all(blobs.map((x) => st.get(x.key, { type: "json" }).catch(() => null)))).filter(Boolean);
+    } catch (e) {
+      return out(502, { error: "Не получилось прочитать список: " + e.message });
+    }
+    const hasBd = (p) => /^\d{2}-\d{2}$/.test(p.bd || "");
+    let to;
+    if (ids.length) to = list.filter((p) => ids.includes(String(p.id)));
+    else {
+      to = list.filter((p) => {
+        const n = p.notif === 1 || p.notif === -1 ? p.notif : 0;
+        if (f.notif === "on" && n !== 1) return false;
+        if (f.notif === "off" && n !== -1) return false;
+        if (f.notif === "none" && n !== 0) return false;
+        if (f.bd === "set" && !hasBd(p)) return false;
+        if (f.bd === "unset" && hasBd(p)) return false;
+        if ([1, 2].includes(Number(f.sg)) && (p.sg || 0) !== Number(f.sg)) return false;
+        return true;
+      });
+    }
+    if (!to.length) return out(400, { error: "Под такой фильтр никто не попал" });
+    let sent = 0, failed = 0;
+    const t0 = Date.now();
+    for (let i = 0; i < to.length; i += 15) {
+      if (Date.now() - t0 > 8000) { failed += to.length - i; break; }
+      const res = await Promise.all(to.slice(i, i + 15).map(async (p) => {
+        try {
+          const r = await fetch(tgUrl("sendMessage"), { method: "POST", headers: H, body: JSON.stringify({ chat_id: p.id, text }) });
+          return r.ok;
+        } catch { return false; }
+      }));
+      res.forEach((ok) => (ok ? sent++ : failed++));
+    }
+    return out(200, { ok: true, sent, failed, total: to.length });
+  }
+
   /* ---------- Информатика: материалы ---------- */
   if (body.action === "mat_list") {
     if (!(await isMember(user.id))) return out(403, { error: "Только для участников группы" });

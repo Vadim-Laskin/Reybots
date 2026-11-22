@@ -23,6 +23,16 @@ model, _ = torch.hub.load(
 )
 model.to(torch.device("cpu"))
 
+# Если на Space включён ZeroGPU, ему нужна хотя бы одна @spaces.GPU-функция (мы GPU не используем)
+try:
+    import spaces
+
+    @spaces.GPU
+    def _gpu_stub():
+        return 1
+except Exception:
+    pass
+
 app = FastAPI()
 
 

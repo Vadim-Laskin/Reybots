@@ -198,14 +198,17 @@ async function sileroTts(text) {
       signal: ctl.signal,
     });
     if (!r.ok) {
-      const e = new Error(r.status === 401 ? "Silero: неверный SILERO_TOKEN" : r.status === 503 || r.status === 502 ? "Silero ещё просыпается, повтори через минуту" : "Silero не ответил (" + r.status + ")");
+      let body = "";
+      try { body = (await r.text()).replace(/\s+/g, " ").slice(0, 90); } catch {}
+      const e = new Error(r.status === 401 ? "Silero: неверный SILERO_TOKEN (не совпадает с TTS_TOKEN в Space)" : "Silero ответил " + r.status + (body ? ": " + body : ""));
       e.status = 502;
       throw e;
     }
     return { buf: Buffer.from(await r.arrayBuffer()), mime: "audio/wav" };
   } catch (e) {
-    if (e.name === "AbortError") { const x = new Error("Silero просыпается (бесплатный хостинг засыпает), повтори через минуту"); x.status = 502; throw x; }
-    throw e;
+    if (e.name === "AbortError") { const x = new Error("Silero не ответил за 8.5 с: Space работает, но озвучка идёт слишком долго (или адрес SILERO_URL неверный)"); x.status = 502; throw x; }
+    if (e.status) throw e;
+    const x = new Error("Silero недоступен: " + (e.cause?.code || e.message)); x.status = 502; throw x;
   } finally { clearTimeout(timer); }
 }
 async function speak(text) {

@@ -1,6 +1,6 @@
 const crypto = require("crypto");
 const { store, nskInfo, getSchedule } = require("../../lib/natk");
-const { loadHw, saveHw, postHomework, norm, subjectsOf, subgroupSubjects, nextLesson, postIfLessonTomorrow } = require("../../lib/homework");
+const { loadHw, saveHw, postHomework, latestPosted, norm, subjectsOf, subgroupSubjects, nextLesson, postIfLessonTomorrow } = require("../../lib/homework");
 const nextBd = (bd, today) => {
   // сколько дней до ближайшего дня рождения (29 февраля в невисокосный год — 28-го)
   const [y, m, d] = today.split("-").map(Number);
@@ -13,7 +13,9 @@ const nextBd = (bd, today) => {
 };
 const { isAdmin, isMember, load, save } = require("../../lib/sounds");
 const { sendUpdate } = require("../../lib/update");
-const { loadTest, saveTest, applyTestMode } = require("../../lib/testmode");
+const { loadTest, saveTest, applyTestMode, realChat } = require("../../lib/testmode");
+const { sendDayTo } = require("../../lib/render");
+const HOLIDAYS = require("../../lib/holidays");
 const ai = require("../../lib/ai");
 // пока ИИ только для админа; чтобы открыть всем участникам — переменная окружения AI_FOR_ALL=1
 const AI_FOR_ALL = process.env.AI_FOR_ALL === "1";
@@ -764,6 +766,49 @@ async function main(event) {
     }
     await saveTest(st, t);
     return out(200, { on: !!t.on, owner, chat: owner ? String(t.chat || "") : "" });
+  }
+
+  if (body.action === "test_run") {
+    if (!admin) return out(403, { error: "Только для админа" });
+    const chat = process.env.CHAT_ID;
+    if (!TM.on || String(chat) === String(realChat())) return out(400, { error: "Сначала включи тестирование и укажи ID тестового чата" });
+    const what = String(body.what || "");
+    const tgSend = async (payload) => {
+      const j = await (await fetch(tgUrl("sendMessage"), { method: "POST", headers: H, body: JSON.stringify({ chat_id: chat, ...payload }) })).json();
+      if (!j.ok) throw new Error("Telegram: " + (j.description || "не отправилось"));
+    };
+    try {
+      if (what === "schedule_today" || what === "schedule_tomorrow") {
+        const s = await getSchedule(event);
+        const n = nskInfo();
+        const day = s.days.find((d) => d.date === (what === "schedule_today" ? n.date : n.tomorrow));
+        if (!day) return out(400, { error: "Этого дня нет в расписании на сайте" });
+        const prefix = what === "schedule_today" ? "Сегодня" : "Завтра";
+        await sendDayTo({ ...day, title: `${prefix}, ${day.label}` }, `${prefix}, ${day.label}`, chat, null);
+      } else if (what === "birthday") {
+        const nm = String(user.first_name || "именинник").replace(/&/g, "&amp;").replace(/</g, "&lt;");
+        await tgSend({ text: `🎉 Сегодня день рождения у <a href="tg://user?id=${user.id}">${nm}</a>!\nПоздравляем и желаем всего самого лучшего! 🎂`, parse_mode: "HTML" });
+      } else if (what === "holiday") {
+        const text = HOLIDAYS[nskInfo().date.slice(5)] || Object.values(HOLIDAYS)[0];
+        await tgSend({ text });
+      } else if (what === "newyear") {
+        const year = new Date(Date.now() + 7.5 * 3600e3).getUTCFullYear();
+        await tgSend({ text: `🎄🎆 С Новым ${year} годом, группа!\nПусть этот год будет лёгким на сессии и щедрым на выходные! 🥂` });
+      } else if (what === "homework") {
+        const all = await loadHw(st);
+        const list = Object.values(all).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+        const h = latestPosted(all, nskInfo().date)[0] || list[0];
+        if (!h) return out(400, { error: "Домашки пока нет" });
+        if (!(await postHomework(h, chat))) return out(502, { error: "Не удалось отправить домашку" });
+      } else if (what === "update") {
+        const text = String(body.text || "").trim();
+        if (!text) return out(400, { error: "Напиши текст обновления" });
+        await sendUpdate(text.slice(0, UPD_MAX));
+      } else return out(400, { error: "Неизвестное действие" });
+    } catch (e) {
+      return out(502, { error: e.message });
+    }
+    return out(200, { ok: true });
   }
 
   /* ---------- личная рассылка (только в лс) ---------- */

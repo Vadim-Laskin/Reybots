@@ -487,6 +487,20 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
   <h1>Тестирование</h1>
   <div class="hi">Пока включено, у всех в Личном кабинете сверху видна плашка: идёт тестирование, некоторые функции могут быть недоступны.</div>
   <button class="btn" id="tst-tog"></button>
+  <div id="tst-run" hidden style="margin-top:18px">
+    <div class="cat">Запустить в тестовый чат</div>
+    <div class="hi" style="margin:0 2px 10px">Всё, что обычно приходит в группу, придёт только в тест. В основную группу ничего не уйдёт.</div>
+    <div class="dmf" style="gap:8px">
+      <button class="btn" data-run="schedule_today">Расписание на сегодня</button>
+      <button class="btn" data-run="schedule_tomorrow">Расписание на завтра</button>
+      <button class="btn" data-run="homework">Последняя домашка</button>
+      <button class="btn" data-run="birthday">Поздравление с ДР</button>
+      <button class="btn" data-run="holiday">Праздничное поздравление</button>
+      <button class="btn" data-run="newyear">Новогоднее поздравление</button>
+    </div>
+    <textarea id="tst-upd" maxlength="3500" placeholder="Текст обновления" style="margin-top:12px"></textarea>
+    <button class="btn" id="tst-upd-go" style="margin-top:8px">Обновление с картинкой</button>
+  </div>
   <div id="tst-own" hidden style="margin-top:18px">
     <div class="cat">ID тестового чата</div>
     <input type="text" id="tst-chat" inputmode="numeric" placeholder="-1001234567890" autocomplete="off">
@@ -2523,6 +2537,7 @@ let TST = { on: false, owner: false, chat: "" };
 function renderTst() {
   $("#tst-tog").textContent = TST.on ? "Выключить тестирование" : "Включить тестирование";
   $("#tst-own").hidden = !TST.owner;
+  $("#tst-run").hidden = !TST.on;
   if (TST.owner && document.activeElement !== $("#tst-chat")) $("#tst-chat").value = TST.chat;
 }
 async function openTst() {
@@ -2538,6 +2553,11 @@ $("#tst-tog").onclick = async () => {
     note("#ok", TST.on ? "Тестирование включено" : "Тестирование выключено", 2500);
   } catch (e) { fail(e); }
 };
+async function tstRun(what, extra) {
+  try { await api("test_run", { what, ...extra }); note("#ok", "Отправлено в тестовый чат", 2500); } catch (e) { fail(e); }
+}
+document.querySelectorAll("[data-run]").forEach((b) => (b.onclick = () => tstRun(b.dataset.run)));
+$("#tst-upd-go").onclick = () => tstRun("update", { text: $("#tst-upd").value });
 $("#tst-save").onclick = async () => {
   try { TST = await api("test_set", { chat: $("#tst-chat").value }); renderTst(); note("#ok", "Сохранено", 2500); } catch (e) { fail(e); }
 };

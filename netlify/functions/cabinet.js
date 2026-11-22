@@ -13,6 +13,7 @@ const nextBd = (bd, today) => {
 };
 const { isAdmin, isMember, load, save } = require("../../lib/sounds");
 const { sendUpdate } = require("../../lib/update");
+const { loadTest, saveTest, applyTestMode } = require("../../lib/testmode");
 const ai = require("../../lib/ai");
 // пока ИИ только для админа; чтобы открыть всем участникам — переменная окружения AI_FOR_ALL=1
 const AI_FOR_ALL = process.env.AI_FOR_ALL === "1";
@@ -415,6 +416,8 @@ async function main(event) {
 
   const st = store(event);
   const admin = isAdmin(user.id);
+  const TM = await applyTestMode(st);
+  const owner = adminList()[0] === String(user.id);
 
   /* ---------- профиль и подгруппы ---------- */
   if (body.action === "info") {
@@ -434,6 +437,7 @@ async function main(event) {
       name,
       isAdmin: admin,
       appLink: process.env.APP_LINK || "",
+      testing: !!TM.on,
       sg: p.sg || 0,
       bd: p.bd || "",
       notif: p.notif === 1 || p.notif === -1 ? p.notif : 0,
@@ -742,6 +746,24 @@ async function main(event) {
     items.unshift({ ts: Date.now(), text, author: user.id });
     await st.setJSON(UPD_KEY, items.slice(0, 10));
     return out(200, { ok: true, items: items.slice(0, 10) });
+  }
+
+  /* ---------- режим тестирования ---------- */
+  if (body.action === "test_get") {
+    if (!admin) return out(403, { error: "Только для админа" });
+    return out(200, { on: !!TM.on, owner, chat: owner ? String(TM.chat || "") : "" });
+  }
+  if (body.action === "test_set") {
+    if (!admin) return out(403, { error: "Только для админа" });
+    const t = await loadTest(st);
+    if (typeof body.on === "boolean") t.on = body.on;
+    if (owner && typeof body.chat === "string") {
+      const c = body.chat.trim();
+      if (c && !/^-?\d{5,20}$/.test(c)) return out(400, { error: "ID чата — число, обычно с минусом, например -1001234567890" });
+      t.chat = c;
+    }
+    await saveTest(st, t);
+    return out(200, { on: !!t.on, owner, chat: owner ? String(t.chat || "") : "" });
   }
 
   /* ---------- личная рассылка (только в лс) ---------- */

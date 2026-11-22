@@ -22,7 +22,7 @@ const say = (chat_id, text, extra = {}) => tg("sendMessage", { chat_id, text, ..
 
 async function isMember(uid) {
   if (isAdmin(uid)) return true;
-  const j = await tg("getChatMember", { chat_id: process.env.CHAT_ID, user_id: uid });
+  const j = await tg("getChatMember", { chat_id: realChat(), user_id: uid });
   const s = j.result?.status;
   return ["creator", "administrator", "member"].includes(s) || (s === "restricted" && j.result.is_member);
 }
@@ -145,6 +145,7 @@ async function groupSticker(st, msg) {
   });
 }
 
+const { applyTestMode, realChat } = require("../../lib/testmode");
 exports.handler = async (event) => {
   if (event.headers["x-telegram-bot-api-secret-token"] !== process.env.SECRET) {
     return { statusCode: 403, body: "no" };
@@ -153,6 +154,7 @@ exports.handler = async (event) => {
   const msg = JSON.parse(event.body).message;
   if (!msg) return ok;
   const st = store(event);
+  await applyTestMode(st);
 
   try {
     if (msg.chat.type === "private") await privateChat(st, msg);

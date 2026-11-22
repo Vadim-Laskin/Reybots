@@ -3,7 +3,9 @@ const {
 } = require("../../lib/natk");
 const { send, sendDay } = require("../../lib/render");
 
+const { applyTestMode } = require("../../lib/testmode");
 exports.handler = async (event) => {
+  await applyTestMode(store(event));
   let s;
   try {
     s = await getSchedule(event);

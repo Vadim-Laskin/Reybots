@@ -4,8 +4,10 @@ const { loadHw, saveHw, postHomework, postIfLessonTomorrow } = require("../../li
 // каждый день в 18:01 по Новосибирску:
 // домашка «по паре» уходит в группу, если завтра есть этот предмет; иначе ждёт следующего дня.
 // Старые записи с конкретной датой уходят в свой день, как раньше.
+const { applyTestMode } = require("../../lib/testmode");
 exports.handler = async (event) => {
   const st = store(event);
+  await applyTestMode(st);
   const all = await loadHw(st);
   const n = nskInfo();
   let changed = false;

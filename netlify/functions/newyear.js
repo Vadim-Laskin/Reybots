@@ -1,8 +1,10 @@
+const { applyTestMode } = require("../../lib/testmode");
 const { store } = require("../../lib/natk");
 
 // 1 января в 00:00 по Новосибирску = 31 декабря 17:00 UTC
 exports.handler = async (event) => {
   const st = store(event);
+  await applyTestMode(st);
   // +7 часов (НСК) и ещё 30 минут запаса: год считается верно, даже если запуск чуть раньше или позже
   const year = new Date(Date.now() + 7.5 * 3600e3).getUTCFullYear();
   const key = `newyear-${year}`;

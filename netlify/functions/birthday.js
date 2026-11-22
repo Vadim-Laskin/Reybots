@@ -1,5 +1,6 @@
 const { store, nskInfo } = require("../../lib/natk");
 const { isMember } = require("../../lib/sounds");
+const { applyTestMode } = require("../../lib/testmode");
 const HOLIDAYS = require("../../lib/holidays");
 
 const H = { "Content-Type": "application/json" };
@@ -37,6 +38,7 @@ async function holiday(st, today) {
 
 exports.handler = async (event) => {
   const st = store(event);
+  await applyTestMode(st);
   const today = nskInfo().date; // YYYY-MM-DD
   const year = Number(today.slice(0, 4));
   try {

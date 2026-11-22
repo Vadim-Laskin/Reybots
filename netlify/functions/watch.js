@@ -3,6 +3,7 @@ const {
 } = require("../../lib/natk");
 const { sendDay } = require("../../lib/render");
 
+const { applyTestMode } = require("../../lib/testmode");
 exports.handler = async (event) => {
   let s;
   try {
@@ -17,6 +18,7 @@ exports.handler = async (event) => {
   }
 
   const st = store(event);
+  await applyTestMode(st);
   let prev = null;
   try {
     prev = await st.get("watch", { type: "json" });

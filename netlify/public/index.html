@@ -33,6 +33,15 @@ main{padding:0 16px}
 .pair.cancel{background:var(--redbg)}
 .pair.past{opacity:.4}
 .entry.other{opacity:.4}
+.bdw{position:fixed;left:12px;right:12px;bottom:calc(var(--bot,24px) + 8px);z-index:85;background:var(--card);border:1.5px solid var(--line);border-radius:20px;padding:14px 14px 14px 16px;box-shadow:0 10px 30px rgba(0,0,0,.35);transform:translateY(calc(100% + 60px));opacity:0;transition:transform .42s cubic-bezier(.2,.85,.25,1),opacity .3s ease}
+.bdw.open{transform:none;opacity:1}
+.bdw[hidden]{display:none}
+.bdw b{display:block;font-size:16px;margin-bottom:4px;padding-right:26px}
+.bdw span{display:block;font-size:13.5px;color:var(--muted);line-height:1.4}
+.bdw .row{display:flex;gap:8px;margin-top:12px}
+.bdw .row button{flex:1;border:0;border-radius:13px;padding:12px 8px;font:inherit;font-weight:700;background:var(--accent);color:#fff}
+.bdw .row button.g{background:var(--line);color:var(--text)}
+.bdw .x{position:absolute;top:8px;right:8px;width:30px;height:30px;border:0;border-radius:50%;background:transparent;color:var(--muted);font-size:20px;line-height:1;padding:0}
 .ntw{position:fixed;inset:0;z-index:90}
 .ntw[hidden]{display:none}
 .ntb{position:absolute;inset:0;background:rgba(0,0,0,.55);opacity:0;transition:opacity .3s ease}
@@ -78,6 +87,12 @@ main{padding:0 16px}
 </header>
 <main id="list"><div id="msg">Загрузка…</div></main>
 
+<div class="bdw" id="bdn" hidden>
+  <button class="x" id="bdn-x" aria-label="Скрыть">×</button>
+  <b>Укажи дату рождения 🎂</b>
+  <span>Добавь её в личном кабинете, и бот поздравит тебя в группе в твой день.</span>
+  <div class="row"><button id="bdn-go">В кабинет</button><button class="g" id="bdn-hide">Скрыть</button></div>
+</div>
 <div class="ntw" id="nt" hidden>
   <div class="ntb" id="nt-bg"></div>
   <div class="nts">
@@ -136,12 +151,38 @@ function ntShow(on) {
 }
 document.body.append($("#nt"));
 $("#nt-bg").onclick = () => { ntSkip = true; renderNt(); };
-function renderNt() { const on = NOTIF === 0 && !ntHidden(); if (on) setTimeout(() => ntShow(true), 500); else ntShow(false); }
+let BDV = null; // дата рождения из кабинета: "" — не указана, null — ещё не знаем
+const BDN_KEY = "bd-hide", BDN_DAYS = 7;
+const bdnHidden = () => { try { return Date.now() - Number(localStorage.getItem(BDN_KEY) || 0) < BDN_DAYS * 864e5; } catch { return false; } };
+let bdnSkip = false;
+function bdnShow(on) {
+  const w = $("#bdn");
+  if (on) {
+    if (!w.hidden) return;
+    w.hidden = false;
+    requestAnimationFrame(() => requestAnimationFrame(() => w.classList.add("open")));
+  } else {
+    if (w.hidden) return;
+    w.classList.remove("open");
+    setTimeout(() => { if (!w.classList.contains("open")) w.hidden = true; }, 450);
+  }
+}
+// не показываем, пока на экране вопрос про уведомления
+function renderBdn() {
+  const on = BDV === "" && !bdnHidden() && !bdnSkip && (NOTIF !== 0 || ntHidden());
+  if (on) setTimeout(() => { if (BDV === "" && !bdnHidden() && !bdnSkip) bdnShow(true); }, 900); else bdnShow(false);
+}
+function bdnClose() { bdnSkip = true; try { localStorage.setItem(BDN_KEY, String(Date.now())); } catch {} bdnShow(false); }
+$("#bdn-x").onclick = bdnClose;
+$("#bdn-hide").onclick = bdnClose;
+$("#bdn-go").onclick = () => { bdnShow(false); setTimeout(() => location.replace("/cabinet/"), 300); };
+function renderNt() {
+  renderBdn(); const on = NOTIF === 0 && !ntHidden(); if (on) setTimeout(() => ntShow(true), 500); else ntShow(false); }
 async function ntSet(v) {
   try {
     const r = await fetch("/.netlify/functions/cabinet", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "notif_set", value: v, initData: tg.initData }) });
     if (!r.ok) throw new Error("HTTP " + r.status);
-    NOTIF = v; renderNt();
+    NOTIF = v; renderNt(); setTimeout(renderBdn, 500);
   } catch (e) { alert("Не получилось сохранить: " + e.message); }
 }
 $("#nt-yes").onclick = () => ntSet(1);
@@ -155,6 +196,7 @@ async function loadMySg() {
     if (!r.ok) return;
     const j = await r.json();
     NOTIF = Number(j.notif) || 0;
+    BDV = j.bd || "";
     renderNt();
     const g = Number(j.sg) || 0;
     if (g !== MYSG) { MYSG = g; if (DATA) build(); }

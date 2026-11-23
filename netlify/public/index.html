@@ -70,6 +70,8 @@ main{padding:0 16px}
 .r{font-size:14px;margin-top:2px}
 .badge{display:inline-block;margin-top:10px;font-size:13px;font-weight:700;color:var(--green)}
 .badge.soft{color:var(--accent)}
+.badge.brk{color:var(--amber,#f5b942)}
+.pair.brk{outline:2px solid var(--amber,#f5b942)}
 .st .badge{display:block}
 .bar{height:4px;border-radius:2px;background:var(--line);margin-top:6px}
 .bar i{display:block;height:100%;background:var(--green);border-radius:2px}
@@ -276,10 +278,11 @@ if (DATA.stale) {
   onScroll();
 }
 
+const hm = (m) => String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
 function tick() {
   if (!DATA) return;
   const now = nskNow();
-  let nextMarked = false;
+  let nextMarked = false, prevEnd = -1;
   document.querySelectorAll(".pair").forEach((c) => {
     const st = c.querySelector(".st");
     st.replaceChildren();
@@ -295,13 +298,21 @@ function tick() {
       const o = ovOf(date, num, g);
       if (o) notes.push(`${g} подгр.: ${o.t === "cancel" ? "пару отменили" : "отпустили до " + o.end}`);
     });
+    const e0 = toMin(c.dataset.end);
     const state = c.dataset.other ? "past" :
       date < now.date ? "past" : date > now.date ? "future" :
       now.min >= e ? "past" : now.min >= s ? "now" : "future";
     if (state === "past") c.classList.add("past");
     else if (state === "now" && !cancel) {
       c.classList.add("now");
-      st.append(el("div", "badge", `Идёт сейчас · осталось ${e - now.min} мин`));
+      // пара в 100 минут: 45 + перерыв 10 + 45
+      const b1 = s + 45, b2 = s + 55;
+      if (e === e0 && e - s === 100 && now.min >= b1 && now.min < b2) {
+        c.classList.add("brk");
+        st.append(el("div", "badge brk", `Перерыв · ещё ${b2 - now.min} мин, вторая половина в ${hm(b2)}`));
+      } else if (e === e0 && e - s === 100) {
+        st.append(el("div", "badge", now.min < b1 ? `Идёт сейчас · до перерыва ${b1 - now.min} мин` : `Идёт сейчас · вторая половина, осталось ${e - now.min} мин`));
+      } else st.append(el("div", "badge", `Идёт сейчас · осталось ${e - now.min} мин`));
       const bar = el("div", "bar"), i = el("i");
       i.style.width = Math.round(((now.min - s) / (e - s)) * 100) + "%";
       bar.append(i);
@@ -309,8 +320,10 @@ function tick() {
     } else if (state === "future" && !cancel && date === now.date && !nextMarked) {
       nextMarked = true;
       c.classList.add("next");
-      st.append(el("div", "badge soft", `Следующая · через ${fmt(s - now.min)}`));
+      if (prevEnd >= 0 && prevEnd <= now.min && s - prevEnd <= 40) st.append(el("div", "badge brk", `Перерыв · ещё ${s - now.min} мин, пара в ${hm(s)}`));
+      else st.append(el("div", "badge soft", `Следующая · через ${fmt(s - now.min)}`));
     }
+    if (date === now.date && !c.dataset.other && !cancel && e <= now.min) prevEnd = Math.max(prevEnd, e);
     // пометки админа показываем у всех непрошедших пар
     if (state !== "past") notes.forEach((t) => st.append(el("div", "badge soft", t)));
   });

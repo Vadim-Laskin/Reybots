@@ -272,6 +272,23 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
 .m-title{font-size:20px;font-weight:700}
 .m-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
 .m-btns .btn{margin-top:0}
+/* ---------- анимации ---------- */
+@keyframes scrIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes popIn{from{opacity:0;transform:translateY(-8px) scale(.97)}to{opacity:1;transform:none}}
+@keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.screen:not([hidden]):not(#vchat){animation:scrIn .28s cubic-bezier(.2,.8,.25,1)}
+#err,#ok{animation:popIn .25s cubic-bezier(.2,.8,.25,1)}
+#upd-banner:not([hidden]){animation:popIn .35s cubic-bezier(.2,.85,.25,1)}
+#home>.item,#home .item{animation:rise .4s cubic-bezier(.2,.8,.25,1) backwards}
+#home .item:nth-of-type(1){animation-delay:.04s}#home .item:nth-of-type(2){animation-delay:.09s}#home .item:nth-of-type(3){animation-delay:.14s}#home .item:nth-of-type(4){animation-delay:.19s}#home .item:nth-of-type(5){animation-delay:.24s}#home .item:nth-of-type(6){animation-delay:.29s}
+#now:not([hidden]),.bdn:not([hidden]){animation:rise .4s cubic-bezier(.2,.8,.25,1)}
+.tstb:not([hidden]){animation:popIn .35s cubic-bezier(.2,.85,.25,1)}
+.item,.frow,.btn,.card,.chips button,.link,.v-mic{transition:transform .15s ease,background-color .2s,opacity .2s}
+.item:active,.frow:active,.btn:active,.card:active,.chips button:active{transform:scale(.97)}
+.dmd>div{animation:fadeIn .25s ease}
+.ai-msgs>*{animation:rise .25s ease}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>

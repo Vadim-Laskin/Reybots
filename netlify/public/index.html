@@ -76,6 +76,15 @@ main{padding:0 16px}
 #msg{padding:40px 16px;text-align:center;color:var(--muted)}
 #warn{display:none;align-items:flex-start;gap:8px;margin-top:6px;padding:10px 12px;border-radius:12px;background:var(--redbg);color:var(--red);font-size:13px;line-height:1.35}
 #warn svg{flex:none;width:18px;height:18px}
+/* ---------- анимации ---------- */
+@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes spinr{to{transform:rotate(360deg)}}
+body.first #list>*{animation:rise .4s cubic-bezier(.2,.8,.25,1) backwards}
+body.first #list>*:nth-child(2){animation-delay:.05s}body.first #list>*:nth-child(3){animation-delay:.1s}body.first #list>*:nth-child(4){animation-delay:.15s}body.first #list>*:nth-child(5){animation-delay:.2s}
+#refresh,#lk{transition:transform .15s ease,background-color .2s}
+#refresh:active,#lk:active{transform:scale(.92)}
+#refresh.spin svg{animation:spinr .8s linear infinite}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
@@ -85,6 +94,7 @@ main{padding:0 16px}
   <div id="warn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4M12 17h.01"/></svg><span id="warn-t"></span></div>
   <div id="tabs"></div>
 </header>
+<script>document.body.classList.add("first");setTimeout(function(){document.body.classList.remove("first")},1500)</script>
 <main id="list"><div id="msg">Загрузка…</div></main>
 
 <div class="bdw" id="bdn" hidden>

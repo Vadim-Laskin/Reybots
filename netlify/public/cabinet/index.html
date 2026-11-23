@@ -181,6 +181,39 @@ input[type=file]{display:none}
 .tstb{display:flex;gap:10px;align-items:flex-start;background:rgba(255,170,0,.14);border:1px solid rgba(255,170,0,.45);border-radius:14px;padding:11px 13px;margin:0 0 14px;font-size:14px;line-height:1.35}
 .tstb[hidden]{display:none}
 .tstb .i{flex:none;margin-top:1px}
+.item{position:relative}
+.ndot{position:absolute;top:14px;right:14px;width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px rgba(139,123,255,.2);animation:lockpulse 2.2s ease-in-out infinite}
+.ndot[hidden]{display:none}
+#news-new{margin:0 0 14px}
+#ned-t{margin-top:6px}
+.ncard{display:block;width:100%;text-align:left;background:var(--card);border:0;border-radius:18px;margin-bottom:12px;overflow:hidden;color:inherit;font:inherit;padding:0}
+.ncard img{display:block;width:100%;max-height:170px;object-fit:cover}
+.ncard .nc{padding:14px 16px 15px}
+.ncard b{display:block;font-size:17px;line-height:1.25}
+.ncard .nd{font-size:12px;color:var(--muted);margin:3px 0 7px}
+.ncard p{margin:0;font-size:14px;line-height:1.4;color:var(--muted);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.ncard .more{display:inline-block;margin-top:9px;font-size:13.5px;font-weight:700;color:var(--accent)}
+.ncard.fresh .nd::after{content:" · новое";color:var(--accent);font-weight:700}
+.nbody{font-size:16px;line-height:1.5;word-wrap:break-word;overflow-wrap:anywhere}
+.nbody img{display:block;max-width:100%;height:auto;border-radius:14px;margin:10px 0}
+.nbody h3{font-size:19px;margin:14px 0 6px}
+.nbody ul,.nbody ol{padding-left:22px;margin:8px 0}
+.nbody blockquote{margin:10px 0;padding:4px 12px;border-left:3px solid var(--accent);color:var(--muted)}
+.nbody span[style*="background"]{padding:1px 4px;border-radius:5px;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.nadm{display:flex;gap:10px;margin-top:22px}
+.nadm .btn{margin-top:0}
+.ntool{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 8px}
+.ntool button{border:0;background:var(--card);color:inherit;border-radius:10px;padding:8px 11px;font:inherit;font-size:14px;display:inline-flex;align-items:center;gap:6px;min-height:36px}
+.ntool button:active{transform:scale(.94)}
+.ntool .sw,.npal i{width:14px;height:14px;border-radius:50%;display:inline-block;border:1px solid rgba(128,128,128,.4)}
+.ntool .i{width:16px;height:16px}
+.npal{display:flex;flex-wrap:wrap;gap:10px;padding:10px 12px;background:var(--card);border-radius:12px;margin-bottom:8px;animation:popIn .2s ease}
+.npal[hidden]{display:none}
+.npal button{border:0;padding:0;width:30px;height:30px;border-radius:50%;background:transparent;display:flex;align-items:center;justify-content:center}
+.npal i{width:26px;height:26px}
+.nedit{min-height:220px;background:var(--card);border-radius:14px;padding:12px 14px;outline:none;margin-bottom:6px}
+.nedit:empty::before{content:attr(data-ph);color:var(--muted)}
+.nedit img{opacity:.95}
 .dmf{display:grid;gap:10px;margin:4px 0 12px}
 .dmf label{display:block;font-size:12px;color:var(--muted);font-weight:600}
 .dmf select{display:block;width:100%;margin-top:4px;padding:11px 12px;border:0;border-radius:12px;background:var(--card);color:var(--text,inherit);font:inherit;font-size:15px;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none' stroke='%23999' stroke-width='2'%3E%3Cpath d='M1 1l5 5 5-5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center}
@@ -332,6 +365,7 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
 
   <div class="menu">
     <button class="item" id="go-schedule"><div class="ic"><span class="i" data-i="calendar"></span></div><div><b>Расписание</b><span>Открыть приложение с расписанием</span></div></button>
+    <button class="item" id="go-news"><div class="ic"><span class="i" data-i="news"></span></div><div><b>Новости</b><span>Что нового в боте</span></div><i class="ndot" id="news-dot" hidden></i></button>
     <button class="item" id="go-bells"><div class="ic"><span class="i" data-i="bell"></span></div><div><b>Расписание звонков</b><span>Время начала и конца пар</span></div></button>
     <button class="item" id="go-mine"><div class="ic"><span class="i" data-i="headphones"></span></div><div><b>Мои звуки</b><span>Звуки на стикеры, которые добавил ты</span></div></button>
     <button class="item" id="go-ideas"><div class="ic"><span class="i" data-i="bulb"></span></div><div><b>Улучшения</b><span>Предложи идею для бота</span></div></button>
@@ -386,6 +420,50 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
   </div>
   <div class="chips" id="idea-chips"></div>
   <div id="idea-list"></div>
+</div>
+
+<div id="news" class="screen" hidden>
+  <button class="link" data-back><span class="i" data-i="back"></span>Назад</button>
+  <h1>Новости</h1>
+  <div class="hi">Что нового и что улучшили в боте</div>
+  <button class="btn" id="news-new" hidden><span class="i" data-i="plus"></span>Написать новость</button>
+  <div id="news-list"></div>
+</div>
+
+<div id="newsv" class="screen" hidden>
+  <button class="link" data-back><span class="i" data-i="back"></span>Назад</button>
+  <h1 id="nv-t"></h1>
+  <div class="muted" id="nv-d" style="margin:0 0 14px"></div>
+  <div class="nbody" id="nv-b"></div>
+  <div class="row nadm" id="nv-adm" hidden>
+    <button class="btn" id="nv-edit"><span class="i" data-i="pencil"></span>Изменить</button>
+    <button class="btn ghost" id="nv-del"><span class="i" data-i="trash"></span>Удалить</button>
+  </div>
+</div>
+
+<div id="ned" class="screen" hidden>
+  <button class="link" data-back><span class="i" data-i="back"></span>Назад</button>
+  <h1 id="ned-h">Новая новость</h1>
+  <input type="text" id="ned-t" maxlength="100" placeholder="Заголовок" autocomplete="off">
+  <textarea id="ned-s" maxlength="200" placeholder="Коротко для списка (необязательно, иначе возьмём начало текста)" style="margin-top:8px;min-height:60px"></textarea>
+  <div class="ntool" id="ned-tool">
+    <button data-c="bold" title="Жирный"><b>Ж</b></button>
+    <button data-c="semi" title="Полужирный"><span style="font-weight:600">Пж</span></button>
+    <button data-c="italic" title="Курсив"><i>К</i></button>
+    <button data-c="underline" title="Подчёркнутый"><u>П</u></button>
+    <button data-c="strike" title="Зачёркнутый"><s>З</s></button>
+    <button data-c="small" title="Мельче">А−</button>
+    <button data-c="big" title="Крупнее">А+</button>
+    <button data-c="color" title="Цвет текста"><span class="sw" style="background:#ff5c5c"></span>Цвет</button>
+    <button data-c="bg" title="Фон текста"><span class="sw" style="background:#ffd54a"></span>Фон</button>
+    <button data-c="list" title="Список">• Список</button>
+    <button data-c="img" title="Картинка"><span class="i" data-i="image"></span>Фото</button>
+    <button data-c="clear" title="Убрать форматирование">Сброс</button>
+  </div>
+  <div class="npal" id="ned-pal" hidden></div>
+  <div class="nbody nedit" id="ned-b" contenteditable="true" data-ph="Текст новости…"></div>
+  <input type="file" id="ned-file" accept="image/*" hidden>
+  <button class="btn" id="ned-save"><span class="i" data-i="send"></span>Опубликовать</button>
 </div>
 
 <div id="hwlist" class="screen" hidden>
@@ -723,6 +801,7 @@ const ICONS = {
   calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
   headphones: '<path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/>',
   shield: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/>',
+  news: '<path d="M4 4h13a2 2 0 0 1 2 2v14H6a2 2 0 0 1-2-2V4Z"/><path d="M19 8h1a1 1 0 0 1 1 1v9a2 2 0 0 1-2 2"/><path d="M8 8h7M8 12h7M8 16h4"/>',
   lock: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
   users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
   bulb: '<path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/>',
@@ -730,6 +809,7 @@ const ICONS = {
   alert: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
   send: '<path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>',
   plus: '<path d="M5 12h14M12 5v14"/>',
+  pencil: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
   play: '<polygon points="6 3 20 12 6 21 6 3" fill="currentColor"/>',
   pause: '<rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor"/><rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor"/>',
   trash: '<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/>',
@@ -836,7 +916,7 @@ async function togglePlay(id, btn) {
 
 /* ---------- навигация ---------- */
 // куда ведёт «Назад» с вложенных экранов (по умолчанию на главную)
-const PARENT = { hw: "hwlist", add: "mine", admin: "apanel", upd: "apanel", ovr: "apanel", hwadmin: "apanel", people: "apanel", users: "apanel", requests: "apanel" };
+const PARENT = { newsv: "news", ned: "news", news: "home", hw: "hwlist", add: "mine", admin: "apanel", upd: "apanel", ovr: "apanel", hwadmin: "apanel", people: "apanel", users: "apanel", requests: "apanel" };
 function show(id) {
   stopAudio();
   document.querySelectorAll(".screen").forEach((s) => (s.hidden = s.id !== id));
@@ -2588,6 +2668,156 @@ $("#upd-send").onclick = () => {
   });
 };
 
+/* ---------- новости ---------- */
+const NEWS_SEEN = "news-seen";
+const nsGet = () => { try { return Number(localStorage.getItem(NEWS_SEEN) || 0); } catch { return 0; } };
+const nsSet = (t) => { try { localStorage.setItem(NEWS_SEEN, String(t)); } catch {} };
+const nDate = (ts) => new Date(ts).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Novosibirsk" });
+function newsDot() { $("#news-dot").hidden = !(INFO?.news && INFO.news > nsGet()); }
+let NEWS = [], NCUR = null;
+async function openNews() {
+  $("#news-new").hidden = !INFO?.isAdmin;
+  show("news");
+  const box = $("#news-list");
+  if (!NEWS.length) box.replaceChildren(el("div", "muted", "Загружаю…"));
+  try { NEWS = (await api("news_list")).items; } catch (e) { return fail(e); }
+  const seen = nsGet();
+  box.replaceChildren();
+  if (!NEWS.length) box.append(el("div", "muted", "Пока новостей нет"));
+  NEWS.forEach((n, i) => {
+    const c = el("button", "ncard" + (n.ts > seen ? " fresh" : ""));
+    if (n.cover) { const im = document.createElement("img"); im.src = `/.netlify/functions/news-img?id=${n.cover}`; im.alt = ""; im.loading = "lazy"; c.append(im); }
+    const w = el("div", "nc");
+    w.append(el("b", null, n.title), el("div", "nd", nDate(n.ts)), el("p", null, n.summary), el("span", "more", "Читать полностью ›"));
+    c.append(w);
+    c.style.animation = `rise .4s ${Math.min(i, 6) * 0.05}s cubic-bezier(.2,.8,.25,1) backwards`;
+    c.onclick = () => openNewsItem(n.id);
+    box.append(c);
+  });
+  const top = NEWS.reduce((m, n) => Math.max(m, n.ts, n.upd || 0), 0);
+  if (top) { nsSet(top); if (INFO) INFO.news = top; newsDot(); }
+}
+async function openNewsItem(id) {
+  try {
+    NCUR = await api("news_get", { id });
+  } catch (e) { return fail(e); }
+  $("#nv-t").textContent = NCUR.title;
+  $("#nv-d").textContent = nDate(NCUR.ts) + (NCUR.upd ? " · изменено " + nDate(NCUR.upd) : "");
+  $("#nv-b").innerHTML = NCUR.body; // уже очищено на сервере
+  $("#nv-b").querySelectorAll("img").forEach((im) => (im.onclick = () => openImg(im.src)));
+  $("#nv-adm").hidden = !INFO?.isAdmin;
+  show("newsv");
+}
+$("#go-news").onclick = openNews;
+$("#news-new").onclick = () => openNewsEd(null);
+$("#nv-edit").onclick = () => openNewsEd(NCUR);
+$("#nv-del").onclick = () => ask("Удалить новость?", async () => {
+  try { await api("news_del", { id: NCUR.id }); NEWS = []; note("#ok", "Удалено", 2000); openNews(); } catch (e) { fail(e); }
+});
+
+/* редактор */
+const NED = { id: null, saved: null };
+const NPAL_TEXT = ["#ff5c5c", "#ff9f43", "#ffd54a", "#4cd97b", "#38c6e8", "#5b8cff", "#a07bff", "#ff7bc0", "#ffffff", "#8a8f9c", "#111111"];
+const NPAL_BG = ["#ffd54a", "#a8f0b5", "#a5e6ff", "#ffc2e2", "#d9c9ff", "#ffcfa3", "#ff9a9a", "#dfe3ea", "none"];
+function openNewsEd(n) {
+  NED.id = n ? n.id : null;
+  $("#ned-h").textContent = n ? "Изменить новость" : "Новая новость";
+  $("#ned-t").value = n ? n.title : "";
+  $("#ned-s").value = n ? n.summary || "" : "";
+  $("#ned-b").innerHTML = n ? n.body : "";
+  $("#ned-pal").hidden = true;
+  $("#ned-save").lastChild.textContent = n ? "Сохранить" : "Опубликовать";
+  show("ned");
+}
+let NSEL = null;
+const nedSave = () => { const s = getSelection(); if (s.rangeCount && $("#ned-b").contains(s.anchorNode)) NSEL = s.getRangeAt(0).cloneRange(); };
+const nedRestore = () => { $("#ned-b").focus(); if (NSEL) { const s = getSelection(); s.removeAllRanges(); s.addRange(NSEL); } };
+document.addEventListener("selectionchange", () => { if (!$("#ned").hidden) nedSave(); });
+function nedWrap(style) {
+  nedRestore();
+  const s = getSelection();
+  if (!s.rangeCount || s.isCollapsed) return note("#err", "Сначала выдели текст", 2200);
+  const r = s.getRangeAt(0), sp = document.createElement("span");
+  sp.style.cssText = style;
+  try { r.surroundContents(sp); }
+  catch { sp.append(r.extractContents()); r.insertNode(sp); }
+  s.removeAllRanges(); const nr = document.createRange(); nr.selectNodeContents(sp); s.addRange(nr); nedSave();
+}
+function nedCmd(cmd, val, css) {
+  nedRestore();
+  document.execCommand("styleWithCSS", false, !!css);
+  document.execCommand(cmd, false, val);
+  nedSave();
+}
+function nedPal(kind) {
+  const pal = $("#ned-pal");
+  if (!pal.hidden && pal.dataset.k === kind) { pal.hidden = true; return; }
+  pal.dataset.k = kind; pal.replaceChildren();
+  (kind === "color" ? NPAL_TEXT : NPAL_BG).forEach((c) => {
+    const bt = el("button"); const i = el("i");
+    i.style.background = c === "none" ? "linear-gradient(135deg,transparent 45%,#f55 46%,#f55 54%,transparent 55%)" : c;
+    bt.append(i);
+    bt.onmousedown = (e) => e.preventDefault();
+    bt.onclick = () => {
+      if (kind === "color") nedCmd("foreColor", c, true);
+      else if (c === "none") nedCmd("hiliteColor", "transparent", true);
+      else nedCmd("hiliteColor", c, true);
+      pal.hidden = true;
+    };
+    pal.append(bt);
+  });
+  pal.hidden = false;
+}
+async function nedImage(file) {
+  if (!file) return;
+  try {
+    const bmp = await createImageBitmap(file);
+    const k = Math.min(1, 1280 / Math.max(bmp.width, bmp.height));
+    const cv = document.createElement("canvas");
+    cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
+    cv.getContext("2d").drawImage(bmp, 0, 0, cv.width, cv.height);
+    const data = cv.toDataURL("image/jpeg", 0.82).split(",")[1];
+    note("#ok", "Загружаю картинку…", 1500);
+    const j = await api("news_img", { data });
+    nedRestore();
+    document.execCommand("insertHTML", false, `<img src="${j.url}"><br>`);
+    nedSave();
+  } catch (e) { fail(e); }
+}
+document.querySelectorAll("#ned-tool button").forEach((bt) => {
+  bt.onmousedown = (e) => e.preventDefault(); // не терять выделение
+  bt.onclick = () => {
+    const c = bt.dataset.c;
+    if (c === "bold") nedCmd("bold");
+    else if (c === "semi") nedWrap("font-weight:600");
+    else if (c === "italic") nedCmd("italic");
+    else if (c === "underline") nedCmd("underline");
+    else if (c === "strike") nedCmd("strikeThrough");
+    else if (c === "small") nedWrap("font-size:.85em");
+    else if (c === "big") nedWrap("font-size:1.25em");
+    else if (c === "color" || c === "bg") nedPal(c);
+    else if (c === "list") nedCmd("insertUnorderedList");
+    else if (c === "clear") nedCmd("removeFormat");
+    else if (c === "img") $("#ned-file").click();
+  };
+});
+$("#ned-file").onchange = (e) => { nedImage(e.target.files[0]); e.target.value = ""; };
+$("#ned-b").addEventListener("paste", (e) => { // вставка без чужого оформления
+  e.preventDefault();
+  document.execCommand("insertText", false, (e.clipboardData || window.clipboardData).getData("text/plain"));
+});
+$("#ned-save").onclick = async () => {
+  const bt = $("#ned-save");
+  bt.disabled = true;
+  try {
+    await api("news_save", { id: NED.id, title: $("#ned-t").value, summary: $("#ned-s").value, body: $("#ned-b").innerHTML });
+    NEWS = [];
+    note("#ok", NED.id ? "Сохранено" : "Опубликовано", 2200);
+    await openNews();
+  } catch (e) { fail(e); }
+  bt.disabled = false;
+};
+
 /* ---------- тестирование ---------- */
 let TST = { on: false, owner: false, chat: "" };
 function renderTst() {
@@ -2906,6 +3136,7 @@ api("info")
     INFO = j;
     updateHi();
     $("#tstb").hidden = !j.testing;
+    newsDot();
     $("#go-apanel").hidden = !j.isAdmin;
     $("#cat").hidden = !j.ai;
     $("#ai-voice").hidden = !j.ai;
@@ -2930,7 +3161,7 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) { lo
 /* ---------- живое обновление: данные и новая версия без ручной перезагрузки ---------- */
 const curScreen = () => document.querySelector(".screen:not([hidden])")?.id;
 // не трогаем экран, пока человек что-то вводит или смотрит диалог
-const userBusy = () => !$("#aichat").hidden || !$("#imgv").hidden || !$("#modal").hidden || ["add", "hw", "upd"].includes(curScreen());
+const userBusy = () => !$("#aichat").hidden || !$("#imgv").hidden || !$("#modal").hidden || ["add", "hw", "upd", "ned"].includes(curScreen());
 let liveAt = 0, liveBusy = false;
 async function liveRefresh(force) {
   if (document.hidden || liveBusy || !INFO) return;

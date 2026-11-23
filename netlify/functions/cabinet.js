@@ -344,6 +344,89 @@ const ideaView = (i, uid) => ({
   ts: i.ts,
 });
 
+
+/* ---------- новости ---------- */
+const NEWS_IMG_RE = /^\/\.netlify\/functions\/news-img\?id=([a-f0-9]{16})$/;
+const NEWS_OK_TAGS = new Set(["b", "strong", "i", "em", "u", "s", "strike", "br", "p", "div", "h3", "ul", "ol", "li", "span", "blockquote", "img"]);
+const NEWS_VOID = new Set(["br", "img"]);
+const NEWS_COLOR = /^(#[0-9a-f]{3,8}|rgba?\(\s*\d{1,3}\s*(,\s*[\d.]+\s*){2,3}\)|[a-z]{3,20}|transparent)$/i;
+function newsStyle(raw) {
+  const keep = [];
+  for (const part of String(raw || "").split(";")) {
+    const i = part.indexOf(":");
+    if (i < 0) continue;
+    const k = part.slice(0, i).trim().toLowerCase();
+    const v = part.slice(i + 1).trim().toLowerCase();
+    if ((k === "color" || k === "background-color") && NEWS_COLOR.test(v)) keep.push(`${k}:${v}`);
+    else if (k === "font-weight" && /^(normal|bold|[1-9]00)$/.test(v)) keep.push(`${k}:${v}`);
+    else if (k === "font-style" && /^(normal|italic)$/.test(v)) keep.push(`${k}:${v}`);
+    else if (k === "text-decoration" && /^(none|underline|line-through)( (underline|line-through))?$/.test(v)) keep.push(`${k}:${v}`);
+    else if (k === "font-size" && /^\d{1,2}(\.\d{1,2})?(px|em|rem|%)$/.test(v)) keep.push(`${k}:${v}`);
+    else if (k === "text-align" && /^(left|center|right)$/.test(v)) keep.push(`${k}:${v}`);
+  }
+  return keep.join(";");
+}
+// чистим HTML из редактора: только безопасные теги и несколько стилей, картинки только свои
+function sanNews(html) {
+  html = String(html || "").slice(0, 80000);
+  const re = /<(\/?)([a-zA-Z][a-zA-Z0-9]*)((?:"[^"]*"|'[^']*'|[^>"'])*)>|<!--[\s\S]*?-->|([^<]+)|</g;
+  const stack = [];
+  let o = "", m;
+  while ((m = re.exec(html))) {
+    if (m[4] !== undefined) {
+      o += m[4].replace(/&(?!(amp|lt|gt|nbsp|quot|#39);)/g, "&amp;").replace(/>/g, "&gt;");
+    } else if (m[2]) {
+      const tag = m[2].toLowerCase();
+      if (!NEWS_OK_TAGS.has(tag)) continue;
+      if (m[1]) {
+        const at = stack.lastIndexOf(tag);
+        if (at < 0) continue;
+        while (stack.length > at) o += `</${stack.pop()}>`;
+        continue;
+      }
+      const attrs = m[3] || "";
+      if (tag === "img") {
+        const s = /\ssrc\s*=\s*(?:"([^"]*)"|'([^']*)')/i.exec(attrs);
+        const src = s ? s[1] || s[2] || "" : "";
+        if (NEWS_IMG_RE.test(src)) o += `<img src="${src}" loading="lazy" alt="">`;
+        continue;
+      }
+      let st = "";
+      if (["span", "p", "div", "li", "h3", "blockquote"].includes(tag)) {
+        const s = /\sstyle\s*=\s*(?:"([^"]*)"|'([^']*)')/i.exec(attrs);
+        if (s) st = newsStyle(s[1] || s[2]);
+      }
+      o += `<${tag}${st ? ` style="${st}"` : ""}>`;
+      if (!NEWS_VOID.has(tag)) stack.push(tag);
+    } else if (m[0] === "<") o += "&lt;";
+  }
+  while (stack.length) o += `</${stack.pop()}>`;
+  return o;
+}
+const newsPlain = (html) =>
+  String(html || "")
+    .replace(/<(br|\/p|\/div|\/li|\/h3|\/blockquote)[^>]*>/gi, " ")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&")
+    .replace(/\s+/g, " ").trim();
+const newsImgIds = (html) => [...String(html || "").matchAll(/news-img\?id=([a-f0-9]{16})/g)].map((x) => x[1]);
+async function loadNews(st) {
+  try {
+    return (await st.get("news", { type: "json" })) || {};
+  } catch (e) {
+    console.log("news read failed:", e.message);
+    return {};
+  }
+}
+const newsCard = (n) => ({
+  id: n.id,
+  title: n.title,
+  summary: n.summary || newsPlain(n.body).slice(0, 160),
+  cover: newsImgIds(n.body)[0] || "",
+  ts: n.ts,
+  upd: n.upd || 0,
+});
+
 async function getPerson(st, id) {
   try {
     return await st.get(personKey(id), { type: "json" });
@@ -450,6 +533,7 @@ async function main(event) {
       isAdmin: admin,
       appLink: process.env.APP_LINK || "",
       testing: !!TM.on,
+      news: Object.values(await loadNews(st)).reduce((m, n) => Math.max(m, n.ts || 0, n.upd || 0), 0),
       sg: p.sg || 0,
       bd: p.bd || "",
       notif: p.notif === 1 || p.notif === -1 ? p.notif : 0,
@@ -758,6 +842,61 @@ async function main(event) {
     items.unshift({ ts: Date.now(), text, author: user.id });
     await st.setJSON(UPD_KEY, items.slice(0, 10));
     return out(200, { ok: true, items: items.slice(0, 10) });
+  }
+
+  /* ---------- новости ---------- */
+  if (body.action === "news_list") {
+    const all = await loadNews(st);
+    return out(200, { items: Object.values(all).sort((a, b) => b.ts - a.ts).map(newsCard) });
+  }
+  if (body.action === "news_get") {
+    const n = (await loadNews(st))[String(body.id || "")];
+    if (!n) return out(404, { error: "Новость не найдена" });
+    return out(200, { id: n.id, title: n.title, summary: n.summary || "", body: n.body, ts: n.ts, upd: n.upd || 0 });
+  }
+  if (body.action === "news_save") {
+    if (!admin) return out(403, { error: "Только для админа" });
+    const title = String(body.title || "").replace(/\s+/g, " ").trim();
+    if (!title) return out(400, { error: "Напиши заголовок" });
+    if (title.length > 100) return out(400, { error: "Заголовок слишком длинный, максимум 100 символов" });
+    const summary = String(body.summary || "").replace(/\s+/g, " ").trim().slice(0, 200);
+    const html = sanNews(body.body);
+    if (!newsPlain(html) && !newsImgIds(html).length) return out(400, { error: "Напиши текст новости" });
+    const all = await loadNews(st);
+    const old = all[String(body.id || "")];
+    const id = old ? old.id : Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    all[id] = { id, title, summary, body: html, ts: old ? old.ts : Date.now(), upd: old ? Date.now() : 0, author: user.id };
+    await st.setJSON("news", all);
+    // картинки, которые убрали из текста, удаляем
+    if (old) {
+      const keep = new Set(newsImgIds(html));
+      for (const x of newsImgIds(old.body)) if (!keep.has(x)) await st.delete("newsimg-" + x).catch(() => {});
+    }
+    return out(200, { id });
+  }
+  if (body.action === "news_del") {
+    if (!admin) return out(403, { error: "Только для админа" });
+    const all = await loadNews(st);
+    const n = all[String(body.id || "")];
+    if (!n) return out(404, { error: "Новость не найдена" });
+    delete all[n.id];
+    await st.setJSON("news", all);
+    for (const x of newsImgIds(n.body)) await st.delete("newsimg-" + x).catch(() => {});
+    return out(200, { ok: true });
+  }
+  if (body.action === "news_img") {
+    if (!admin) return out(403, { error: "Только для админа" });
+    let buf;
+    try {
+      buf = Buffer.from(String(body.data || ""), "base64");
+    } catch {
+      return out(400, { error: "Плохая картинка" });
+    }
+    if (buf.length < 100 || buf.length > 3.5 * 1024 * 1024) return out(400, { error: "Картинка слишком большая (до 3 МБ)" });
+    if (!(buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff)) return out(400, { error: "Нужен JPEG" });
+    const id = require("crypto").randomBytes(8).toString("hex");
+    await st.set("newsimg-" + id, buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.length));
+    return out(200, { url: `/.netlify/functions/news-img?id=${id}` });
   }
 
   /* ---------- режим тестирования ---------- */

@@ -314,12 +314,12 @@ const STATUS = {
 const adminList = () =>
   (process.env.ADMIN_IDS || "").split(",").map((s) => s.trim()).filter(Boolean);
 
-async function dm(chat, text) {
+async function dm(chat, text, extra = {}) {
   try {
     await fetch(tgUrl("sendMessage"), {
       method: "POST",
       headers: H,
-      body: JSON.stringify({ chat_id: chat, text }),
+      body: JSON.stringify({ chat_id: chat, text, ...extra }),
     });
   } catch (e) {
     console.log("dm failed:", e.message);
@@ -588,13 +588,13 @@ async function main(event) {
         const [yy, mm, dd] = date.split("-");
         const when = date === nw.date ? "сегодня" : "завтра";
         const who = sg ? `${sg} подгруппа: ` : "";
-        const what = t === "cancel" ? "пару отменили" : `пару отпускают раньше, до ${list[list.length - 1].end}`;
-        const text = `📢 Изменение в расписании (${when}, ${dd}.${mm})\n${who}${num} пара — ${what}.`;
+        const what = t === "cancel" ? "пару отменили" : `отпускают раньше, до ${list[list.length - 1].end}`;
+        const text = `<b>📢 Изменение в расписании (${when}, ${dd}.${mm})</b>\n\n${who}${num} пара — ${what}.`;
         const { blobs } = await st.list({ prefix: "person-" });
         const people = (await Promise.all(blobs.map((b) => st.get(b.key, { type: "json" }).catch(() => null)))).filter(Boolean);
         const to = people.filter((x) => x.notif === 1 && x.id !== user.id && (!sg || !x.sg || x.sg === sg));
         // не держим ответ админу дольше 4 с, даже если Telegram тормозит
-        await Promise.race([Promise.all(to.map((x) => dm(x.id, text))), new Promise((r) => setTimeout(r, 4000))]);
+        await Promise.race([Promise.all(to.map((x) => dm(x.id, text, { parse_mode: "HTML" }))), new Promise((r) => setTimeout(r, 4000))]);
       } catch (e) {
         console.log("notify failed:", e.message);
       }

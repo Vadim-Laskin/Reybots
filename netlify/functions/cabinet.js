@@ -419,6 +419,16 @@ async function main(event) {
   const st = store(event);
   const admin = isAdmin(user.id);
   const TM = await applyTestMode(st);
+  // кабинет только для участников группы (положительную проверку помним час, чтобы не дёргать Telegram на каждый запрос)
+  if (!admin) {
+    const pp = await getPerson(st, user.id);
+    let ok = !!pp && Date.now() - (pp.mok || 0) < 3600e3;
+    if (!ok) {
+      try { ok = await isMember(user.id); } catch (e) { console.log("member check failed:", e.message); ok = !!pp; }
+      if (ok && pp) { try { await st.setJSON(personKey(user.id), { ...pp, mok: Date.now() }); } catch {} }
+    }
+    if (!ok) return body.action === "info" ? out(200, { blocked: true }) : out(403, { error: "Кабинет доступен только в специальной группе", blocked: true });
+  }
   const owner = adminList()[0] === String(user.id);
 
   /* ---------- профиль и подгруппы ---------- */

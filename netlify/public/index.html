@@ -205,6 +205,7 @@ async function loadMySg() {
     const r = await fetch("/.netlify/functions/cabinet", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "info", initData: tg.initData }) });
     if (!r.ok) return;
     const j = await r.json();
+    if (j.blocked) return; // не из группы: расписание открыто, а про уведомления и ДР не спрашиваем
     NOTIF = Number(j.notif) || 0;
     BDV = j.bd || "";
     renderNt();

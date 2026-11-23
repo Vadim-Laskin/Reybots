@@ -82,6 +82,16 @@ h1{font-size:26px}
 .utbl .n{color:var(--muted)}
 .boot{position:fixed;inset:0;z-index:200;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;transition:opacity .35s ease}
 .boot.off{opacity:0;pointer-events:none}
+.lock{position:fixed;inset:0;z-index:300;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:0 32px;text-align:center;opacity:0;transition:opacity .45s ease}
+.lock[hidden]{display:none}
+.lock.on{opacity:1}
+.lock b{font-size:24px;transform:translateY(14px);opacity:0;transition:transform .5s .25s cubic-bezier(.2,.85,.25,1),opacity .5s .25s}
+.lock span.t{color:var(--muted);font-size:15px;line-height:1.45;max-width:300px;transform:translateY(14px);opacity:0;transition:transform .5s .35s cubic-bezier(.2,.85,.25,1),opacity .5s .35s}
+.lock.on b,.lock.on span.t{transform:none;opacity:1}
+.lock-i{width:92px;height:92px;border-radius:50%;background:rgba(139,123,255,.15);color:var(--accent);display:flex;align-items:center;justify-content:center;margin-bottom:10px;transform:scale(.4);opacity:0;transition:transform .6s cubic-bezier(.2,1.3,.3,1),opacity .4s}
+.lock.on .lock-i{transform:none;opacity:1;animation:lockpulse 2.6s ease-in-out .8s infinite}
+.lock-i .i{width:44px;height:44px}
+@keyframes lockpulse{0%,100%{box-shadow:0 0 0 0 rgba(139,123,255,.35)}50%{box-shadow:0 0 0 16px rgba(139,123,255,0)}}
 .boot i{width:44px;height:44px;border-radius:50%;border:4px solid var(--line);border-top-color:var(--accent);animation:bootspin .8s linear infinite}
 .boot span{color:var(--muted);font-size:15px}
 @keyframes bootspin{to{transform:rotate(360deg)}}
@@ -292,6 +302,11 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
 </style>
 </head>
 <body>
+<div id="lock" class="lock" hidden>
+  <div class="lock-i"><span class="i" data-i="lock"></span></div>
+  <b>Доступ закрыт</b>
+  <span class="t">Личный кабинет доступен только в специальной группе.</span>
+</div>
 <div class="boot" id="boot"><i></i><span>Загрузка…</span></div>
 <div id="err"></div>
 <div id="ok"></div>
@@ -706,6 +721,7 @@ const ICONS = {
   calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
   headphones: '<path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/>',
   shield: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/>',
+  lock: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
   users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
   bulb: '<path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/>',
   clipboard: '<rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/>',
@@ -751,6 +767,7 @@ async function api(action, extra = {}) {
     body: JSON.stringify({ action, initData: tg?.initData || "", ...extra }),
   });
   const j = await r.json().catch(() => ({}));
+  if (j.blocked) showLock();
   if (!r.ok) { const e = new Error(j.error || "HTTP " + r.status); e.status = r.status; throw e; }
   return j;
 }
@@ -2845,6 +2862,15 @@ $("#nt-no").onclick = () => { $("#nt-main").hidden = true; $("#nt-more").hidden 
 $("#nt-never").onclick = () => ntSet(-1);
 $("#nt-hide").onclick = () => { try { sessionStorage.setItem("nt-hide", "1"); } catch {} renderNt(); };
 
+function showLock() {
+  const l = $("#lock");
+  if (!l || !l.hidden) return;
+  const ic = l.querySelector(".lock-i .i");
+  if (ic && !ic.firstChild) setIcon(ic, "lock");
+  l.hidden = false;
+  requestAnimationFrame(() => requestAnimationFrame(() => l.classList.add("on")));
+  hideBoot();
+}
 function hideBoot() {
   const bt = $("#boot");
   if (!bt || bt.classList.contains("off")) return;
@@ -2854,6 +2880,7 @@ function hideBoot() {
 setTimeout(hideBoot, 15000);
 api("info")
   .then(async (j) => {
+    if (j.blocked) return;
     INFO = j;
     updateHi();
     $("#tstb").hidden = !j.testing;

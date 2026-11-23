@@ -33,7 +33,8 @@ async function privateChat(st, msg) {
 
   if (msg.text && msg.text.startsWith("/start")) {
     if (!(await isMember(uid))) {
-      return say(chat, "Бот работает только для группы РЭУ-26.256.\nЕсли хотите сделать такого же бота, нажмите кнопку ниже.", {
+      return say(chat, "🔒 <b>Бот работает только для группы РЭУ-26.256.</b>\n\n<i>Если хотите сделать такого же бота, нажмите кнопку ниже.</i>", {
+        parse_mode: "HTML",
         reply_markup: { inline_keyboard: [[{ text: "Сделать бота", url: "https://t.me/laskin01" }]] },
       });
     }

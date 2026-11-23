@@ -33,7 +33,9 @@ async function privateChat(st, msg) {
 
   if (msg.text && msg.text.startsWith("/start")) {
     if (!(await isMember(uid))) {
-      return say(chat, "Бот работает только для группы РЭУ-26.256.");
+      return say(chat, "Бот работает только для группы РЭУ-26.256.\nЕсли хотите сделать такого же бота, нажмите кнопку ниже.", {
+        reply_markup: { inline_keyboard: [[{ text: "Сделать бота", url: "https://t.me/laskin01" }]] },
+      });
     }
     const rows = [];
     if (process.env.APP_LINK) rows.push([{ text: "📅 Расписание", url: process.env.APP_LINK }]);

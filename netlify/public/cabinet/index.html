@@ -162,6 +162,8 @@ input[type=file]{display:none}
 .nts .row button.g{background:var(--line);color:var(--text)}
 .now{background:var(--card);border:1.5px solid var(--line);border-radius:20px;padding:16px;margin-bottom:14px;cursor:pointer}
 .now.live{border-color:var(--green)}
+.now.brk{border-color:var(--amber)}
+.now.brk .now-h{color:var(--amber)}
 .now-h{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
 .now.live .now-h{color:var(--green)}
 .now-s{font-size:18px;font-weight:700;margin-top:10px}
@@ -1531,6 +1533,7 @@ $("#hw-send").onclick = async () => {
 /* ---------- «Сейчас» и звонки ---------- */
 let SCH = null;
 const toMin = (s) => { const [a, b] = s.split(":").map(Number); return a * 60 + b; };
+const hm = (m) => String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
 const fmtMin = (m) => (m < 60 ? `${m} мин` : `${Math.floor(m / 60)} ч${m % 60 ? ` ${m % 60} мин` : ""}`);
 function nsk() {
   const d = new Date(Date.now() + 7 * 3600e3);
@@ -1579,28 +1582,47 @@ function renderNow() {
   const live = list.find((p) => toMin(p.start) <= n.min && n.min < toMin(p.end));
   const next = list.find((p) => toMin(p.start) > n.min);
 
-  let title, pair = null, extra = "", pct = null;
+  let title, pair = null, extra = "", pct = null, isBreak = false;
   if (live) {
     const s = toMin(live.start), e = toMin(live.end);
     title = `Идёт ${live.num}-я пара`;
     pair = live;
     extra = `Осталось ${e - n.min} мин (до ${live.end})`;
     pct = Math.round(((n.min - s) / (e - s)) * 100);
+    // пара в 100 минут: 45 + перерыв 10 + 45
+    if (e - s === 100) {
+      const b1 = s + 45, b2 = s + 55;
+      if (n.min < b1) extra = `Первая половина, до перерыва ${b1 - n.min} мин\nПара до ${live.end}`;
+      else if (n.min < b2) {
+        title = `Перерыв внутри ${live.num}-й пары`;
+        extra = `Ещё ${b2 - n.min} мин, вторая половина в ${hm(b2)}\nПара до ${live.end}`;
+        isBreak = true;
+      } else extra = `Вторая половина, осталось ${e - n.min} мин (до ${live.end})`;
+    }
   } else if (next) {
-    title = `Следующая: ${next.num}-я пара`;
+    const prev = [...list].reverse().find((p) => toMin(p.end) <= n.min);
+    if (prev) {
+      const gap = toMin(next.start) - toMin(prev.end);
+      title = gap > 40 ? "Окно между парами" : "Перерыв между парами";
+      extra = gap > 40 ? `${next.num}-я пара в ${next.start}, через ${fmtMin(toMin(next.start) - n.min)}` : `Перерыв ${gap} мин: ещё ${toMin(next.start) - n.min} мин, ${next.num}-я пара в ${next.start}`;
+      isBreak = true;
+    } else {
+      title = `Следующая: ${next.num}-я пара`;
+      extra = `Начало в ${next.start}, через ${fmtMin(toMin(next.start) - n.min)}`;
+    }
     pair = next;
-    extra = `Начало в ${next.start}, через ${fmtMin(toMin(next.start) - n.min)}`;
   } else {
     title = list.length ? "На сегодня всё" : "Сегодня занятий нет";
     // «На сегодня всё»: ближайшую пару не показываем
   }
 
-  box.classList.toggle("live", !!live);
+  box.classList.toggle("live", !!live && !isBreak);
+  box.classList.toggle("brk", isBreak);
   $("#now-t").textContent = title;
   const b = $("#now-b");
   b.replaceChildren();
   if (pair) b.append(pairLines(pair));
-  if (extra) b.append(el("div", "now-x", extra));
+  if (extra) { const x = el("div", "now-x", extra); x.style.whiteSpace = "pre-line"; b.append(x); }
   if (pair?.early) b.append(el("div", "now-m", `Отпустили раньше: пара до ${pair.end}`));
   if (SCH.stale) b.append(el("div", "now-m", "Сайт natk.ru недоступен, данные могут быть устаревшими"));
   const bar = $("#now-bar");

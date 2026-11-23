@@ -1594,7 +1594,7 @@ function renderNow() {
       const b1 = s + 45, b2 = s + 55;
       if (n.min < b1) extra = `Первая половина, до перерыва ${b1 - n.min} мин\nПара до ${live.end}`;
       else if (n.min < b2) {
-        title = `Перерыв внутри ${live.num}-й пары`;
+        title = "Перерыв";
         extra = `Ещё ${b2 - n.min} мин, вторая половина в ${hm(b2)}\nПара до ${live.end}`;
         isBreak = true;
       } else extra = `Вторая половина, осталось ${e - n.min} мин (до ${live.end})`;
@@ -1603,7 +1603,7 @@ function renderNow() {
     const prev = [...list].reverse().find((p) => toMin(p.end) <= n.min);
     if (prev) {
       const gap = toMin(next.start) - toMin(prev.end);
-      title = gap > 40 ? "Окно между парами" : "Перерыв между парами";
+      title = gap > 40 ? "Окно между парами" : "Перерыв";
       extra = gap > 40 ? `${next.num}-я пара в ${next.start}, через ${fmtMin(toMin(next.start) - n.min)}` : `Перерыв ${gap} мин: ещё ${toMin(next.start) - n.min} мин, ${next.num}-я пара в ${next.start}`;
       isBreak = true;
     } else {

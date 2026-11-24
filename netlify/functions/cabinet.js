@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const { verifySession } = require("../../lib/appauth");
 const { store, nskInfo, getSchedule } = require("../../lib/natk");
 const { loadHw, saveHw, postHomework, latestPosted, norm, subjectsOf, subgroupSubjects, nextLesson, postIfLessonTomorrow } = require("../../lib/homework");
 const nextBd = (bd, today) => {
@@ -496,7 +497,12 @@ async function main(event) {
     return out(400, { error: "Плохой запрос" });
   }
 
-  const user = verify(body.initData || "");
+  // вход: Telegram initData (мини-приложение) или сессия мобильного приложения (вход через бота)
+  let user = verify(body.initData || "");
+  if (!user && body.session) {
+    user = verifySession(body.session);
+    if (!user) return out(401, { error: "Сессия истекла, войдите заново", relogin: true });
+  }
   if (!user) return out(401, { error: "Открой кабинет из Telegram" });
 
   const st = store(event);

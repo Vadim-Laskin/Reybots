@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Кабинет РЭУ</string>
+
+    <string name="login_title">Вход</string>
+    <string name="login_subtitle">Войдите через Telegram, чтобы открыть расписание и кабинет группы.</string>
+    <string name="login_button">Авторизироваться через бота</string>
+    <string name="login_hint">Откроется бот. Нажмите в нём «Подтвердить вход в приложение», и вход произойдёт автоматически.</string>
+    <string name="reopen_telegram">Открыть Telegram снова</string>
+    <string name="cancel">Отмена</string>
+
+    <string name="status_waiting">Ждём подтверждения в Telegram…</string>
+    <string name="status_opened">Нажмите «Подтвердить вход в приложение» в боте…</string>
+    <string name="status_offline">Нет связи, пробуем снова…</string>
+
+    <string name="err_network">Не удалось связаться с сервером. Проверьте интернет и попробуйте ещё раз.</string>
+    <string name="err_expired">Время ожидания вышло. Нажмите кнопку ещё раз.</string>
+    <string name="err_cancelled">Вход отменён в Telegram.</string>
+    <string name="err_not_member">Приложение доступно только участникам группы РЭУ-26.256.</string>
+    <string name="err_no_telegram">Не удалось открыть Telegram. Установите его и попробуйте снова.</string>
+    <string name="err_not_configured">Не задан адрес сайта. Укажите reyBaseUrl в android/gradle.properties.</string>
+
+    <string name="nav_cabinet">Кабинет</string>
+    <string name="nav_schedule">Расписание</string>
+    <string name="nav_bot">Бот</string>
+    <string name="action_refresh">Обновить</string>
+    <string name="action_logout">Выйти</string>
+    <string name="logout_title">Выйти из приложения?</string>
+    <string name="logout_message">Чтобы войти снова, потребуется подтверждение через Telegram.</string>
+    <string name="logout_yes">Выйти</string>
+
+    <string name="load_error">Не удалось загрузить страницу</string>
+    <string name="retry">Повторить</string>
+</resources>

@@ -27,11 +27,82 @@ async function isMember(uid) {
   return ["creator", "administrator", "member"].includes(s) || (s === "restricted" && j.result.is_member);
 }
 
+/* ---------- вход в мобильное приложение ---------- */
+const appauth = require("../../lib/appauth");
+
+// человек перешёл по ссылке t.me/<бот>?start=app_<код>: проверяем его и просим подтвердить вход
+async function appLogin(st, msg, code) {
+  const chat = msg.chat.id;
+  const uid = msg.from.id;
+  const rec = appauth.codeOk(code) ? await appauth.getRec(st, code) : null;
+  if (!rec || Date.now() > rec.exp || rec.st === "ok" || rec.st === "no") {
+    return say(chat, "⌛ Ссылка для входа устарела. Вернитесь в приложение и нажмите «Авторизироваться через бота» ещё раз.");
+  }
+  if (rec.st === "opened" && rec.uid !== uid) {
+    return say(chat, "Эта ссылка для входа уже используется. Вернитесь в приложение и запросите новую.");
+  }
+  if (!(await isMember(uid))) {
+    await appauth.putRec(st, code, { ...rec, st: "no", reason: "not_member" });
+    return say(chat, "🔒 <b>Приложение работает только для группы РЭУ-26.256.</b>", { parse_mode: "HTML" });
+  }
+  await appauth.putRec(st, code, {
+    ...rec,
+    st: "opened",
+    uid,
+    name: msg.from.first_name || "",
+    username: msg.from.username || "",
+  });
+  return say(
+    chat,
+    "🔐 <b>Вход в приложение</b>\n\nЕсли вы только что нажали «Авторизироваться через бота» в приложении, подтвердите вход.\n\n<i>Если это были не вы, нажмите «Отменить».</i>",
+    {
+      parse_mode: "HTML",
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "✅ Подтвердить вход в приложение", callback_data: "aok:" + code }],
+          [{ text: "Отменить", callback_data: "ano:" + code }],
+        ],
+      },
+    }
+  );
+}
+
+// нажатие «Подтвердить» / «Отменить»
+async function appCallback(st, cq) {
+  const [act, code] = String(cq.data || "").split(":");
+  if (act !== "aok" && act !== "ano") return tg("answerCallbackQuery", { callback_query_id: cq.id });
+  const uid = cq.from.id;
+  const chat = cq.message?.chat?.id;
+  const mid = cq.message?.message_id;
+  const rec = appauth.codeOk(code) ? await appauth.getRec(st, code) : null;
+  if (!rec || Date.now() > rec.exp || rec.uid !== uid || rec.st !== "opened") {
+    await tg("answerCallbackQuery", {
+      callback_query_id: cq.id,
+      text: "Ссылка для входа устарела. Запросите новую в приложении.",
+      show_alert: true,
+    });
+    if (chat && mid) await tg("editMessageReplyMarkup", { chat_id: chat, message_id: mid, reply_markup: { inline_keyboard: [] } });
+    return;
+  }
+  if (act === "aok") {
+    await appauth.putRec(st, code, { ...rec, st: "ok", okTs: Date.now() });
+    await tg("answerCallbackQuery", { callback_query_id: cq.id, text: "Вход подтверждён" });
+    if (chat && mid) await tg("editMessageText", { chat_id: chat, message_id: mid, text: "✅ Вход подтверждён." });
+    if (chat) await say(chat, "✅ Готово! Зайдите в приложение, вход выполнится автоматически.");
+  } else {
+    await appauth.putRec(st, code, { ...rec, st: "no", reason: "cancel" });
+    await tg("answerCallbackQuery", { callback_query_id: cq.id, text: "Вход отменён" });
+    if (chat && mid) await tg("editMessageText", { chat_id: chat, message_id: mid, text: "❌ Вход отменён." });
+  }
+}
+
 async function privateChat(st, msg) {
   const uid = msg.from.id;
   const chat = msg.chat.id;
 
   if (msg.text && msg.text.startsWith("/start")) {
+    const param = msg.text.split(/\s+/)[1] || "";
+    if (param.startsWith("app_")) return appLogin(st, msg, param.slice(4));
     if (!(await isMember(uid))) {
       return say(chat, "🔒 <b>Бот работает только для группы РЭУ-26.256.</b>\n\n<i>Если хотите сделать такого же бота, нажмите кнопку ниже.</i>", {
         parse_mode: "HTML",
@@ -154,9 +225,18 @@ exports.handler = async (event) => {
     return { statusCode: 403, body: "no" };
   }
   cabinetUrl = process.env.CABINET_URL || `https://${event.headers.host}/cabinet/`;
-  const msg = JSON.parse(event.body).message;
-  if (!msg) return ok;
+  const upd = JSON.parse(event.body);
   const st = store(event);
+  if (upd.callback_query) {
+    try {
+      await appCallback(st, upd.callback_query);
+    } catch (e) {
+      console.log("callback error:", e.message);
+    }
+    return ok;
+  }
+  const msg = upd.message;
+  if (!msg) return ok;
   await applyTestMode(st);
 
   try {

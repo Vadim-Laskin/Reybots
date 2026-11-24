@@ -840,15 +840,19 @@ const setIcon = (b, n) => {
 const ico = (n) => { const s = el("span", "i"); setIcon(s, n); return s; };
 document.querySelectorAll("[data-i]").forEach((e) => setIcon(e, e.dataset.i));
 
+// сессия мобильного приложения (вход через бота): токен отдаёт мост ReyApp, который добавляет приложение
+const APP_SESSION = () => { try { return window.ReyApp?.session?.() || ""; } catch { return ""; } };
+const IN_APP = !!window.ReyApp;
 let INFO = null, ITEMS = [], STICKERS = [], PICK = null, FILE = null, PEOPLE = [];
 
 async function api(action, extra = {}) {
   const r = await fetch("/.netlify/functions/cabinet", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action, initData: tg?.initData || "", ...extra }),
+    body: JSON.stringify({ action, initData: tg?.initData || "", session: APP_SESSION(), ...extra }),
   });
   const j = await r.json().catch(() => ({}));
+  if (j.relogin) { try { window.ReyApp?.logout?.(); } catch {} }
   if (j.blocked) showLock();
   if (!r.ok) { const e = new Error(j.error || "HTTP " + r.status); e.status = r.status; throw e; }
   return j;
@@ -3067,7 +3071,8 @@ $("#go-apanel").onclick = () => { if (INFO?.isAdmin) { renderApanel(); show("apa
 
 $("#go-schedule").onclick = () => {
   if (!INFO?.appLink) return fail(new Error("Не задана ссылка на расписание (APP_LINK)"));
-  if (tg) {
+  if (IN_APP) location.href = "/"; // в приложении расписание открывается внутри него
+  else if (tg) {
     tg.openTelegramLink(INFO.appLink);
     setTimeout(() => tg.close(), 400);
   } else location.href = INFO.appLink;
@@ -3209,4 +3214,4 @@ window.addEventListener("focus", onResume);
 try { tg?.onEvent("activated", onResume); } catch {}
 </script>
 </body>
-</html>
+</html>

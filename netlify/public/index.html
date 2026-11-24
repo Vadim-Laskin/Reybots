@@ -117,6 +117,7 @@ body.first #list>*:nth-child(2){animation-delay:.05s}body.first #list>*:nth-chil
 </div>
 <script>
 const tg = window.Telegram?.WebApp;
+const APP_SESSION = () => { try { return window.ReyApp?.session?.() || ""; } catch { return ""; } };
 if (tg) {
   tg.ready();
   tg.expand();
@@ -192,7 +193,7 @@ function renderNt() {
   renderBdn(); const on = NOTIF === 0 && !ntHidden(); if (on) setTimeout(() => ntShow(true), 500); else ntShow(false); }
 async function ntSet(v) {
   try {
-    const r = await fetch("/.netlify/functions/cabinet", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "notif_set", value: v, initData: tg.initData }) });
+    const r = await fetch("/.netlify/functions/cabinet", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "notif_set", value: v, initData: tg?.initData || "", session: APP_SESSION() }) });
     if (!r.ok) throw new Error("HTTP " + r.status);
     NOTIF = v; renderNt(); setTimeout(renderBdn, 500);
   } catch (e) { alert("Не получилось сохранить: " + e.message); }
@@ -202,9 +203,9 @@ $("#nt-no").onclick = () => { $("#nt-main").hidden = true; $("#nt-more").hidden 
 $("#nt-never").onclick = () => ntSet(-1);
 $("#nt-hide").onclick = () => { try { sessionStorage.setItem("nt-hide", "1"); } catch {} renderNt(); };
 async function loadMySg() {
-  if (!tg?.initData) return;
+  if (!tg?.initData && !APP_SESSION()) return;
   try {
-    const r = await fetch("/.netlify/functions/cabinet", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "info", initData: tg.initData }) });
+    const r = await fetch("/.netlify/functions/cabinet", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "info", initData: tg?.initData || "", session: APP_SESSION() }) });
     if (!r.ok) return;
     const j = await r.json();
     if (j.blocked) return; // не из группы: расписание открыто, а про уведомления и ДР не спрашиваем

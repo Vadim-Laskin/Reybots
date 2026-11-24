@@ -18,6 +18,7 @@ import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebStorage
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -32,6 +33,7 @@ import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.progressindicator.LinearProgressIndicator
 import com.google.android.material.appbar.MaterialToolbar
 import org.json.JSONObject
+import java.io.ByteArrayInputStream
 
 /**
  * Каркас: открывает страницы сайта в WebView и добавляет то, чего нет на сайте —
@@ -117,6 +119,15 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
 
+            // скрипт Telegram в приложении не нужен (контекста Telegram здесь нет), а telegram.org может быть недоступен
+            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                val u = request.url
+                if (u.host == "telegram.org" && u.path?.endsWith("telegram-web-app.js") == true) {
+                    return WebResourceResponse("application/javascript", "utf-8", ByteArrayInputStream(ByteArray(0)))
+                }
+                return null
+            }
+
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
                 pageTrusted = Uri.parse(url).host == Config.HOST
                 progress.visibility = View.VISIBLE
@@ -130,6 +141,8 @@ class MainActivity : AppCompatActivity() {
 
             override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
                 if (request.isForMainFrame) {
+                    findViewById<android.widget.TextView>(R.id.tvErrorDetail).text =
+                        "${error.description} (${error.errorCode})\n${request.url}"
                     errorBox.visibility = View.VISIBLE
                     progress.visibility = View.GONE
                 }

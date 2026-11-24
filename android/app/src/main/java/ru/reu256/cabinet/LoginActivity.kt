@@ -71,6 +71,8 @@ class LoginActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 btnLogin.isEnabled = true
                 showError(R.string.err_network)
+                // техническая причина (например, HTTP 404 — на сайте ещё нет функции входа)
+                tvError.text = getString(R.string.err_network) + "\n(" + (e.message ?: e.javaClass.simpleName) + ")"
             }
         }
     }

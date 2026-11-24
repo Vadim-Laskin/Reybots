@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Расписание</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="/app-offline.js"></script>
 <script src="/festive.js" defer></script>
 <style>
 :root{--bg:#0e1014;--card:#1a1d26;--redbg:#2a1a20;--accent:#8b7bff;--red:#ff5d6c;--green:#4ade80;--text:#eceef5;--muted:#8b90a0;--line:#2a2e3a}
@@ -357,9 +358,12 @@ function onScroll() {
 let first = true;
 async function load() {
   try {
-    const r = await fetch("/.netlify/functions/schedule-data", { cache: "no-store" });
-    if (!r.ok) throw new Error("HTTP " + r.status);
-    DATA = await r.json();
+    if (window.ReyOffline) DATA = await window.ReyOffline.json("/.netlify/functions/schedule-data");
+    else {
+      const r = await fetch("/.netlify/functions/schedule-data", { cache: "no-store" });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      DATA = await r.json();
+    }
     if (Q.has("stale")) { DATA.stale = true; DATA.fetchedAt = Date.now() - 3600e3; }
     if (!DATA.days || !DATA.days.length) throw new Error("расписание пустое");
     const y = window.scrollY;
@@ -380,6 +384,7 @@ async function load() {
 }
 
 $("#refresh").onclick = load;
+window.addEventListener("rey-synced", load); // приложение: сеть вернулась
 $("#lk").onclick = () => { location.replace("/cabinet/"); };
 window.addEventListener("scroll", onScroll, { passive: true });
 document.addEventListener("visibilitychange", () => { if (!document.hidden) { tick(); load(); loadMySg(); } });

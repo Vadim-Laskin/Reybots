@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Личный кабинет</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="/app-offline.js"></script>
 <script src="/festive.js" defer></script>
 <script>
 // тема берётся из Telegram (светлая или тёмная), вне Telegram — из настроек системы
@@ -845,7 +846,11 @@ const APP_SESSION = () => { try { return window.ReyApp?.session?.() || ""; } cat
 const IN_APP = !!window.ReyApp;
 let INFO = null, ITEMS = [], STICKERS = [], PICK = null, FILE = null, PEOPLE = [];
 
+// в приложении запросы идут через офлайн-слой (кэш чтения, очередь небольших изменений); в Telegram — напрямую
 async function api(action, extra = {}) {
+  return window.ReyOffline ? window.ReyOffline.call(action, extra, apiRaw) : apiRaw(action, extra);
+}
+async function apiRaw(action, extra = {}) {
   const r = await fetch("/.netlify/functions/cabinet", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -1750,9 +1755,12 @@ function renderBells() {
 
 async function loadSchedule() {
   try {
-    const r = await fetch("/.netlify/functions/schedule-data", { cache: "no-store" });
-    if (!r.ok) throw new Error("HTTP " + r.status);
-    SCH = await r.json();
+    if (window.ReyOffline) SCH = await window.ReyOffline.json("/.netlify/functions/schedule-data");
+    else {
+      const r = await fetch("/.netlify/functions/schedule-data", { cache: "no-store" });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      SCH = await r.json();
+    }
   } catch (e) {
     console.log("schedule load failed:", e.message);
   }
@@ -3207,6 +3215,12 @@ async function checkVersion() {
 $("#upd-go").onclick = () => location.reload();
 checkVersion();
 setInterval(() => liveRefresh(), 25000);
+// приложение: сеть вернулась и очередь изменений отправлена — подтягиваем свежие данные
+window.addEventListener("rey-synced", () => {
+  api("info").then((j) => { if (INFO && !j.blocked) { Object.assign(INFO, j); renderBd(); } }).catch(() => {});
+  liveRefresh(true);
+});
+window.ReyOffline?.init(apiRaw);
 setInterval(checkVersion, 2 * 60000);
 const onResume = () => { liveRefresh(true); checkVersion(); };
 document.addEventListener("visibilitychange", () => { if (!document.hidden) onResume(); });

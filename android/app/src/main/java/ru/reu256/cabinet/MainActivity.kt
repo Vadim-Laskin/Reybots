@@ -7,6 +7,9 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Bundle
 import android.view.Menu
@@ -19,6 +22,7 @@ import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
+import android.webkit.WebSettings
 import android.webkit.WebStorage
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -48,6 +52,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var toolbar: MaterialToolbar
 
     @Volatile private var pageTrusted = false
+    private var wasOnline = true
+    private var cacheRetriedUrl: String? = null
     private var fileCallback: ValueCallback<Array<Uri>>? = null
     private var pendingPermission: PermissionRequest? = null
 
@@ -80,17 +86,76 @@ class MainActivity : AppCompatActivity() {
         webView = findViewById(R.id.webView)
 
         setSupportActionBar(toolbar)
+        wasOnline = currentlyOnline()
         setupWebView()
         setupNav()
         findViewById<View>(R.id.btnRetry).setOnClickListener {
             errorBox.visibility = View.GONE
-            webView.reload()
+            openPage(null)
         }
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = goBack()
         })
 
-        webView.loadUrl(Config.url("/cabinet/"))
+        openPage(Config.url("/cabinet/"))
+    }
+
+    /* ---------- офлайн: без сети страницы берутся из кэша WebView, данные — из хранилища страницы ---------- */
+
+    private val netCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
+            val on = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            runOnUiThread { setOnline(on) }
+        }
+
+        override fun onLost(network: Network) {
+            runOnUiThread { setOnline(false) }
+        }
+    }
+
+    private fun currentlyOnline(): Boolean {
+        val cm = getSystemService(ConnectivityManager::class.java) ?: return true
+        val caps = cm.getNetworkCapabilities(cm.activeNetwork ?: return false) ?: return false
+        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }
+
+    /** Загрузка/перезагрузка с учётом сети: страницу из кэша берём только когда подключения нет. */
+    private fun openPage(url: String?) {
+        cacheRetriedUrl = null
+        webView.settings.cacheMode =
+            if (currentlyOnline()) WebSettings.LOAD_DEFAULT else WebSettings.LOAD_CACHE_ELSE_NETWORK
+        if (url == null) webView.reload() else webView.loadUrl(url)
+    }
+
+    private fun setOnline(on: Boolean) {
+        if (!::webView.isInitialized) return
+        webView.settings.cacheMode = if (on) WebSettings.LOAD_DEFAULT else WebSettings.LOAD_CACHE_ELSE_NETWORK
+        if (on && !wasOnline) {
+            // сеть вернулась: страница отправит накопленные изменения и обновит данные
+            webView.evaluateJavascript("window.dispatchEvent(new Event('rey-online'))", null)
+        }
+        wasOnline = on
+    }
+
+    override fun onStart() {
+        super.onStart()
+        if (!::webView.isInitialized) return
+        setOnline(currentlyOnline())
+        try {
+            getSystemService(ConnectivityManager::class.java)?.registerDefaultNetworkCallback(netCallback)
+        } catch (e: Exception) {
+            // без отслеживания сети приложение продолжит работать, просто переключение кэша будет по запуску экрана
+        }
+    }
+
+    override fun onStop() {
+        if (::webView.isInitialized) {
+            try {
+                getSystemService(ConnectivityManager::class.java)?.unregisterNetworkCallback(netCallback)
+            } catch (e: Exception) {
+            }
+        }
+        super.onStop()
     }
 
     /* ---------- WebView ---------- */
@@ -105,6 +170,7 @@ class MainActivity : AppCompatActivity() {
             allowFileAccess = false
             allowContentAccess = false
             setSupportMultipleWindows(false)
+            cacheMode = if (currentlyOnline()) WebSettings.LOAD_DEFAULT else WebSettings.LOAD_CACHE_ELSE_NETWORK
             userAgentString = "$userAgentString ReyApp/1.0"
         }
         setupBridge()
@@ -141,6 +207,14 @@ class MainActivity : AppCompatActivity() {
 
             override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
                 if (request.isForMainFrame) {
+                    // сеть на деле не работает (точка доступа без интернета и т.п.): один раз пробуем сохранённую копию
+                    val u = request.url.toString()
+                    if (view.settings.cacheMode == WebSettings.LOAD_DEFAULT && cacheRetriedUrl != u) {
+                        cacheRetriedUrl = u
+                        view.settings.cacheMode = WebSettings.LOAD_CACHE_ELSE_NETWORK
+                        view.reload()
+                        return
+                    }
                     findViewById<android.widget.TextView>(R.id.tvErrorDetail).text =
                         "${error.description} (${error.errorCode})\n${request.url}"
                     errorBox.visibility = View.VISIBLE
@@ -224,16 +298,16 @@ class MainActivity : AppCompatActivity() {
     private fun setupNav() {
         bottomNav.setOnItemSelectedListener { item ->
             when (item.itemId) {
-                R.id.nav_cabinet -> { webView.loadUrl(Config.url("/cabinet/")); true }
-                R.id.nav_schedule -> { webView.loadUrl(Config.url("/")); true }
+                R.id.nav_cabinet -> { openPage(Config.url("/cabinet/")); true }
+                R.id.nav_schedule -> { openPage(Config.url("/")); true }
                 R.id.nav_bot -> { openExternal(Uri.parse(Config.botLink())); false }
                 else -> false
             }
         }
         bottomNav.setOnItemReselectedListener { item ->
             when (item.itemId) {
-                R.id.nav_cabinet -> webView.loadUrl(Config.url("/cabinet/"))
-                R.id.nav_schedule -> webView.loadUrl(Config.url("/"))
+                R.id.nav_cabinet -> openPage(Config.url("/cabinet/"))
+                R.id.nav_schedule -> openPage(Config.url("/"))
             }
         }
     }
@@ -251,7 +325,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean = when (item.itemId) {
-        R.id.action_refresh -> { webView.reload(); true }
+        R.id.action_refresh -> { openPage(null); true }
         R.id.action_logout -> {
             AlertDialog.Builder(this)
                 .setTitle(R.string.logout_title)

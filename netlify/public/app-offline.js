@@ -107,7 +107,7 @@
   function render() {
     var n = qGet().length;
     var text = flashText ||
-      (offline || !navigator.onLine ? "Нет интернета. Показаны сохранённые данные" + (n ? " · ждут отправки: " + n : "") : n ? "Отправляем изменения: " + n + "…" : "");
+      (offline || !navigator.onLine ? "Нет связи с сервером. Показаны сохранённые данные" + (n ? " · ждут отправки: " + n : "") : n ? "Отправляем изменения: " + n + "…" : "");
     if (!text) { if (bar) bar.hidden = true; return; }
     if (!document.body) { document.addEventListener("DOMContentLoaded", render, { once: true }); return; }
     if (!bar) {

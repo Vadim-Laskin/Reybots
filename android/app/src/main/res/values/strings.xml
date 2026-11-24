@@ -29,6 +29,10 @@
     <string name="logout_message">Чтобы войти снова, потребуется подтверждение через Telegram.</string>
     <string name="logout_yes">Выйти</string>
 
-    <string name="load_error">Не удалось загрузить страницу</string>
+    <string name="load_error">Не удалось загрузить страницу. Если нет VPN, включите его и нажмите «Повторить».</string>
+    <string name="outage_title">Нет связи с сервером</string>
+    <string name="outage_msg">Сайт недоступен без VPN. Показаны сохранённые данные, они могут быть не самыми свежими. Включите VPN, и приложение обновит данные само, или нажмите «Повторить». Это окно можно просто закрыть.</string>
+    <string name="outage_msg_vpn">Сервер не отвечает, хотя VPN включён. Показаны сохранённые данные. Попробуйте позже или другой VPN. Это окно можно просто закрыть.</string>
+    <string name="close">Закрыть</string>
     <string name="retry">Повторить</string>
 </resources>

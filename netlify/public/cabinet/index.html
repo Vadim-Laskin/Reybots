@@ -657,6 +657,10 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
   <div id="req-list"></div>
 </div>
 
+<div id="game" class="screen" hidden>
+  <div id="blocks"></div>
+</div>
+
 <button id="cat" hidden aria-label="Мурзик — ИИ-помощник">
   <svg viewBox="0 0 64 64" width="64" height="64" aria-hidden="true">
     <g class="ear-l"><path d="M10 30 L12 6 L30 18 Z" fill="#f0a24a"/><path d="M14 24 L15 12 L24 18 Z" fill="#ffb7c5"/></g>
@@ -925,9 +929,10 @@ async function togglePlay(id, btn) {
 
 /* ---------- навигация ---------- */
 // куда ведёт «Назад» с вложенных экранов (по умолчанию на главную)
-const PARENT = { newsv: "news", ned: "news", news: "home", hw: "hwlist", add: "mine", admin: "apanel", upd: "apanel", ovr: "apanel", hwadmin: "apanel", people: "apanel", users: "apanel", requests: "apanel" };
+const PARENT = { newsv: "news", ned: "news", news: "home", hw: "hwlist", add: "mine", admin: "apanel", upd: "apanel", ovr: "apanel", hwadmin: "apanel", people: "apanel", users: "apanel", requests: "apanel", game: "apanel" };
 function show(id) {
   stopAudio();
+  if (id !== "game") window.ReyBlocks?.close();
   document.querySelectorAll(".screen").forEach((s) => (s.hidden = s.id !== id));
   if (tg) id === "home" ? tg.BackButton.hide() : tg.BackButton.show();
   window.scrollTo(0, 0);
@@ -938,6 +943,7 @@ function back() {
   if (!$("#imgv").hidden) { $("#imgv").hidden = true; return; }
   if (!$("#modal").hidden) return closeModal();
   const cur = document.querySelector(".screen:not([hidden])")?.id;
+  if (cur === "game" && window.ReyBlocks?.back()) return;
   show(PARENT[cur] || "home");
 }
 
@@ -2549,12 +2555,36 @@ const ADMIN_TREE = [
     ],
   },
   {
+    title: "Разработка",
+    rows: [
+      { icon: "play", title: "Блоки", desc: "Игра с уровнями, тестирование", open: openGame },
+    ],
+  },
+  {
     title: "Обратная связь",
     rows: [
       { icon: "clipboard", title: "Заявки", desc: "Идеи участников", count: () => IDEAS.filter((i) => i.status === "review").length, hot: true, open: () => { renderRequests(); show("requests"); } },
     ],
   },
 ];
+
+/* ---------- игра «Блоки» (пока только для админа, тестирование) ---------- */
+// код игры лежит отдельно и подгружается только при первом открытии
+let gameLoad = null;
+async function openGame() {
+  if (!INFO?.isAdmin) return;
+  try {
+    await (gameLoad ||= new Promise((ok, no) => {
+      const s = document.createElement("script");
+      s.src = "/cabinet/blocks.js";
+      s.onload = ok;
+      s.onerror = () => { gameLoad = null; s.remove(); no(new Error("Не удалось загрузить игру")); };
+      document.head.append(s);
+    }));
+    show("game");
+    window.ReyBlocks.open($("#blocks"), () => show("apanel"));
+  } catch (e) { fail(e); }
+}
 
 /* ---------- админ: отмена пар ---------- */
 let OVD = "today";
@@ -3174,7 +3204,7 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) { lo
 /* ---------- живое обновление: данные и новая версия без ручной перезагрузки ---------- */
 const curScreen = () => document.querySelector(".screen:not([hidden])")?.id;
 // не трогаем экран, пока человек что-то вводит или смотрит диалог
-const userBusy = () => !$("#aichat").hidden || !$("#imgv").hidden || !$("#modal").hidden || ["add", "hw", "upd", "ned"].includes(curScreen());
+const userBusy = () => !$("#aichat").hidden || !$("#imgv").hidden || !$("#modal").hidden || ["add", "hw", "upd", "ned", "game"].includes(curScreen());
 let liveAt = 0, liveBusy = false;
 async function liveRefresh(force) {
   if (document.hidden || liveBusy || !INFO) return;

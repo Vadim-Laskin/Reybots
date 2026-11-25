@@ -217,6 +217,8 @@ async function loadMySg() {
     if (g !== MYSG) { MYSG = g; if (DATA) build(); }
   } catch {}
 }
+// как в ЛК: дистанта у нас нет, поэтому пары «Дистанционные технологии» не проводятся
+const remote = (e) => /дистанц/i.test(e.room || "");
 // правки админа для «Идёт / следующая»: отмена пары или «отпустили раньше»
 const ovOf = (date, num, sg) => ((DATA?.over?.[date] || {})[num] || []).find((o) => (o.sg || 0) === sg);
 
@@ -256,13 +258,17 @@ if (DATA.stale) {
       c.dataset.end = p.end;
       c.dataset.cancel = allCancel ? "1" : "";
       c.dataset.num = p.num;
-      // пара только для другой подгруппы — показываем как прошедшую
-      c.dataset.other = MYSG && p.entries.length && p.entries.every((e) => e.sg && e.sg !== MYSG) ? "1" : "";
+      // пара только для другой подгруппы или дистанционная — показываем как прошедшую
+      const my = p.entries.filter((e) => !MYSG || !e.sg || e.sg === MYSG);
+      const noPair = my.some(remote) && my.every((e) => e.cancelled || remote(e));
+      c.dataset.other = p.entries.length && (!my.length || noPair) ? "1" : "";
       const num = el("div", "num");
       num.append(el("b", null, p.num), el("span", null, p.start), el("span", null, p.end));
       const info = el("div", "info");
       p.entries.forEach((e, i) => {
-        const b = el("div", "entry" + (MYSG && e.sg && e.sg !== MYSG ? " other" : ""));
+        // в карточке, приглушённой целиком, записи второй раз не приглушаем
+        const dim = !c.dataset.other && (remote(e) || (MYSG && e.sg && e.sg !== MYSG));
+        const b = el("div", "entry" + (dim ? " other" : ""));
         const lab = e.sg ? `${e.sg} подгруппа` : p.sub ? "по подгруппам" : "";
         if (lab) b.append(el("div", "sg", lab));
         b.append(el("div", e.cancelled ? "s red" : "s", e.subject));

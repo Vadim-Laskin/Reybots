@@ -22,7 +22,6 @@ import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
-import android.webkit.WebSettings
 import android.webkit.WebStorage
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -31,6 +30,15 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import com.google.android.material.bottomnavigation.BottomNavigationView
@@ -52,8 +60,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var toolbar: MaterialToolbar
 
     @Volatile private var pageTrusted = false
-    private var wasOnline = true
-    private var cacheRetriedUrl: String? = null
+    private lateinit var proxy: SiteProxy
+    private var outageNotified = false
+    private var outageDialog: AlertDialog? = null
+    private var probeJob: Job? = null
     private var fileCallback: ValueCallback<Array<Uri>>? = null
     private var pendingPermission: PermissionRequest? = null
 
@@ -86,7 +96,10 @@ class MainActivity : AppCompatActivity() {
         webView = findViewById(R.id.webView)
 
         setSupportActionBar(toolbar)
-        wasOnline = currentlyOnline()
+        proxy = SiteProxy(applicationContext, object : SiteProxy.Listener {
+            override fun onServerDown() = runOnUiThread { serverDown() }
+            override fun onServerRecovered() = runOnUiThread { serverRecovered() }
+        })
         setupWebView()
         setupNav()
         findViewById<View>(R.id.btnRetry).setOnClickListener {
@@ -100,51 +113,76 @@ class MainActivity : AppCompatActivity() {
         openPage(Config.url("/cabinet/"))
     }
 
-    /* ---------- офлайн: без сети страницы берутся из кэша WebView, данные — из хранилища страницы ---------- */
+    /* ---------- нет связи с сервером (например, без VPN): показываем сохранённое ---------- */
 
     private val netCallback = object : ConnectivityManager.NetworkCallback() {
+        // сеть сменилась (например, включили VPN): если сервер был недоступен, сразу проверяем его
         override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
-            val on = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-            runOnUiThread { setOnline(on) }
-        }
-
-        override fun onLost(network: Network) {
-            runOnUiThread { setOnline(false) }
+            if (::proxy.isInitialized && proxy.isDown) Thread { proxy.probe() }.start()
         }
     }
 
-    private fun currentlyOnline(): Boolean {
-        val cm = getSystemService(ConnectivityManager::class.java) ?: return true
+    private fun vpnActive(): Boolean {
+        val cm = getSystemService(ConnectivityManager::class.java) ?: return false
         val caps = cm.getNetworkCapabilities(cm.activeNetwork ?: return false) ?: return false
-        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        return caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
     }
 
-    /** Загрузка/перезагрузка с учётом сети: страницу из кэша берём только когда подключения нет. */
-    private fun openPage(url: String?) {
-        cacheRetriedUrl = null
-        webView.settings.cacheMode =
-            if (currentlyOnline()) WebSettings.LOAD_DEFAULT else WebSettings.LOAD_CACHE_ELSE_NETWORK
-        if (url == null) webView.reload() else webView.loadUrl(url)
+    private fun serverDown() {
+        if (isFinishing) return
+        startProbe()
+        if (!outageNotified) {
+            outageNotified = true
+            outageDialog = AlertDialog.Builder(this)
+                .setTitle(R.string.outage_title)
+                .setMessage(if (vpnActive()) R.string.outage_msg_vpn else R.string.outage_msg)
+                .setPositiveButton(R.string.close, null)
+                .setNegativeButton(R.string.retry) { _, _ -> openPage(null) }
+                .show()
+        }
     }
 
-    private fun setOnline(on: Boolean) {
-        if (!::webView.isInitialized) return
-        webView.settings.cacheMode = if (on) WebSettings.LOAD_DEFAULT else WebSettings.LOAD_CACHE_ELSE_NETWORK
-        if (on && !wasOnline) {
-            // сеть вернулась: страница отправит накопленные изменения и обновит данные
+    private fun serverRecovered() {
+        outageNotified = false
+        outageDialog?.dismiss()
+        outageDialog = null
+        probeJob?.cancel()
+        if (errorBox.visibility == View.VISIBLE) {
+            // страница не открылась из-за отсутствия связи: открываем заново
+            errorBox.visibility = View.GONE
+            openPage(null)
+        } else {
+            // страница отправит накопленные изменения и обновит данные
             webView.evaluateJavascript("window.dispatchEvent(new Event('rey-online'))", null)
         }
-        wasOnline = on
+    }
+
+    /** Пока сервер недоступен, раз в несколько секунд проверяем, не появилась ли связь (пока приложение на экране). */
+    private fun startProbe() {
+        if (probeJob?.isActive == true) return
+        probeJob = lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (isActive && proxy.isDown) {
+                    delay(5000)
+                    withContext(Dispatchers.IO) { proxy.probe() }
+                }
+            }
+        }
+    }
+
+    /** Загрузка/перезагрузка: сначала снова пробуем сервер. */
+    private fun openPage(url: String?) {
+        proxy.forceNetwork()
+        if (url == null) webView.reload() else webView.loadUrl(url)
     }
 
     override fun onStart() {
         super.onStart()
         if (!::webView.isInitialized) return
-        setOnline(currentlyOnline())
         try {
             getSystemService(ConnectivityManager::class.java)?.registerDefaultNetworkCallback(netCallback)
         } catch (e: Exception) {
-            // без отслеживания сети приложение продолжит работать, просто переключение кэша будет по запуску экрана
+            // без отслеживания сети приложение работает, просто восстановление связи заметит чуть позже
         }
     }
 
@@ -170,7 +208,6 @@ class MainActivity : AppCompatActivity() {
             allowFileAccess = false
             allowContentAccess = false
             setSupportMultipleWindows(false)
-            cacheMode = if (currentlyOnline()) WebSettings.LOAD_DEFAULT else WebSettings.LOAD_CACHE_ELSE_NETWORK
             userAgentString = "$userAgentString ReyApp/1.0"
         }
         setupBridge()
@@ -191,7 +228,7 @@ class MainActivity : AppCompatActivity() {
                 if (u.host == "telegram.org" && u.path?.endsWith("telegram-web-app.js") == true) {
                     return WebResourceResponse("application/javascript", "utf-8", ByteArrayInputStream(ByteArray(0)))
                 }
-                return null
+                return proxy.handle(request) // наш сайт: с сервера или из сохранённой копии
             }
 
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
@@ -207,14 +244,6 @@ class MainActivity : AppCompatActivity() {
 
             override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
                 if (request.isForMainFrame) {
-                    // сеть на деле не работает (точка доступа без интернета и т.п.): один раз пробуем сохранённую копию
-                    val u = request.url.toString()
-                    if (view.settings.cacheMode == WebSettings.LOAD_DEFAULT && cacheRetriedUrl != u) {
-                        cacheRetriedUrl = u
-                        view.settings.cacheMode = WebSettings.LOAD_CACHE_ELSE_NETWORK
-                        view.reload()
-                        return
-                    }
                     findViewById<android.widget.TextView>(R.id.tvErrorDetail).text =
                         "${error.description} (${error.errorCode})\n${request.url}"
                     errorBox.visibility = View.VISIBLE
@@ -340,6 +369,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun logout() {
         store.clearAll()
+        proxy.clear()
         webView.clearHistory()
         WebStorage.getInstance().deleteAllData()
         startActivity(Intent(this, LoginActivity::class.java))

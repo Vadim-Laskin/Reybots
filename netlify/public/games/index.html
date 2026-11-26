@@ -69,25 +69,27 @@ kbd{font:inherit;font-weight:700;color:var(--text);background:var(--card);border
 #intro .ring+.ring{animation-delay:1.25s;border-color:rgba(100,200,255,.7)}
 #intro .streak{position:absolute;left:-60%;width:60%;height:2px;background:linear-gradient(90deg,transparent,#bcd9ff,transparent);animation:in-streak .9s ease-in forwards;opacity:.8}
 #intro .logo{position:relative;display:grid;grid-template-columns:repeat(3,clamp(34px,9vmin,86px));grid-auto-rows:clamp(34px,9vmin,86px);gap:8px;animation:in-thump .5s 1s ease-out}
-#intro .logo i{border-radius:22%;background:var(--k);box-shadow:inset 0 4px 0 rgba(255,255,255,.4),inset 0 -5px 0 rgba(0,0,0,.25),0 0 34px var(--k);animation:in-fly .8s cubic-bezier(.2,1.25,.35,1) backwards}
+#intro .logo i{border-radius:22%;background:var(--k);box-shadow:inset 0 4px 0 rgba(255,255,255,.4),inset 0 -5px 0 rgba(0,0,0,.25),0 0 18px var(--k);animation:in-fly .8s cubic-bezier(.2,1.25,.35,1) backwards}
 #intro .name{position:relative;font-size:clamp(28px,7vmin,68px);font-weight:900;white-space:nowrap;animation:in-name .9s 1.15s cubic-bezier(.2,.8,.2,1) backwards}
 #intro .sub{position:relative;margin-top:-16px;color:var(--muted);font-size:clamp(12px,2.2vmin,20px);letter-spacing:.35em;text-transform:uppercase;animation:in-sub .7s 1.6s backwards}
 #intro .skip{position:absolute;bottom:calc(env(safe-area-inset-bottom,0px) + 22px);color:var(--muted);font-size:13px;opacity:.6;animation:in-sub .5s 1.2s backwards}
 body.intro #lib .game,body.intro header,body.intro h2.sec{animation-play-state:paused}
+/* пока идёт заставка, всё под ней стоит на месте и не отнимает кадры */
+body.intro::before,body.intro .game .art i{animation-play-state:paused}
 header,h2.sec{animation:rise .5s backwards}
 @keyframes in-out{to{opacity:0;transform:scale(1.35);visibility:hidden}}
 @keyframes in-glow{from{opacity:0;transform:scale(.2)}45%{opacity:.5}}
 @keyframes in-ring{0%{opacity:1;transform:scale(.4)}100%{opacity:0;transform:scale(4)}}
 @keyframes in-streak{to{transform:translateX(280vw)}}
 @keyframes in-fly{from{opacity:0;transform:translate(var(--x),var(--y)) rotate(var(--r)) scale(2.2)}}
-@keyframes in-thump{35%{transform:scale(1.18);filter:brightness(1.7)}}
-@keyframes in-name{from{opacity:0;letter-spacing:.5em;filter:blur(14px)}}
+@keyframes in-thump{35%{transform:scale(1.18)}}
+@keyframes in-name{from{opacity:0;transform:scale(1.5)}}
 @keyframes in-sub{from{opacity:0;transform:translateY(14px)}}
 /* вход в игровой режим: своя заставка, не связанная с играми */
 #intro.mode{gap:3.5vmin;background:radial-gradient(120% 90% at 50% 110%,#12376b 0,#081634 38%,#02040c 75%);animation:m-out .7s 3.4s cubic-bezier(.6,0,.8,.4) forwards}
-#intro.mode .aurora{position:absolute;left:-30vw;width:160vw;height:34vh;border-radius:50%;filter:blur(40px);opacity:0;background:linear-gradient(90deg,transparent 8%,var(--c) 50%,transparent 92%);animation:m-aurora 3.6s ease-in-out forwards}
-#intro.mode .dot{position:absolute;left:50%;top:50%;width:5px;height:5px;margin:-2.5px;border-radius:50%;background:#bfe3ff;box-shadow:0 0 10px 2px #5cb6ff;opacity:0;animation:m-dot 1.15s cubic-bezier(.55,0,.9,.5) forwards}
-#intro.mode .emblem{position:relative;width:min(46vmin,360px);height:min(46vmin,360px);overflow:visible;filter:drop-shadow(0 0 18px rgba(92,182,255,.75));animation:m-emblem 1s 1.35s cubic-bezier(.2,.9,.3,1)}
+#intro.mode .aurora{position:absolute;left:-30vw;width:160vw;height:44vh;opacity:0;background:radial-gradient(closest-side,var(--c),transparent);will-change:transform,opacity;animation:m-aurora 3.6s ease-in-out forwards}
+#intro.mode .dot{position:absolute;left:50%;top:50%;width:5px;height:5px;margin:-2.5px;border-radius:50%;background:#bfe3ff;opacity:0;will-change:transform,opacity;animation:m-dot 1.15s cubic-bezier(.55,0,.9,.5) forwards}
+#intro.mode .emblem{position:relative;width:min(46vmin,360px);height:min(46vmin,360px);overflow:visible;border-radius:50%;background:radial-gradient(closest-side,rgba(92,182,255,.05) 55%,rgba(92,182,255,.34) 82%,transparent);animation:m-emblem 1s 1.35s cubic-bezier(.2,.9,.3,1)}
 #intro.mode .emblem *{fill:none;stroke:#eaf6ff;stroke-linecap:round;stroke-linejoin:round}
 #intro.mode .draw{stroke-dasharray:1;stroke-dashoffset:1;animation:m-draw 1.1s .35s cubic-bezier(.6,0,.2,1) forwards}
 #intro.mode .pad{stroke-width:4;animation-delay:.75s}
@@ -98,7 +100,7 @@ header,h2.sec{animation:rise .5s backwards}
 #intro.mode .ring{width:46vmin;height:46vmin;margin:-23vmin 0 0 -23vmin;border-color:rgba(150,210,255,.85);animation:in-ring 1.6s 1.42s ease-out}
 #intro.mode .ring+.ring{animation-delay:1.65s;border-color:rgba(139,123,255,.7)}
 #intro.mode .title{position:relative;display:flex;font-size:clamp(20px,5.6vmin,56px);font-weight:800;letter-spacing:.22em;white-space:pre;overflow:hidden;padding:.1em 0}
-#intro.mode .title span{animation:m-letter .6s cubic-bezier(.2,1.2,.35,1) backwards;background:linear-gradient(100deg,#dcecff 40%,#fff 50%,#dcecff 60%) 0 0/100vw 100% fixed;-webkit-background-clip:text;background-clip:text;color:transparent}
+#intro.mode .title span{color:#e4f1ff;animation:m-letter .6s cubic-bezier(.2,1.2,.35,1) backwards}
 #intro.mode .bar{position:relative;width:min(52vmin,420px);height:3px;border-radius:3px;background:rgba(255,255,255,.12);overflow:hidden;animation:in-sub .4s 1.9s backwards}
 #intro.mode .bar::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,#8b7bff,#5cb6ff,#fff);transform-origin:left;animation:m-load 1.35s 2s cubic-bezier(.5,.1,.3,1) both}
 /* лучи, кольца и вспышка сходятся ровно в центре эмблемы (она выше середины из-за подписи) */
@@ -108,11 +110,11 @@ header,h2.sec{animation:rise .5s backwards}
 @keyframes m-dot{0%{opacity:0;transform:rotate(var(--r)) translateX(75vmax) scaleX(14)}25%{opacity:1}100%{opacity:0;transform:rotate(var(--r)) translateX(0) scaleX(1)}}
 @keyframes m-draw{to{stroke-dashoffset:0}}
 @keyframes m-orbit{0%{opacity:0;transform:rotate(0) scale(.7)}25%{opacity:.9;transform:rotate(80deg) scale(1)}100%{opacity:.7;transform:rotate(330deg) scale(1)}}
-@keyframes m-emblem{20%{transform:scale(1.16);filter:drop-shadow(0 0 50px #bfe3ff) brightness(1.6)}}
+@keyframes m-emblem{20%{transform:scale(1.16)}}
 @keyframes m-flash{20%{opacity:.9}}
 @keyframes m-letter{from{opacity:0;transform:translateY(110%)}}
 @keyframes m-load{from{transform:scaleX(0)}}
-@keyframes m-out{to{opacity:0;transform:scale(3.2);filter:blur(10px);visibility:hidden}}
+@keyframes m-out{to{opacity:0;transform:scale(1.6);visibility:hidden}}
 @media (prefers-reduced-motion:reduce){#intro{display:none}}
 @media (prefers-reduced-motion:reduce){*,body::before{animation:none !important;transition:none !important}}
 </style>

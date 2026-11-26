@@ -138,12 +138,12 @@ header,h2.sec{animation:rise .5s backwards}
   <header>
     <h1>РЭУ Игры</h1>
     <span id="clock"></span>
-    <button id="mode" class="btn main">⛶ Игровой режим</button>
+    <button id="mode" class="btn main" hidden>⛶ Игровой режим</button>
     <button id="logout" class="btn">Выйти</button>
   </header>
   <h2 class="sec">Доступные игры</h2>
   <div id="lib"></div>
-  <div id="hint"><span><kbd>←</kbd> <kbd>→</kbd> выбор</span><span><kbd>Enter</kbd> запуск</span><span><kbd>F</kbd> весь экран</span></div>
+  <div id="hint"><span><kbd>←</kbd> <kbd>→</kbd> выбор</span><span><kbd>Enter</kbd> запуск</span><span><kbd>F</kbd> игровой режим</span></div>
 </div>
 
 <div id="play" hidden>
@@ -185,6 +185,7 @@ function loadTelegram() {
     safe(() => tg.ready());
     safe(() => tg.expand());
     safe(() => tg.disableVerticalSwipes()); // чтобы перетаскивание фигур не сворачивало окно
+    fullscreen(true); // игры всегда на весь экран, как бы их ни открыли
     safe(() => tg.setHeaderColor("#0b0d16"));
     safe(() => tg.setBackgroundColor("#0b0d16"));
     safe(() => tg.BackButton.onClick(() => { if ($("#intro").hidden && current && !current.api().back()) library(); }));
@@ -494,13 +495,21 @@ function fullscreen(on) {
   } catch {}
 }
 const canFull = () => tg ? !!tg.isVersionAtLeast?.("8.0") : !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
-const modeLabel = () => ($("#mode").textContent = isFull() ? "✕ Выйти из режима" : "⛶ Игровой режим");
-function toggleMode() {
-  const on = !isFull();
-  fullscreen(on);
-  if (on && !$("#home").hidden) modeIntro();
+// кнопка нужна, только пока экран не развёрнут: выключать полный экран самим незачем
+const modeLabel = () => ($("#mode").hidden = !canFull() || isFull());
+function enterMode() {
+  if (isFull()) return;
+  fullscreen(true);
+  if (!$("#home").hidden) modeIntro();
 }
-$("#mode").onclick = toggleMode;
+$("#mode").onclick = enterMode;
+// Обычный браузер разворачивает страницу только в ответ на действие, поэтому делаем это при первом же
+// касании или нажатии клавиши (и снова, если из полного экрана вышли). Кнопка и F включают режим сами.
+for (const ev of ["pointerup", "keydown"])
+  window.addEventListener(ev, (e) => {
+    if (isFull() || e.target.closest?.("#mode, #botlink") || e.code === "KeyF" || e.code === "Escape") return;
+    fullscreen(true);
+  }, true);
 for (const ev of ["fullscreenchange", "webkitfullscreenchange"])
   document.addEventListener(ev, modeLabel);
 document.addEventListener("visibilitychange", () => { if (!document.hidden && !$("#play").hidden) keepAwake(); });
@@ -508,7 +517,7 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden && !$
 /* ---------- клавиатура (внутри игры клавиши обрабатывает сама игра) ---------- */
 document.addEventListener("keydown", (e) => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
-  if (e.code === "KeyF" && !e.repeat) { e.preventDefault(); return $("#home").hidden ? fullscreen(!isFull()) : toggleMode(); }
+  if (e.code === "KeyF" && !e.repeat) { e.preventDefault(); return enterMode(); }
   if ($("#home").hidden) return;
   const dir = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: "top", ArrowDown: "cards" }[e.code];
   if (!dir) return;
@@ -530,7 +539,6 @@ const telegramReady = loadTelegram();
 modeIntro();
 telegramReady.then(() => {
   $("#logout").hidden = !!(tg || appSession());
-  $("#mode").hidden = !canFull();
   modeLabel();
   check();
 });

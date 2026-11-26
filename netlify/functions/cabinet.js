@@ -538,7 +538,7 @@ async function main(event) {
       name,
       isAdmin: admin,
       appLink: process.env.APP_LINK || "",
-      gamesLink: process.env.GAMES_LINK || "https://t.me/Armaturchic_bot/games",
+      gamesLink: process.env.GAMES_LINK || "https://t.me/Armaturchic_bot/games?mode=fullscreen",
       testing: !!TM.on,
       news: Object.values(await loadNews(st)).reduce((m, n) => Math.max(m, n.ts || 0, n.upd || 0), 0),
       sg: p.sg || 0,

@@ -1251,6 +1251,26 @@ async function main(event) {
     }
   }
 
+  // скины для игр: ИИ подбирает только цвета; игры пока открыты одному админу
+  if (body.action === "ai_skin") {
+    if (!admin) return out(403, { error: "Игры пока доступны только админу" });
+    const kind = body.kind === "bg" ? "bg" : "ship";
+    const wish = String(body.wish || "").replace(/\s+/g, " ").trim().slice(0, 80);
+    if (wish.length < 2) return out(400, { error: "Опиши, что нарисовать" });
+    const rk = "skin-rate-" + user.id;
+    let hits = [];
+    try { hits = ((await st.get(rk, { type: "json" })) || []).filter((t) => Date.now() - t < 5 * 60 * 1000); } catch {}
+    if (hits.length >= AI_LIMIT) return out(429, { error: "Мурзик устал рисовать, подожди пару минут" });
+    hits.push(Date.now());
+    try { await st.setJSON(rk, hits); } catch {}
+    try {
+      return out(200, { skin: await ai.skin(kind, wish) });
+    } catch (e) {
+      if (e.diag) console.log(e.diag);
+      return out(e.status || 502, { error: e.message });
+    }
+  }
+
   if (body.action === "ai_chat") {
     if (!(admin || (AI_FOR_ALL && (await isMember(user.id))))) return out(403, { error: "ИИ пока доступен только админу" });
     const messages = ai.cleanMessages(body.messages);

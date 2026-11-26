@@ -150,7 +150,57 @@
     return events;
   }
 
-  var Core = { TOTAL: TOTAL, spec: spec, newGame: newGame, step: step, objectX: objectX, JUMP: JUMP, GRAVITY: GRAVITY };
+  /* ----- скины: только цвета, на правила игры они не влияют ----- */
+  var ROLES = {
+    ship: ["body", "trim", "nose", "glass", "glassTrim", "wing", "wingTrim", "fin", "flame"],
+    bg: ["sky", "mid", "horizon", "ground", "floor", "sun1", "sun2", "road", "grid", "lane", "left", "right", "tower", "edge1", "edge2"],
+  };
+  function item(kind, id, name, price, list) {
+    var colors = {};
+    list.split(" ").forEach(function (c, i) { colors[ROLES[kind][i]] = "#" + c; });
+    return { id: id, name: name, price: price, colors: colors };
+  }
+  var SHOP = {
+    ship: [
+      item("ship", "classic", "Классика", 0, "bfc7f2 8c66ff e6ebff 1a73a6 33e6ff 5938bf ff408c e63380 33e6ff"),
+      item("ship", "melon", "Арбуз", 100, "ff4d6a 1f7a3a ff8095 17311f 8dff9d 2f9e4f c8ff9e 1f7a3a ff6b7f"),
+      item("ship", "ice", "Лёд", 150, "e8fbff 5bd6ff ffffff 2a6fd6 bff4ff 8fdcff ffffff 5bd6ff bff4ff"),
+      item("ship", "cat", "Кото-крейсер", 250, "ff9e2e bf5914 fff2e0 241040 ff73a6 ff9e2e fff2e0 ff73a6 ffd24d"),
+      item("ship", "shadow", "Тень", 350, "15121f ff2255 241f35 4a0014 ff2255 0d0b14 ff2255 ff2255 ff4466"),
+      item("ship", "gold", "Золото", 600, "ffc93c fff3b0 ffe27a 7a4a00 ffffff d99a00 fff3b0 ffffff fff08a"),
+    ],
+    bg: [
+      item("bg", "neon", "Неон", 0, "090418 2b0c52 ff4f8b 3a0f5c 0a0517 ffe36e ff4f8b 120d24 4d2980 7359bf ff408c 33e6ff 1a0f38 8c66ff ff408c"),
+      item("bg", "ocean", "Океан", 150, "010b1f 053a63 3fe0d0 064663 010f1f d8fff6 36c6e0 04182b 0f5c7a 3fb8c9 35ffd2 4d8dff 052840 2fd0e0 3d7bff"),
+      item("bg", "desert", "Пустыня", 200, "2a0f2e 9c2f3b ffb347 8a3b1e 220c0a fff2a8 ff7a2f 2b1410 7a3a1c d98a4a ffd24d ff6a3d 3a1a12 ff9a3d ffd27a"),
+      item("bg", "sakura", "Сакура", 300, "1d1038 6b2f6e ffb7d5 7a3566 1c0d24 ffffff ff8fc0 24112e 6e3567 d78ac0 ff7ab8 ffe3f1 3a1a42 ff9ecb ffd9ec"),
+      item("bg", "matrix", "Матрица", 400, "000a03 002b12 17ff6a 00250f 000502 d6ffd0 0fbf4a 001207 075c24 17a64a 39ff7a b6ff3d 001a0a 17ff6a 0a9e43"),
+    ],
+  };
+  var AI_PRICE = 200;
+  function owns(save_, kind, id) { var it = findItem(save_, kind, id); return !!it && (!it.price || !!it.made || (save_.owned[kind] || []).indexOf(id) >= 0); }
+  function items(save_, kind) { return SHOP[kind].concat(save_.made.filter(function (m) { return m.kind === kind; })); }
+  function findItem(save_, kind, id) { return items(save_, kind).filter(function (x) { return x.id === id; })[0]; }
+  // покупка: списывает алмазы и сразу надевает; возвращает false, если не хватает
+  function buy(save_, kind, it) {
+    if (!owns(save_, kind, it.id)) {
+      var price = it.draft ? AI_PRICE : it.price;
+      if (save_.wallet < price) return false;
+      save_.wallet -= price;
+      if (it.draft) save_.made.push({ id: it.id, kind: kind, name: it.name, colors: it.colors, made: true, price: price });
+      else save_.owned[kind] = (save_.owned[kind] || []).concat(it.id);
+    }
+    save_.use[kind] = it.id;
+    return true;
+  }
+  // ответ ИИ проверяется: все цвета на месте и в формате #rrggbb
+  function checkColors(kind, c) {
+    var out = {};
+    var ok = ROLES[kind] && c && ROLES[kind].every(function (k) { out[k] = c[k]; return /^#[0-9a-f]{6}$/i.test(c[k]); });
+    return ok ? out : null;
+  }
+
+  var Core = { ROLES: ROLES, SHOP: SHOP, AI_PRICE: AI_PRICE, owns: owns, items: items, findItem: findItem, buy: buy, checkColors: checkColors, TOTAL: TOTAL, spec: spec, newGame: newGame, step: step, objectX: objectX, JUMP: JUMP, GRAVITY: GRAVITY };
   if (typeof module !== "undefined" && module.exports) { module.exports = Core; return; }
 
   /* ================= отрисовка ================= */
@@ -225,6 +275,14 @@
     return [k(5), k(3), k(1)];
   }
   var shards = []; // осколки разбитых на форсаже препятствий
+  var look = { ship: {}, bg: {} }; // цвета выбранных скинов в виде [r, g, b]
+  function rgb(hex) { var n = parseInt(hex.slice(1), 16); return [(n >> 16) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]; }
+  function setLook(kind, colors) {
+    ROLES[kind].forEach(function (k) {
+      look[kind][k] = rgb(colors[k]);
+      if (kind === "bg" && box) box.style.setProperty("--c-" + k, colors[k]);
+    });
+  }
   // огромный кубический кот, который выглядывает из-за горизонта в «Котомире»
   function drawCat(r, g) {
     var up = Math.min(1, (BONUS - g.bonus) / 1.4, g.bonus / 0.9), t = g.t;
@@ -255,8 +313,9 @@
     r.begin([g.x * 0.55 + (Math.random() - 0.5) * shake, 3.2 + g.y * 0.35 + (Math.random() - 0.5) * shake, 7], 0.55 + fast * 0.17);
     var d = g.dist, i, z, party = g.bonus > 0, wild = party || fast > 0;
     if (party) drawCat(r, g);
-    r.box([0, -0.55, -90], [HALF * 2 + 0.6, 0.1, 200], [0.07, 0.05, 0.14], { glow: 1 });
-    [-1, 1].forEach(function (s) { r.box([s * (HALF + 0.35), -0.35, -90], [0.18, 0.3, 200], wild ? hue(g.t * 0.8 + s * 0.25) : s < 0 ? PINK : CYAN, { glow: 1 }); });
+    var B = look.bg, S = look.ship;
+    r.box([0, -0.55, -90], [HALF * 2 + 0.6, 0.1, 200], B.road, { glow: 1 });
+    [-1, 1].forEach(function (s) { r.box([s * (HALF + 0.35), -0.35, -90], [0.18, 0.3, 200], wild ? hue(g.t * 0.8 + s * 0.25) : s < 0 ? B.left : B.right, { glow: 1 }); });
     if (party) for (i = 0; i < 36; i++) { // радужная дорога
       z = -(i * 5 - (d % 5)) + 6;
       r.box([0, -0.49, z], [HALF * 2, 0.02, 5], hue((Math.floor(d / 5) + i) / 7), { glow: 1, alpha: 0.55 });
@@ -269,8 +328,8 @@
     // разметка и «города» по бокам бегут навстречу
     for (i = 0; i < 28; i++) {
       z = -(i * 7 - (d % 7)) + 6;
-      r.box([0, -0.48, z], [HALF * 2, 0.02, 0.08], [0.3, 0.16, 0.5], { glow: 1 });
-      [-1.7, 1.7].forEach(function (x) { r.box([x, -0.47, z - 3.5], [0.1, 0.02, 2.4], [0.45, 0.35, 0.75], { glow: 1 }); });
+      r.box([0, -0.48, z], [HALF * 2, 0.02, 0.08], B.grid, { glow: 1 });
+      [-1.7, 1.7].forEach(function (x) { r.box([x, -0.47, z - 3.5], [0.1, 0.02, 2.4], B.lane, { glow: 1 }); });
     }
     var first = Math.floor(d / 11);
     for (i = first; i < first + 18; i++) {
@@ -278,9 +337,9 @@
       [-1, 1].forEach(function (s) {
         var h = 2 + ((i * 37 + (s > 0 ? 11 : 0)) % 9), x = s * (10 + ((i * 53) % 7));
         if (party) h *= 0.7 + Math.abs(Math.sin(g.t * 6 + i)) * 0.7; // дома пляшут
-        r.box([x, h / 2 - 2, z], [2.6, h, 2.6], [0.1, 0.06, 0.22], { edge: party ? hue(i / 5 + g.t) : (i + (s > 0 ? 1 : 0)) % 3 ? VIOLET : PINK });
+        r.box([x, h / 2 - 2, z], [2.6, h, 2.6], B.tower, { edge: party ? hue(i / 5 + g.t) : (i + (s > 0 ? 1 : 0)) % 3 ? B.edge1 : B.edge2 });
       });
-      if (i % 3 === 0) [-1, 1].forEach(function (s) { r.box([s * (HALF + 1.4), 0.5, z], [0.15, 2.2, 0.15], s < 0 ? PINK : CYAN, { glow: 1 }); });
+      if (i % 3 === 0) [-1, 1].forEach(function (s) { r.box([s * (HALF + 1.4), 0.5, z], [0.15, 2.2, 0.15], s < 0 ? B.left : B.right, { glow: 1 }); });
     }
     var end = spec(g.n, d).length;
     if (end - d < 190) { // финишная арка
@@ -315,23 +374,23 @@
     var y = g.y + Math.sin(g.t * 9) * 0.04, roll = g.roll, pv = [g.x, y];
     r.box([g.x, -0.48, 0], [1.5 / (1 + g.y), 0.02, 1.8 / (1 + g.y)], [0, 0, 0], { glow: 1, alpha: 0.5 });
     var part = function (px, py, pz, size, color, o) { o = o || {}; o.roll = roll; o.pivot = pv; r.box([g.x + px, y + py, pz], size, color, o); };
-    part(0, 0, 0, [0.8, 0.32, 1.7], fast ? hue(g.t * 3) : [0.75, 0.78, 0.95], { edge: VIOLET, glow: fast * 0.7 });
-    part(0, -0.02, -1.15, [0.42, 0.2, 0.65], [0.9, 0.92, 1], { edge: CYAN });
-    part(0, 0.27, 0.1, [0.46, 0.26, 0.7], [0.1, 0.45, 0.65], { edge: CYAN });
+    part(0, 0, 0, [0.8, 0.32, 1.7], fast ? hue(g.t * 3) : S.body, { edge: S.trim, glow: fast * 0.7 });
+    part(0, -0.02, -1.15, [0.42, 0.2, 0.65], S.nose, { edge: S.glassTrim });
+    part(0, 0.27, 0.1, [0.46, 0.26, 0.7], S.glass, { edge: S.glassTrim });
     [-1, 1].forEach(function (s) {
-      part(s * 0.68, -0.08, 0.35, [0.6, 0.12, 0.85], [0.35, 0.22, 0.75], { edge: PINK });
-      part(s * 0.98, 0.1, 0.55, [0.1, 0.45, 0.45], [0.9, 0.2, 0.5], { glow: 0.5 });
-      part(s * 0.24, -0.02, 0.95 + Math.random() * 0.12, [0.2, 0.16, 0.22 + Math.random() * 0.2], CYAN, { glow: 1, edge: WHITE });
+      part(s * 0.68, -0.08, 0.35, [0.6, 0.12, 0.85], S.wing, { edge: S.wingTrim });
+      part(s * 0.98, 0.1, 0.55, [0.1, 0.45, 0.45], S.fin, { glow: 0.5 });
+      part(s * 0.24, -0.02, 0.95 + Math.random() * 0.12, [0.2, 0.16, 0.22 + Math.random() * 0.2], S.flame, { glow: 1, edge: WHITE });
     });
   }
 
   /* ================= экраны и управление ================= */
   var CSS = [
-    ".rc{position:fixed;left:0;top:0;z-index:100;overflow:hidden;color:#fff;background:linear-gradient(#090418 0,#2b0c52 34%,#ff4f8b 40%,#3a0f5c 41%,#0a0517);touch-action:none;--l:12px;--r:12px;--t:10px;--b:10px;--w:100vw;--h:100vh;",
+    ".rc{position:fixed;left:0;top:0;z-index:100;overflow:hidden;color:#fff;background:linear-gradient(var(--c-sky) 0,var(--c-mid) 34%,var(--c-horizon) 40%,var(--c-ground) 41%,var(--c-floor));touch-action:none;--l:12px;--r:12px;--t:10px;--b:10px;--w:100vw;--h:100vh;",
     "--l:calc(env(safe-area-inset-left,0px) + 12px);--r:calc(env(safe-area-inset-right,0px) + 12px);--b:calc(max(env(safe-area-inset-bottom,0px),var(--tg-safe-area-inset-bottom,0px)) + 10px);--t:calc(max(env(safe-area-inset-top,0px),var(--tg-safe-area-inset-top,0px) + var(--tg-content-safe-area-inset-top,0px)) + 10px)}",
     // телефон держат вертикально: поворачиваем игру сами, отступы поворачиваются вместе с ней
     ".rc.rot{transform-origin:0 0;--l:calc(max(env(safe-area-inset-top,0px),var(--tg-safe-area-inset-top,0px) + var(--tg-content-safe-area-inset-top,0px)) + 12px);--r:calc(max(env(safe-area-inset-bottom,0px),var(--tg-safe-area-inset-bottom,0px)) + 12px);--t:10px;--b:10px}",
-    ".rc-sun{position:absolute;left:50%;top:40%;width:calc(var(--h)*.44);height:calc(var(--h)*.22);margin:calc(var(--h)*-.22) 0 0 calc(var(--h)*-.22);border-radius:999px 999px 0 0;background:repeating-linear-gradient(transparent 0 11px,rgba(43,12,82,.9) 11px 15px),linear-gradient(#ffe36e,#ff4f8b)}",
+    ".rc-sun{position:absolute;left:50%;top:40%;width:calc(var(--h)*.44);height:calc(var(--h)*.22);margin:calc(var(--h)*-.22) 0 0 calc(var(--h)*-.22);border-radius:999px 999px 0 0;background:repeating-linear-gradient(transparent 0 11px,var(--c-mid) 11px 15px),linear-gradient(var(--c-sun1),var(--c-sun2))}",
     ".rc canvas{position:absolute;inset:0;width:100%;height:100%}",
     ".rc-btn{border:0;border-radius:14px;background:rgba(20,12,45,.75);color:#fff;font:inherit;font-weight:800;padding:10px 16px;outline-offset:3px}",
     ".rc-btn:active{transform:scale(.94)}",
@@ -372,13 +431,32 @@
     "@keyframes rc-flip{0%{transform:rotate(0) scale(1)}50%{transform:rotate(180deg) scale(2.3)}100%{transform:rotate(360deg) scale(1)}}",
     "@keyframes rc-pop{0%{opacity:0;transform:scale(.4)}25%{opacity:1;transform:scale(1.15)}100%{opacity:0;transform:translateY(-40px)}}",
     "@keyframes rc-banner{0%{opacity:0;transform:scale(3) rotate(-8deg)}18%{opacity:1;transform:scale(.92) rotate(2deg)}28%{transform:none}80%{opacity:1}100%{opacity:0;transform:scale(1.2)}}",
+    ".rc-wallet{font-weight:900;color:#7dffe8;background:rgba(20,12,45,.75);border-radius:14px;padding:8px 14px;white-space:nowrap}",
+    ".rc-shop{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;gap:8px;padding:var(--t) var(--r) var(--b) var(--l)}",
+    ".rc-shop .rc-top{align-self:stretch}",
+    ".rc-shop .rc-btn.on{background:#7a52ff}",
+    ".rc-shop .rc-btn:disabled{opacity:.55}",
+    ".rc-name{font-size:clamp(18px,calc(var(--h)*.07),30px);font-weight:900;font-style:italic;text-shadow:0 2px 8px #000,0 0 14px #000}",
+    ".rc-arrow{position:absolute;top:62%;width:60px;height:60px;border-radius:50%;font-size:26px;border:2px solid rgba(255,255,255,.45)}",
+    ".rc-note{font-size:13px;text-shadow:0 1px 4px #000,0 0 8px #000;text-align:center}",
+    ".rc-note.bottom{margin-top:auto}",
+    // окно запроса не поворачивается вместе с игрой: клавиатура телефона всегда «вертикальная»
+    ".rc-ask{position:fixed;inset:0;z-index:101;display:flex;align-items:flex-start;justify-content:center;padding:calc(max(env(safe-area-inset-top,0px),var(--tg-safe-area-inset-top,0px) + var(--tg-content-safe-area-inset-top,0px)) + 24px) 16px 16px;background:rgba(8,4,22,.88);color:#fff}",
+    ".rc-ask form{width:100%;max-width:420px;display:flex;flex-direction:column;gap:12px;text-align:center}",
+    ".rc-ask input{font:inherit;font-size:17px;padding:12px 14px;border-radius:14px;border:2px solid #7a52ff;background:#1b0f3a;color:#fff;user-select:text;-webkit-user-select:text}",
+    ".rc-ask p{margin:0;color:#ffb4c8;min-height:1.3em;font-size:14px}",
+    ".rc-ask .rc-btn{background:#2b1a55}.rc-ask .rc-btn.main{background:#ff3f86}",
     ".rc-count{position:absolute;left:0;right:0;top:30%;text-align:center;font-size:calc(var(--h)*.18);font-weight:900;font-style:italic;text-shadow:0 0 24px #ff3f86;pointer-events:none}",
   ].join("\n");
 
   var host, box, canvas, renderer, layer, G = null, screen = "menu", raf = 0, prev = 0, countdown = 0, paused = false, audio = null, hud = {}, level = 1;
   var keys = {}, pads = { left: 0, right: 0 }, jumpWanted = 0;
-  var SAVE = "rey-racer", save = { stars: {}, best: 0, top: {}, all: false, mute: false };
+  var SAVE = "rey-racer", save = { stars: {}, best: 0, top: {}, all: false, mute: false, wallet: 0, owned: {}, use: {}, made: [] };
   try { Object.assign(save, JSON.parse(root.localStorage.getItem(SAVE) || "{}")); } catch (e) {}
+  var ask = null, shop = { tab: "ship", at: { ship: 0, bg: 0 }, aiKind: "ship", draft: null };
+  function dress() { // надеть выбранные скины
+    ["ship", "bg"].forEach(function (kind) { setLook(kind, (findItem(save, kind, save.use[kind]) || SHOP[kind][0]).colors); });
+  }
   function persist() { try { root.localStorage.setItem(SAVE, JSON.stringify(save)); } catch (e) {} }
 
   function el(tag, cls, text) { var e = doc.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
@@ -420,7 +498,7 @@
       for (var i = 0; i < 18; i++) shards.push({ born: G.t, x: e.x + (Math.random() - 0.5) * e.smash.w, y: Math.random() * e.smash.h, z: -1, vx: (Math.random() - 0.5) * 16, vy: Math.random() * 12, vz: -Math.random() * 22, s: 0.2 + Math.random() * 0.45, rate: Math.random() * 14, c: i % 3 ? PINK : CYAN });
       beep([120, 70], 0.05, "square", 0.12); haptic("medium");
     } else if (e === "jump") { jumpWanted = 0; beep([300, 480], 0.05, "square", 0.05); }
-    else if (e === "gem") { var up = Math.pow(1.06, G.bonus ? Math.min(24, G.gems % 25) : 0); beep([990 * up, 1320 * up], 0.05); }
+    else if (e === "gem") { save.wallet++; persist(); var up = Math.pow(1.06, G.bonus ? Math.min(24, G.gems % 25) : 0); beep([990 * up, 1320 * up], 0.05); }
     else if (e === "near") {
       if (hud.pop) hud.pop.remove();
       hud.pop = el("div", "rc-pop", (G.combo > 1 ? "Впритирку ×" + G.combo : "Впритирку!") + " +" + 50 * Math.min(G.combo, 10));
@@ -444,7 +522,7 @@
 
   // игра всегда горизонтальная
   function layout() {
-    if (!box) return;
+    if (!box || ask) return;
     var W = root.innerWidth, H = root.innerHeight, rot = H > W, w = rot ? H : W, h = rot ? W : H;
     box.classList.toggle("rot", rot);
     box.style.width = w + "px"; box.style.height = h + "px";
@@ -459,14 +537,14 @@
   var stars = function (n) { return save.stars[n] || 0; };
   var unlocked = function (n) { return save.all || n === 1 || stars(n - 1) > 0 || stars(n) > 0; };
   function showMenu() {
-    screen = "menu"; stopLoop(); clearInput(); shards = []; box.classList.remove("rush", "party", "flip");
+    screen = "menu"; stopLoop(); clearInput(); closeAsk(); shards = []; box.classList.remove("rush", "party", "flip"); dress();
     G = newGame(1, 1); G.objects = []; // фон меню — пустая трасса
     if (renderer) draw(renderer, G);
     clearLayer();
     var m = el("div", "rc-menu"), top = el("div", "rc-top");
     var mute = btn(save.mute ? "🔇" : "🔊", function () { save.mute = !save.mute; persist(); mute.textContent = save.mute ? "🔇" : "🔊"; });
     mute.setAttribute("aria-label", "Звук");
-    top.append(btn("←", function () { api.onExit(); }), el("h1", null, "Неон-трасса"), mute);
+    top.append(btn("←", function () { api.onExit(); }), el("h1", null, "Неон-трасса"), el("span", "rc-wallet", "💎 " + save.wallet), mute);
     var grid = el("div", "rc-grid"), cur = 1;
     while (cur < TOTAL && stars(cur) > 0) cur++;
     for (var i = 1; i <= TOTAL; i++) (function (n) {
@@ -480,9 +558,105 @@
     c.type = "checkbox"; c.checked = save.all;
     c.onchange = function () { save.all = c.checked; persist(); showMenu(); };
     check.append(c, doc.createTextNode(" Открыть все уровни (для теста)"));
-    row.append(btn("∞ Бесконечный заезд" + (save.best ? " · рекорд " + save.best + " м" : ""), function () { start(0); }, "main"), check);
+    row.append(btn("∞ Бесконечный заезд" + (save.best ? " · рекорд " + save.best + " м" : ""), function () { start(0); }, "main"), btn("🛒 Магазин", openShop), check);
     m.append(top, grid, row);
     layer.append(m);
+  }
+
+  function openShop() {
+    screen = "shop"; stopLoop(); clearInput();
+    ["ship", "bg"].forEach(function (k) { shop.at[k] = Math.max(0, items(save, k).map(function (x) { return x.id; }).indexOf(save.use[k] || SHOP[k][0].id)); });
+    G = newGame(1, 1); G.objects = [];
+    showShop();
+    var last = 0;
+    var spin = function (now) { // корабль в витрине летит по пустой трассе
+      var dt = last ? Math.min(0.05, (now - last) / 1000) : 0; last = now;
+      G.t += dt; G.dist = (G.dist + dt * 16) % 154; G.roll = Math.sin(G.t * 1.4) * 0.16;
+      if (renderer) draw(renderer, G);
+      raf = root.requestAnimationFrame(spin);
+    };
+    raf = root.requestAnimationFrame(spin);
+  }
+  function showShop(focus) {
+    clearLayer(); dress();
+    var tab = shop.tab, m = el("div", "rc-shop"), top = el("div", "rc-top"), tabs = el("div", "rc-row");
+    var go = function (fn, id) { return function () { fn(); showShop(id); }; };
+    var tag = function (b, id) { b.dataset.id = id; return b; };
+    top.append(btn("←", showMenu), el("h1", null, "Магазин"), btn("+500 (тест)", go(function () { save.wallet += 500; persist(); }, "test")), el("span", "rc-wallet", "💎 " + save.wallet));
+    tag(top.children[2], "test");
+    [["ship", "Корабль"], ["bg", "Фон"], ["ai", "✨ От ИИ"]].forEach(function (t) {
+      tabs.append(tag(btn(t[1], go(function () { shop.tab = t[0]; }, t[0]), t[0] === tab ? "on" : ""), t[0]));
+    });
+    m.append(top, tabs);
+    if (tab === "ai") aiTab(m, go, tag);
+    else {
+      var list = items(save, tab), i = shop.at[tab] = (shop.at[tab] + list.length) % list.length, it = list[i];
+      setLook(tab, it.colors);
+      m.append(el("div", "rc-name", it.name), buyButton(tab, it, tag), el("div", "rc-note", (i + 1) + " из " + list.length));
+      var prevB = tag(btn("‹", go(function () { shop.at[tab]--; }, "prev"), "rc-arrow"), "prev"), nextB = tag(btn("›", go(function () { shop.at[tab]++; }, "next"), "rc-arrow"), "next");
+      prevB.style.left = "var(--l)"; nextB.style.right = "var(--r)";
+      m.append(prevB, nextB);
+    }
+    layer.append(m);
+    if (focus) { var f = m.querySelector('[data-id="' + focus + '"]'); if (f && !f.disabled) f.focus({ preventScroll: true }); }
+  }
+  function buyButton(kind, it, tag) {
+    var have = !it.draft && owns(save, kind, it.id), on = have && (save.use[kind] || SHOP[kind][0].id) === it.id;
+    var price = it.draft ? AI_PRICE : it.price, lack = price - save.wallet;
+    var b = tag(btn(on ? "✓ Выбрано" : have ? "Надеть" : lack > 0 ? "Не хватает " + lack + " 💎" : "Купить за " + price + " 💎", function () {
+      if (!buy(save, kind, it)) return;
+      persist();
+      if (it.draft) { shop.draft = null; shop.tab = kind; shop.at[kind] = items(save, kind).length - 1; }
+      if (!have) { beep([660, 880, 1320], 0.09); haptic("win"); } else beep([880], 0.07);
+      showShop("buy");
+    }, "main"), "buy");
+    b.disabled = on || (!have && lack > 0);
+    return b;
+  }
+  function aiTab(m, go, tag) {
+    var d = shop.draft, kinds = el("div", "rc-row");
+    [["ship", "Корабль"], ["bg", "Фон"]].forEach(function (k) {
+      kinds.append(tag(btn(k[1], go(function () { shop.aiKind = k[0]; shop.draft = null; }, "k-" + k[0]), shop.aiKind === k[0] ? "on" : ""), "k-" + k[0]));
+    });
+    m.append(kinds);
+    if (d) { setLook(d.kind, d.colors); m.append(el("div", "rc-name", d.name)); }
+    var row = el("div", "rc-row");
+    if (d) row.append(buyButton(d.kind, d, tag));
+    row.append(tag(btn(d ? "Другой вариант" : "✨ Придумать", openAsk, d ? "" : "main"), "ask"));
+    m.append(row, el("div", "rc-note bottom", d ? "Это примерка: пока не куплено, вариант не сохранится" : "Опиши словами, а ИИ подберёт цвета. Посмотреть бесплатно, забрать — " + AI_PRICE + " 💎"));
+  }
+  function openAsk() {
+    if (ask) return;
+    var kind = shop.aiKind, wrap = el("div", "rc-ask"), form = el("form"), input = el("input"), msg = el("p"), row = el("div", "rc-row");
+    input.maxLength = 80; input.value = shop.wish || ""; input.enterKeyHint = "go";
+    input.placeholder = kind === "ship" ? "например: космический арбуз" : "например: северное сияние";
+    var ok = btn("Нарисовать", null, "main"); ok.type = "submit"; ok.onclick = null;
+    row.append(ok, btn("Отмена", closeAsk));
+    form.append(el("h2", null, kind === "ship" ? "Какой корабль придумать?" : "Какой фон придумать?"), input, msg, row);
+    wrap.append(form); host.append(wrap); ask = wrap;
+    wrap.onkeydown = function (e) { if (e.key === "Escape") closeAsk(); e.stopPropagation(); };
+    form.onsubmit = function (e) {
+      e.preventDefault();
+      var wish = input.value.trim();
+      if (wish.length < 2) { msg.textContent = "Напиши хотя бы пару букв"; return; }
+      if (!api.draw) { msg.textContent = "ИИ здесь недоступен"; return; }
+      shop.wish = wish; ok.disabled = true; msg.textContent = "ИИ рисует…";
+      api.draw(kind, wish).then(function (r) {
+        if (ask !== wrap) return;
+        var colors = checkColors(kind, r && r.skin && r.skin.colors);
+        if (!colors) throw new Error("ИИ нарисовал что-то странное, попробуй ещё раз");
+        shop.draft = { id: "ai-" + Date.now().toString(36), kind: kind, name: String(r.skin.name || wish).slice(0, 24), colors: colors, draft: true };
+        closeAsk(); showShop("ask"); beep([784, 988, 1175, 1568], 0.08);
+      }).catch(function (err) {
+        if (ask !== wrap) return;
+        ok.disabled = false; msg.textContent = (err && err.message) || "Не получилось, попробуй ещё раз";
+      });
+    };
+    input.focus();
+  }
+  function closeAsk() {
+    if (!ask) return;
+    ask.remove(); ask = null; layout();
   }
 
   function start(n) {
@@ -599,7 +773,7 @@
 
   function visible() { return !!box && box.isConnected && !host.closest("[hidden]"); }
   function onKey(e) {
-    if (!box || !visible() || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (!box || !visible() || ask || e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.type === "keyup") { delete keys[e.code]; return; }
     var back = e.code === "Escape" || e.code === "Backspace", done = true;
     var list = Array.prototype.slice.call(layer.querySelectorAll((layer.querySelector(".rc-modal") ? ".rc-modal " : "") + "button:not(:disabled)"));
@@ -625,6 +799,7 @@
 
   var api = {
     onExit: function () {},
+    draw: null, // задаётся приложением игр: (вид, пожелание) -> Promise с ответом ИИ
     open: function (container, onExit) {
       if (!doc.getElementById("rc-css")) { var st = el("style"); st.id = "rc-css"; st.textContent = CSS; doc.head.append(st); }
       host = container; api.onExit = onExit;
@@ -634,19 +809,20 @@
       renderer = null;
       try { renderer = makeRenderer(canvas); } catch (e) { console.log("racer:", e.message); }
       canvas.addEventListener("webglcontextlost", function (e) { if (e.target !== canvas || !renderer) return; e.preventDefault(); stopLoop(); renderer = null; clearLayer(); modal("Графика сбросилась", "Откройте игру заново.", [btn("Выйти", function () { api.onExit(); }, "main")]); });
-      layout(); showMenu(); layout();
+      ask = null; layout(); showMenu(); layout();
       if (!renderer) { clearLayer(); modal("3D недоступно", "Этот браузер не поддерживает WebGL.", [btn("Назад", function () { api.onExit(); }, "main")]); }
       // где браузер разрешает, дополнительно закрепляем горизонтальную ориентацию
       try { var p = root.screen.orientation.lock("landscape"); if (p) p.catch(function () {}); } catch (e) {}
     },
     // кнопка «Назад»: гонка → пауза → меню; false — выходить из игры
     back: function () {
+      if (ask) { closeAsk(); return true; }
       if (screen === "menu") return false;
       if (screen === "race" && !paused) setPause(true); else showMenu();
       return true;
     },
     close: function () {
-      stopLoop(); screen = "menu"; G = null; clearInput();
+      stopLoop(); screen = "menu"; G = null; clearInput(); if (ask) ask.remove(); ask = null; shop.draft = null;
       try { root.screen.orientation.unlock(); } catch (e) {}
       if (renderer) { var lose = renderer.gl.getExtension("WEBGL_lose_context"); renderer = null; if (box) box.remove(); if (lose) lose.loseContext(); }
       if (box) box.remove();

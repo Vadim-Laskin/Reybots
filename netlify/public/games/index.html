@@ -311,6 +311,16 @@ $("#other").onclick = $("#logout").onclick = () => {
   gate("Игровой раздел пока открыт только админу. Войдите через Telegram-бота.", ["login"]);
 };
 
+/* ---------- скины от ИИ (тот же ключ, что у Мурзика, лежит на сервере) ---------- */
+async function drawSkin(kind, wish) {
+  const initData = tg?.initData || "";
+  try {
+    return await post("cabinet", { action: "ai_skin", initData, session: initData ? "" : appSession() || get(SESSION), kind, wish });
+  } catch (e) {
+    throw e.status ? e : new Error("Нет связи с сервером");
+  }
+}
+
 /* ---------- библиотека ---------- */
 let current = null, last = 0;
 const COLORS = ["#ff5d6c", "#ff9f43", "#f5c542", "#35c97a", "#38a8f5", "#9b7bff"];
@@ -376,6 +386,7 @@ async function launch(game) {
     // на экране только выбранная игра и её подсказки по клавишам
     for (const g of GAMES) $(g.root).hidden = g !== game;
     $("#keys").hidden = game.root !== "#blocks";
+    if (game.root === "#racer") game.api().draw = drawSkin;
     game.api().open($(game.root), library);
   } catch (e) { toast(e.message); }
 }
@@ -571,7 +582,7 @@ $("#mode").onclick = enterMode;
 // касании или нажатии клавиши (и снова, если из полного экрана вышли). Кнопка и F включают режим сами.
 for (const ev of ["pointerup", "keydown"])
   window.addEventListener(ev, (e) => {
-    if (isFull() || e.target.closest?.("#mode, #botlink") || e.code === "KeyF" || e.code === "Escape") return;
+    if (isFull() || e.target.closest?.("#mode, #botlink, input") || e.code === "KeyF" || e.code === "Escape") return;
     fullscreen(true);
   }, true);
 for (const ev of ["fullscreenchange", "webkitfullscreenchange"])
@@ -580,7 +591,7 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden && !$
 
 /* ---------- клавиатура (внутри игры клавиши обрабатывает сама игра) ---------- */
 document.addEventListener("keydown", (e) => {
-  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.ctrlKey || e.metaKey || e.altKey || e.target.matches?.("input")) return;
   if (e.code === "KeyF" && !e.repeat) { e.preventDefault(); return enterMode(); }
   if ($("#home").hidden) return;
   const dir = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: "top", ArrowDown: "cards" }[e.code];

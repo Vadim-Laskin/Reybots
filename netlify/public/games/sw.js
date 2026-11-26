@@ -1,6 +1,6 @@
 // сначала сеть, без связи — сохранённая копия (только файлы игрового приложения)
-const CACHE = "rey-games-1";
-const FILES = ["/games/", "/games/manifest.webmanifest", "/games/icon-192.png", "/cabinet/blocks.js"];
+const CACHE = "rey-games-2";
+const FILES = ["/games/", "/games/manifest.webmanifest", "/games/icon-192.png", "/cabinet/blocks.js", "/games/racer.js"];
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
 });

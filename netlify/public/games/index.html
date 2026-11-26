@@ -62,10 +62,34 @@ kbd{font:inherit;font-weight:700;color:var(--text);background:var(--card);border
 @keyframes drift{to{transform:translate(4%,3%) scale(1.08)}}
 @keyframes rise{from{opacity:0;transform:translateY(40px)}}
 @keyframes float{50%{transform:translateY(-6px)}}
+/* заставка входа в игровой режим */
+#intro{position:fixed;inset:0;z-index:300;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;overflow:hidden;background:#05060c;cursor:pointer;animation:in-out .55s 2.65s ease-in forwards}
+#intro .glow{position:absolute;width:140vmax;height:140vmax;left:50%;top:50%;margin:-70vmax 0 0 -70vmax;background:radial-gradient(circle,rgba(139,123,255,.55),rgba(56,168,245,.18) 25%,transparent 55%);animation:in-glow 2.6s ease-out backwards}
+#intro .ring{position:absolute;left:50%;top:50%;width:40vmin;height:40vmin;margin:-20vmin 0 0 -20vmin;border:2px solid rgba(190,180,255,.8);border-radius:50%;opacity:0;animation:in-ring 1.5s 1s ease-out}
+#intro .ring+.ring{animation-delay:1.25s;border-color:rgba(100,200,255,.7)}
+#intro .streak{position:absolute;left:-60%;width:60%;height:2px;background:linear-gradient(90deg,transparent,#bcd9ff,transparent);animation:in-streak .9s ease-in forwards;opacity:.8}
+#intro .logo{position:relative;display:grid;grid-template-columns:repeat(3,clamp(34px,9vmin,86px));grid-auto-rows:clamp(34px,9vmin,86px);gap:8px;animation:in-thump .5s 1s ease-out}
+#intro .logo i{border-radius:22%;background:var(--k);box-shadow:inset 0 4px 0 rgba(255,255,255,.4),inset 0 -5px 0 rgba(0,0,0,.25),0 0 34px var(--k);animation:in-fly .8s cubic-bezier(.2,1.25,.35,1) backwards}
+#intro .name{position:relative;font-size:clamp(28px,7vmin,68px);font-weight:900;white-space:nowrap;animation:in-name .9s 1.15s cubic-bezier(.2,.8,.2,1) backwards}
+#intro .sub{position:relative;margin-top:-16px;color:var(--muted);font-size:clamp(12px,2.2vmin,20px);letter-spacing:.35em;text-transform:uppercase;animation:in-sub .7s 1.6s backwards}
+#intro .skip{position:absolute;bottom:calc(env(safe-area-inset-bottom,0px) + 22px);color:var(--muted);font-size:13px;opacity:.6;animation:in-sub .5s 1.2s backwards}
+body.intro #lib .game,body.intro header,body.intro h2.sec{animation-play-state:paused}
+header,h2.sec{animation:rise .5s backwards}
+@keyframes in-out{to{opacity:0;transform:scale(1.35);visibility:hidden}}
+@keyframes in-glow{from{opacity:0;transform:scale(.2)}45%{opacity:.5}}
+@keyframes in-ring{0%{opacity:1;transform:scale(.4)}100%{opacity:0;transform:scale(4)}}
+@keyframes in-streak{to{transform:translateX(280vw)}}
+@keyframes in-fly{from{opacity:0;transform:translate(var(--x),var(--y)) rotate(var(--r)) scale(2.2)}}
+@keyframes in-thump{35%{transform:scale(1.18);filter:brightness(1.7)}}
+@keyframes in-name{from{opacity:0;letter-spacing:.5em;filter:blur(14px)}}
+@keyframes in-sub{from{opacity:0;transform:translateY(14px)}}
+@media (prefers-reduced-motion:reduce){#intro{display:none}}
 @media (prefers-reduced-motion:reduce){*,body::before{animation:none !important;transition:none !important}}
 </style>
 </head>
 <body>
+
+<div id="intro" hidden aria-hidden="true"></div>
 
 <div id="gate" hidden>
   <img src="/games/icon-192.png" alt="">
@@ -279,6 +303,71 @@ async function launch(game) {
   } catch (e) { toast(e.message); }
 }
 
+/* ---------- заставка: блоки слетаются в значок, вспышка, название ---------- */
+let introTimer = 0, audio = null;
+function introSound() {
+  try {
+    if (JSON.parse(get("rey-blocks") || "{}").mute) return;
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    audio.resume?.().catch(() => {});
+    if (audio.state !== "running") return; // до первого касания браузер звук не разрешает
+    const note = (f, at, len, type, vol, to) => {
+      const o = audio.createOscillator(), g = audio.createGain(), t = audio.currentTime + at;
+      o.type = type; o.frequency.setValueAtTime(f, t);
+      if (to) o.frequency.exponentialRampToValueAtTime(to, t + len);
+      g.gain.setValueAtTime(0.001, t);
+      g.gain.exponentialRampToValueAtTime(vol, t + 0.08);
+      g.gain.exponentialRampToValueAtTime(0.001, t + len);
+      o.connect(g); g.connect(audio.destination); o.start(t); o.stop(t + len);
+    };
+    note(55, 0, 1.2, "sawtooth", 0.05, 220); // нарастание
+    [262, 392, 523, 659, 784].forEach((f, i) => note(f, 1 + i * 0.05, 1.7, "triangle", 0.07)); // аккорд
+  } catch {}
+}
+function endIntro() {
+  clearTimeout(introTimer);
+  audio?.suspend?.().catch(() => {});
+  $("#intro").hidden = true;
+  $("#intro").replaceChildren();
+  document.body.classList.remove("intro");
+}
+function intro() {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  endIntro();
+  const box = $("#intro");
+  const add = (parent, cls, tag = "div", text = "") => {
+    const e = document.createElement(tag); e.className = cls; e.textContent = text; parent.append(e); return e;
+  };
+  add(box, "glow"); add(box, "ring"); add(box, "ring");
+  for (let i = 0; i < 7; i++) {
+    const s = add(box, "streak");
+    s.style.top = 8 + i * 13 + "%"; s.style.animationDelay = ((i * 5) % 7) * 0.09 + "s";
+  }
+  const logo = add(box, "logo");
+  // клетки значка: [столбец, строка, цвет, откуда прилетает]
+  [[1, 1, 1, "-60vw", "-30vh"], [2, 1, 5, "10vw", "-60vh"], [2, 2, 4, "-20vw", "60vh"], [3, 2, 3, "60vw", "25vh"], [3, 3, 0, "40vw", "50vh"], [1, 3, 2, "-55vw", "35vh"]]
+    .forEach(([c, r, k, x, y], i) => {
+      const t = add(logo, "", "i");
+      t.style.cssText = `grid-column:${c};grid-row:${r};--k:${COLORS[k]};--x:${x};--y:${y};--r:${i % 2 ? 220 : -220}deg;animation-delay:${0.15 + i * 0.09}s`;
+    });
+  add(box, "name", "div", "РЭУ Игры");
+  add(box, "sub", "div", "игровой режим");
+  add(box, "skip", "div", "нажмите, чтобы пропустить");
+  box.hidden = false;
+  document.body.classList.add("intro");
+  introSound();
+  introTimer = setTimeout(endIntro, 3200);
+  // библиотека начинает выезжать, пока заставка растворяется
+  setTimeout(() => { if (!box.hidden) document.body.classList.remove("intro"); }, 2650);
+}
+$("#intro").onclick = endIntro;
+// любая клавиша пропускает заставку и не срабатывает в меню под ней
+window.addEventListener("keydown", (e) => {
+  if ($("#intro").hidden || e.ctrlKey || e.metaKey || e.altKey) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  endIntro();
+}, true);
+
 /* ---------- игровой режим: весь экран и экран не гаснет ---------- */
 const isFull = () => tg ? !!tg.isFullscreen : !!(document.fullscreenElement || document.webkitFullscreenElement);
 let wake = null;
@@ -299,7 +388,12 @@ function fullscreen(on) {
 }
 const canFull = () => tg ? !!tg.isVersionAtLeast?.("8.0") : !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
 const modeLabel = () => ($("#mode").textContent = isFull() ? "✕ Выйти из режима" : "⛶ Игровой режим");
-$("#mode").onclick = () => fullscreen(!isFull());
+function toggleMode() {
+  const on = !isFull();
+  fullscreen(on);
+  if (on && !$("#home").hidden) intro();
+}
+$("#mode").onclick = toggleMode;
 for (const ev of ["fullscreenchange", "webkitfullscreenchange"])
   document.addEventListener(ev, modeLabel);
 document.addEventListener("visibilitychange", () => { if (!document.hidden && !$("#play").hidden) keepAwake(); });
@@ -307,7 +401,7 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden && !$
 /* ---------- клавиатура (внутри игры клавиши обрабатывает сама игра) ---------- */
 document.addEventListener("keydown", (e) => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
-  if (e.code === "KeyF" && !e.repeat) { e.preventDefault(); return fullscreen(!isFull()); }
+  if (e.code === "KeyF" && !e.repeat) { e.preventDefault(); return $("#home").hidden ? fullscreen(!isFull()) : toggleMode(); }
   if ($("#home").hidden) return;
   const dir = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: "top", ArrowDown: "cards" }[e.code];
   if (!dir) return;
@@ -325,6 +419,7 @@ const tick = () => ($("#clock").textContent = new Date().toLocaleTimeString("ru-
 tick(); setInterval(tick, 10000);
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("/games/sw.js").catch(() => {});
 gate("Проверяю вход…");
+intro();
 loadTelegram().then(() => {
   $("#logout").hidden = !!(tg || appSession());
   $("#mode").hidden = !canFull();

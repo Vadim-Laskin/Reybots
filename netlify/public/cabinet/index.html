@@ -2587,11 +2587,12 @@ async function openGame() {
   } catch (e) { fail(e); }
 }
 
-// отдельное приложение /games/: из Telegram открываем в браузере, там можно установить его значком
+// отдельное приложение «Игры»: из Telegram открываем его мини-приложение и закрываем кабинет (как переход в расписание)
 function openGamesApp() {
-  const url = location.origin + "/games/";
-  if (tg?.initData && tg.openLink) tg.openLink(url);
-  else location.href = url;
+  if (!IN_APP && tg?.initData && INFO?.gamesLink) {
+    tg.openTelegramLink(INFO.gamesLink);
+    setTimeout(() => tg.close(), 400);
+  } else location.href = "/games/";
 }
 
 /* ---------- админ: отмена пар ---------- */

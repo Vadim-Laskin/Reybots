@@ -16,7 +16,8 @@
 *{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 [hidden]{display:none !important}
 html,body{background:var(--bg);color:var(--text);font-family:-apple-system,"Segoe UI",Roboto,sans-serif;min-height:100%}
-body{padding:calc(env(safe-area-inset-top,0px) + 16px) calc(env(safe-area-inset-right,0px) + 16px) calc(env(safe-area-inset-bottom,0px) + 16px) calc(env(safe-area-inset-left,0px) + 16px)}
+/* отступы учитывают вырезы телефона и кнопки Telegram в полноэкранном режиме */
+body{padding:calc(max(env(safe-area-inset-top,0px),var(--tg-safe-area-inset-top,0px) + var(--tg-content-safe-area-inset-top,0px)) + 16px) calc(env(safe-area-inset-right,0px) + 16px) calc(max(env(safe-area-inset-bottom,0px),var(--tg-safe-area-inset-bottom,0px) + var(--tg-content-safe-area-inset-bottom,0px)) + 16px) calc(env(safe-area-inset-left,0px) + 16px)}
 body::before{content:"";position:fixed;inset:-20%;z-index:-1;background:radial-gradient(40% 35% at 20% 15%,rgba(139,123,255,.35),transparent 70%),radial-gradient(40% 40% at 85% 80%,rgba(56,168,245,.22),transparent 70%);animation:drift 14s ease-in-out infinite alternate}
 button,a.btn{font:inherit;color:var(--text);cursor:pointer}
 .btn{display:inline-block;border:0;border-radius:14px;background:var(--card);font-weight:700;padding:12px 18px;text-decoration:none;transition:transform .12s}
@@ -108,6 +109,32 @@ const set = (k, v) => {
 // внутри Android-приложения кабинета вход уже есть
 const appSession = () => { try { return window.ReyApp?.session?.() || ""; } catch { return ""; } };
 
+/* ---------- запуск как мини-приложение Telegram (t.me/<бот>/games) ---------- */
+let tg = null;
+// скрипт Telegram грузим только внутри Telegram: обычному браузеру и офлайн-запуску он не нужен
+function loadTelegram() {
+  if (!/tgWebApp/.test(location.hash)) return Promise.resolve();
+  return new Promise((done) => {
+    const s = document.createElement("script");
+    s.src = "https://telegram.org/js/telegram-web-app.js";
+    s.onload = s.onerror = () => { clearTimeout(timer); done(); };
+    const timer = setTimeout(done, 8000);
+    document.head.append(s);
+  }).then(() => {
+    const w = window.Telegram?.WebApp;
+    if (!w?.initData) return;
+    tg = w;
+    const safe = (f) => { try { f(); } catch {} };
+    safe(() => tg.ready());
+    safe(() => tg.expand());
+    safe(() => tg.disableVerticalSwipes()); // чтобы перетаскивание фигур не сворачивало окно
+    safe(() => tg.setHeaderColor("#0b0d16"));
+    safe(() => tg.setBackgroundColor("#0b0d16"));
+    safe(() => tg.BackButton.onClick(() => { if (current && !current.api().back()) library(); }));
+    safe(() => tg.onEvent("fullscreenChanged", () => { modeLabel(); setTimeout(() => dispatchEvent(new Event("resize")), 100); }));
+  });
+}
+
 /* ---------- каталог игр: новую игру достаточно добавить сюда ---------- */
 const GAMES = [
   { title: "Блоки", desc: "60 уровней · головоломка", src: "/cabinet/blocks.js", api: () => window.ReyBlocks, root: "#blocks" },
@@ -115,6 +142,7 @@ const GAMES = [
 
 function view(id) {
   for (const v of ["gate", "home", "play"]) $("#" + v).hidden = v !== id;
+  try { id === "play" ? tg?.BackButton.show() : tg?.BackButton.hide(); } catch {}
   window.scrollTo(0, 0);
 }
 let toastTimer = 0;
@@ -140,22 +168,24 @@ async function post(fn, body) {
 }
 function forget() { set(SESSION, null); set(OK, null); set(PENDING, null); }
 async function check() {
-  const session = appSession() || get(SESSION);
-  if (!session) return get(PENDING) ? wait() : gate("Игровой раздел пока открыт только админу. Войдите через Telegram-бота.", ["login"]);
+  const initData = tg?.initData || "";
+  const session = initData ? "" : appSession() || get(SESSION);
+  if (!initData && !session) return get(PENDING) ? wait() : gate("Игровой раздел пока открыт только админу. Войдите через Telegram-бота.", ["login"]);
   gate("Проверяю вход…");
   try {
-    const info = await post("cabinet", { action: "info", session });
+    const info = await post("cabinet", { action: "info", initData, session });
     if (!info.isAdmin) {
       set(OK, null);
-      return gate("Игры пока доступны только админу.", appSession() ? [] : ["other"]);
+      return gate("Игры пока доступны только админу.", initData || appSession() ? [] : ["other"]);
     }
     set(OK, "1");
     library();
   } catch (e) {
+    if (initData && e.status === 401) return gate("Закройте окно и откройте игры из Telegram заново.");
     if (e.relogin) { forget(); return gate("Вход устарел, войдите заново.", ["login"]); }
     // нет связи или сервер болен: пускаем, если раньше вход уже был подтверждён
     if ((!e.status || e.status >= 500) && get(OK)) { library(); return toast("Нет связи, играем без сети"); }
-    gate(e.status ? e.message : "Нет связи с сервером.", ["retry", ...(appSession() ? [] : ["other"])]);
+    gate(e.status ? e.message : "Нет связи с сервером.", ["retry", ...(initData || appSession() ? [] : ["other"])]);
   }
 }
 const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -200,7 +230,6 @@ $("#other").onclick = $("#logout").onclick = () => {
   clearTimeout(pollTimer); forget();
   gate("Игровой раздел пока открыт только админу. Войдите через Telegram-бота.", ["login"]);
 };
-$("#logout").hidden = !!appSession();
 
 /* ---------- библиотека ---------- */
 let current = null, last = 0;
@@ -251,7 +280,7 @@ async function launch(game) {
 }
 
 /* ---------- игровой режим: весь экран и экран не гаснет ---------- */
-const isFull = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+const isFull = () => tg ? !!tg.isFullscreen : !!(document.fullscreenElement || document.webkitFullscreenElement);
 let wake = null;
 async function keepAwake() {
   try { if (!wake || wake.released) wake = await navigator.wakeLock?.request("screen"); } catch {}
@@ -259,16 +288,20 @@ async function keepAwake() {
 function fullscreen(on) {
   keepAwake();
   const d = document, root = d.documentElement;
+  if (tg) { // внутри Telegram весь экран включает он сам (Bot API 8.0+)
+    try { if (canFull() && on !== isFull()) on ? tg.requestFullscreen() : tg.exitFullscreen(); } catch {}
+    return;
+  }
   try {
     if (on && !isFull()) (root.requestFullscreen || root.webkitRequestFullscreen)?.call(root)?.catch?.(() => {});
     if (!on && isFull()) (d.exitFullscreen || d.webkitExitFullscreen).call(d)?.catch?.(() => {});
   } catch {}
 }
-const canFull = !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
-$("#mode").hidden = !canFull;
+const canFull = () => tg ? !!tg.isVersionAtLeast?.("8.0") : !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
+const modeLabel = () => ($("#mode").textContent = isFull() ? "✕ Выйти из режима" : "⛶ Игровой режим");
 $("#mode").onclick = () => fullscreen(!isFull());
 for (const ev of ["fullscreenchange", "webkitfullscreenchange"])
-  document.addEventListener(ev, () => { $("#mode").textContent = isFull() ? "✕ Выйти из режима" : "⛶ Игровой режим"; });
+  document.addEventListener(ev, modeLabel);
 document.addEventListener("visibilitychange", () => { if (!document.hidden && !$("#play").hidden) keepAwake(); });
 
 /* ---------- клавиатура (внутри игры клавиши обрабатывает сама игра) ---------- */
@@ -291,7 +324,13 @@ document.addEventListener("keydown", (e) => {
 const tick = () => ($("#clock").textContent = new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }));
 tick(); setInterval(tick, 10000);
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("/games/sw.js").catch(() => {});
-check();
+gate("Проверяю вход…");
+loadTelegram().then(() => {
+  $("#logout").hidden = !!(tg || appSession());
+  $("#mode").hidden = !canFull();
+  modeLabel();
+  check();
+});
 </script>
 </body>
 </html>

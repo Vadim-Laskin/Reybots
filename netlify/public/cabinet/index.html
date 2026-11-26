@@ -2558,6 +2558,7 @@ const ADMIN_TREE = [
     title: "Разработка",
     rows: [
       { icon: "play", title: "Блоки", desc: "Игра с уровнями, тестирование", open: openGame },
+      { icon: "play", title: "Игровое приложение", desc: "Все игры на весь экран, можно установить", open: openGamesApp },
     ],
   },
   {
@@ -2584,6 +2585,13 @@ async function openGame() {
     show("game");
     window.ReyBlocks.open($("#blocks"), () => show("apanel"));
   } catch (e) { fail(e); }
+}
+
+// отдельное приложение /games/: из Telegram открываем в браузере, там можно установить его значком
+function openGamesApp() {
+  const url = location.origin + "/games/";
+  if (tg?.initData && tg.openLink) tg.openLink(url);
+  else location.href = url;
 }
 
 /* ---------- админ: отмена пар ---------- */

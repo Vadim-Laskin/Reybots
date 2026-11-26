@@ -278,6 +278,7 @@
     ".bk-pop{animation:bk-pop .25s}",
     ".bk-crack{animation:bk-shake .3s}",
     ".bk-ghost{opacity:.4}",
+    ".bk-bad::after{content:'';position:absolute;inset:1.5px;border-radius:7px;background:rgba(255,70,90,.7);z-index:1}",
     ".bk-will .bk-b{filter:brightness(1.35);box-shadow:0 0 12px var(--k);opacity:1}",
     ".bk-will::before{background:#fff;opacity:.35}",
     ".bk-boom{position:absolute;inset:1.5px;border-radius:7px;background:var(--k);animation:bk-boom .45s forwards;pointer-events:none;z-index:2}",
@@ -305,6 +306,13 @@
     ".bk-stars i.on{color:var(--amber);animation:bk-star .5s cubic-bezier(.2,1.8,.4,1) backwards}",
     ".bk-box .bk-btn{width:100%;margin-top:8px}",
     ".bk-box .bk-btn:not(.main){background:var(--line)}",
+    "#blocks :focus-visible,.bk-modal :focus-visible{outline:3px solid var(--amber);outline-offset:2px}",
+    "#blocks .bk-slot.kb{outline:3px solid var(--amber)}",
+    "#blocks.bk-wide.bk-play{max-width:none;width:fit-content}",
+    ".bk-wide .bk-area{display:flex;gap:12px;justify-content:center;align-items:stretch}",
+    ".bk-wide .bk-wrap{margin:0}",
+    ".bk-wide .bk-tray{margin:0;grid-template-columns:calc(var(--cell)*3.4);grid-template-rows:repeat(3,1fr)}",
+    ".bk-wide .bk-slot{height:auto}",
     "@keyframes bk-in{from{opacity:0;transform:scale(.5)}to{opacity:1;transform:none}}",
     "@keyframes bk-fade{from{opacity:0}}",
     "@keyframes bk-pulse{50%{transform:scale(1.07)}}",
@@ -384,7 +392,8 @@
   var unlocked = function (n) { return save.all || n === 1 || stars(n - 1) > 0 || stars(n) > 0; };
   function closeModal() { var m = doc.querySelector(".bk-modal"); if (m) m.remove(); }
   function showMap() {
-    screen = "map"; G = null; cancelDrag(); closeModal();
+    screen = "map"; G = null; kb = null; cancelDrag(); closeModal();
+    host.classList.remove("bk-play", "bk-wide");
     host.replaceChildren();
     var top = el("div", "bk-top");
     var got = Object.keys(save.stars).reduce(function (s, k) { return s + save.stars[k]; }, 0);
@@ -421,15 +430,21 @@
   var GOAL = { score: "⭐ Очки", lines: "➖ Линии", gems: "💎", stones: "🪨" };
   var hud = {};
   function sizeCells() {
-    var w = Math.min(host.clientWidth || root.innerWidth - 32, 480);
-    // сверху учитываем шапку Telegram (отступ до игры), поле — 8 клеток, лоток — около 3
+    // широкий экран (ПК, телефон боком): поле слева, фигуры столбиком справа
+    var wide = root.innerWidth > root.innerHeight * 1.15;
+    host.classList.toggle("bk-wide", wide);
+    host.classList.add("bk-play");
+    // сверху учитываем шапку (отступ до игры)
     var above = host.getBoundingClientRect().top + root.scrollY;
-    var h = (root.innerHeight - above - 230) / 11.4;
-    var c = Math.max(26, Math.floor(Math.min((w - 12) / 8, h)));
-    host.style.setProperty("--cell", c + "px");
+    var w = host.parentNode.clientWidth || root.innerWidth - 32;
+    if (!wide) w = Math.min(w, 560);
+    var c = wide
+      ? Math.min((w - 24) / 11.4, (root.innerHeight - above - 215) / 8)
+      : Math.min((w - 12) / 8, (root.innerHeight - above - 230) / 11.4); // поле — 8 клеток, лоток — около 3
+    host.style.setProperty("--cell", Math.max(24, Math.min(96, Math.floor(c))) + "px");
   }
   function start(n) {
-    screen = "game"; cancelDrag(); closeModal();
+    screen = "game"; kb = null; cancelDrag(); closeModal();
     G = newGame(n, (Date.now() ^ (Math.random() * 1e9)) >>> 0);
     host.replaceChildren();
     var top = el("div", "bk-top");
@@ -446,12 +461,20 @@
     wrap.append(boardEl); hud.wrap = wrap;
     trayEl = el("div", "bk-tray");
     var bar = el("div", "bk-bar");
-    hud.swap = btn("", function () { cancelDrag(); if (swap(G)) { beep([440, 660], 0.06); renderTray(); renderHud(); finish(); } });
+    hud.swap = btn("", swapNow);
     bar.append(hud.swap);
-    host.append(top, h, wrap, trayEl, bar);
+    var area = el("div", "bk-area");
+    area.append(wrap, trayEl);
+    host.append(top, h, area, bar);
     sizeCells();
     renderBoard(); renderTray(); renderHud();
     root.scrollTo(0, 0);
+    doc.activeElement && doc.activeElement.blur();
+  }
+  function swapNow() {
+    cancelDrag();
+    if (!swap(G)) return;
+    kb = null; beep([440, 660], 0.06); renderBoard(); renderTray(); renderHud(); finish();
   }
   function blockEl(cell) {
     var b = el("i", "bk-b");
@@ -513,6 +536,7 @@
   function pickUp(e, slot, slotEl) {
     if (drag || !G || G.over) return;
     e.preventDefault();
+    if (kb) { kb = null; renderBoard(); kbMark(); }
     var p = G.tray[slot], size = cells[0].getBoundingClientRect().width;
     var node = pieceEl(p, size + "px"); node.classList.add("bk-drag");
     doc.body.append(node);
@@ -538,11 +562,14 @@
   }
   function preview() {
     renderBoard();
-    if (!drag || !drag.at) return;
-    var copy = G.board.slice(), r = drag.at[0], c = drag.at[1];
-    drag.p.shape.cells.forEach(function (d) {
+    if (drag && drag.at) ghost(drag.p, drag.at[0], drag.at[1]);
+  }
+  function ghost(p, r, c) {
+    var copy = G.board.slice();
+    p.shape.cells.forEach(function (d) {
       var k = (r + d[0]) * N + c + d[1];
-      copy[k] = { c: drag.p.color };
+      if (copy[k]) { cells[k].classList.add("bk-bad"); return; }
+      copy[k] = { c: p.color };
       var b = blockEl(copy[k]); b.className += " bk-ghost"; cells[k].append(b);
     });
     var L = fullLines(copy);
@@ -638,6 +665,95 @@
     m.append(box); doc.body.append(m);
   }
 
+  /* ---------- клавиатура ---------- */
+  var kb = null; // выбранная фигура и клетка на поле
+  // ближайшая кнопка в нужную сторону
+  function nav(list, dx, dy) {
+    var cur = doc.activeElement;
+    if (list.indexOf(cur) < 0) {
+      var first = list.filter(function (x) { return x.classList.contains("cur") || x.classList.contains("main"); })[0] || list[0];
+      if (first) first.focus();
+      return;
+    }
+    var a = cur.getBoundingClientRect(), best = null, score = Infinity;
+    list.forEach(function (x) {
+      if (x === cur) return;
+      var b = x.getBoundingClientRect();
+      var mx = b.left + b.width / 2 - a.left - a.width / 2, my = b.top + b.height / 2 - a.top - a.height / 2;
+      var along = mx * dx + my * dy, side = Math.abs(mx * dy) + Math.abs(my * dx);
+      if (along < 4) return;
+      if (along + side * 3 < score) { score = along + side * 3; best = x; }
+    });
+    if (best) { best.focus(); best.scrollIntoView({ block: "nearest" }); }
+  }
+  function kbShow() {
+    renderBoard(); kbMark();
+    if (!kb) return;
+    ghost(G.tray[kb.slot], kb.r, kb.c);
+  }
+  // рамка на выбранной фигуре (лоток не перерисовываем, чтобы фигуры не мигали)
+  function kbMark() {
+    Array.prototype.forEach.call(trayEl.children, function (s, i) { s.classList.toggle("kb", !!kb && kb.slot === i); });
+  }
+  // выбрать фигуру (по возможности сразу на свободном месте)
+  function kbPick(slot) {
+    var p = G.tray[slot];
+    if (!p) return;
+    var s = p.shape, at = null, from = kb ? [kb.r, kb.c] : [3, 3], best = Infinity;
+    for (var r = 0; r <= N - s.h; r++) for (var c = 0; c <= N - s.w; c++) {
+      var d = Math.abs(r - from[0]) + Math.abs(c - from[1]);
+      if (d < best && canPlace(G.board, s, r, c)) { best = d; at = [r, c]; }
+    }
+    at = at || [0, 0];
+    kb = { slot: slot, r: at[0], c: at[1] };
+    beep([520], 0.04); kbShow();
+  }
+  function kbNext(step) {
+    for (var i = 1; i <= 3; i++) {
+      var slot = ((kb ? kb.slot : step > 0 ? -1 : 0) + step * i + 6) % 3;
+      if (G.tray[slot]) return kbPick(slot);
+    }
+  }
+  var ARROWS = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+  function onKey(e) {
+    if (!visible() || e.ctrlKey || e.metaKey || e.altKey) return;
+    var a = ARROWS[e.code], enter = e.code === "Enter" || e.code === "NumpadEnter" || e.code === "Space";
+    var back = e.code === "Escape" || e.code === "Backspace";
+    var modal = doc.querySelector(".bk-modal"), done = true;
+    if (back) { if (!e.repeat) { if (screen === "game") showMap(); else api.onExit(); } }
+    else if (modal || screen === "map") {
+      if (a) nav(Array.prototype.slice.call((modal || host).querySelectorAll("button:not(:disabled),input")), a[0], a[1]);
+      else done = false; // Enter и пробел нажимают выбранную кнопку сами
+    } else if (G && !G.over) {
+      var digit = /^(Digit|Numpad)([123])$/.exec(e.code);
+      if (digit) kbPick(digit[2] - 1);
+      else if (e.code === "KeyQ") kbNext(-1);
+      else if (e.code === "KeyE" || e.code === "Tab") kbNext(e.shiftKey ? -1 : 1);
+      else if (e.code === "KeyS") swapNow();
+      else if (e.code === "KeyR") { if (!e.repeat) start(G.spec.n); }
+      else if (a) {
+        if (!kb) kbNext(1);
+        else {
+          var s = G.tray[kb.slot].shape;
+          kb.c = Math.max(0, Math.min(N - s.w, kb.c + a[0]));
+          kb.r = Math.max(0, Math.min(N - s.h, kb.r + a[1]));
+          kbShow();
+        }
+      } else if (enter) {
+        if (doc.activeElement) doc.activeElement.blur();
+        if (!kb) kbNext(1);
+        else if (!e.repeat) {
+          var res = play(G, kb.slot, kb.r, kb.c);
+          if (!res) beep([150], 0.08, "sawtooth", 0.08);
+          else {
+            kb = null; renderBoard(res); renderTray(); renderHud(); effects(res); finish();
+          }
+        }
+      } else done = false;
+    } else done = false;
+    if (done) e.preventDefault();
+  }
+
   var api = {
     onExit: function () {},
     open: function (container, onExit) {
@@ -647,8 +763,9 @@
     },
     // кнопка «Назад»: из уровня — на карту; false — выходить из игры
     back: function () { if (screen === "game") { showMap(); return true; } return false; },
-    close: function () { cancelDrag(); closeModal(); G = null; screen = "map"; parts = []; },
+    close: function () { cancelDrag(); closeModal(); G = null; kb = null; screen = "map"; parts = []; },
   };
+  doc.addEventListener("keydown", onKey);
   doc.addEventListener("pointermove", move, { passive: false });
   doc.addEventListener("pointerup", drop);
   doc.addEventListener("pointercancel", drop);

@@ -73,6 +73,25 @@ kbd{font:inherit;font-weight:700;color:var(--text);background:var(--card);border
 #intro .logo i{border-radius:22%;background:var(--k);box-shadow:inset 0 4px 0 rgba(255,255,255,.4),inset 0 -5px 0 rgba(0,0,0,.25),0 0 18px var(--k);animation:in-fly .8s cubic-bezier(.2,1.25,.35,1) backwards}
 #intro .name{position:relative;font-size:clamp(28px,7vmin,68px);font-weight:900;white-space:nowrap;animation:in-name .9s 1.15s cubic-bezier(.2,.8,.2,1) backwards}
 #intro .sub{position:relative;margin-top:-16px;color:var(--muted);font-size:clamp(12px,2.2vmin,20px);letter-spacing:.35em;text-transform:uppercase;animation:in-sub .7s 1.6s backwards}
+/* открытие «Неон-трассы»: всегда горизонтальная, как и сама игра; только сдвиги и прозрачность */
+#intro.racer{background:#090418}
+#intro.racer .stage{position:absolute;left:50%;top:50%;width:100vw;height:100vh;transform:translate(-50%,-50%);overflow:hidden;background:linear-gradient(#090418 0,#2b0c52 40%,#ff4f8b 50%,#2a0b4a 50.5%,#0a0517)}
+@media (orientation:portrait){#intro.racer .stage{width:100vh;height:100vw;transform:translate(-50%,-50%) rotate(90deg)}}
+#intro.racer .sun{position:absolute;left:50%;bottom:50%;width:56vmin;height:28vmin;margin-left:-28vmin;border-radius:999px 999px 0 0;background:repeating-linear-gradient(transparent 0 2.4vmin,rgba(43,12,82,.9) 2.4vmin 3.2vmin),linear-gradient(#ffe36e,#ff4f8b);animation:r-sun 1.4s cubic-bezier(.2,.8,.3,1) backwards}
+#intro.racer .road{position:absolute;left:0;right:0;top:50%;bottom:0;overflow:hidden;animation:r-fade .6s .25s backwards}
+#intro.racer .road svg{width:100%;height:100%}
+#intro.racer .dash{position:absolute;left:50%;top:50%;width:1.6vmin;height:7vmin;margin-left:-.8vmin;border-radius:1vmin;background:#b59bff;opacity:0;animation:r-dash .75s cubic-bezier(.6,0,1,.6) 4}
+#intro.racer .wind{position:absolute;left:50%;top:50%;width:34vmin;height:3px;margin-top:-1px;transform-origin:left;opacity:0;background:linear-gradient(90deg,transparent,#fff);animation:r-wind .6s ease-in 2}
+#intro.racer .ship{position:absolute;left:50%;bottom:7%;width:40vmin;margin-left:-20vmin;animation:r-ship 3.1s forwards}
+#intro.racer .name{position:absolute;left:0;right:0;top:14%;text-align:center;font-size:13vmin;font-weight:900;font-style:italic;white-space:nowrap;color:#fff;text-shadow:0 0 3vmin #ff3f86,0 .8vmin 0 #5a1a8a;animation:r-name .7s 1.35s cubic-bezier(.2,1.3,.4,1) backwards}
+#intro.racer .sub{position:absolute;left:0;right:0;top:calc(14% + 17vmin);margin:0;text-align:center;font-size:5vmin;font-weight:800;color:#fff;text-shadow:0 0 1.5vmin #12002b,0 .4vmin .8vmin #12002b;animation:in-sub .5s 1.8s backwards}
+#intro.racer .flash{position:absolute;inset:0;background:#fff;opacity:0;animation:m-flash .55s 1.35s ease-out}
+@keyframes r-sun{from{opacity:0;transform:translateY(26vmin)}}
+@keyframes r-fade{from{opacity:0}}
+@keyframes r-dash{0%{opacity:0;transform:translateY(0) scale(.1)}30%{opacity:1}100%{opacity:1;transform:translateY(60vmax) scale(2.2)}}
+@keyframes r-wind{0%{opacity:0;transform:rotate(var(--a)) translateX(5vmin) scaleX(.2)}40%{opacity:.9}100%{opacity:0;transform:rotate(var(--a)) translateX(95vmax) scaleX(2)}}
+@keyframes r-ship{0%{transform:translate(-90vmax,10vmin) rotate(25deg) scale(1.6)}30%{transform:translate(8vmin,0) rotate(-12deg) scale(1)}42%{transform:translate(0,0) rotate(0)}78%{transform:translate(0,1vmin) scale(1.08);animation-timing-function:cubic-bezier(.7,0,1,.4)}100%{transform:translate(0,-34vmin) scale(.02)}}
+@keyframes r-name{from{opacity:0;transform:scale(3.4) skewX(-18deg)}}
 /* пока Telegram готовит окно, заставка стоит на первом кадре */
 #intro.wait,#intro.wait *,#intro.wait *::after{animation-play-state:paused !important}
 body.intro #lib .game,body.intro header,body.intro h2.sec{animation-play-state:paused}
@@ -198,7 +217,7 @@ function loadTelegram() {
 /* ---------- каталог игр: новую игру достаточно добавить сюда ---------- */
 const GAMES = [
   { title: "Блоки", desc: "60 уровней · головоломка", src: "/cabinet/blocks.js", api: () => window.ReyBlocks, root: "#blocks", intro: () => blocksIntro(), art: blocksArt },
-  { title: "Неон-трасса", desc: "3D-гонка · играется горизонтально", src: "/games/racer.js", api: () => window.ReyRacer, root: "#racer", art: racerArt },
+  { title: "Неон-трасса", desc: "3D-гонка · играется горизонтально", src: "/games/racer.js", api: () => window.ReyRacer, root: "#racer", intro: () => racerIntro(), art: racerArt },
 ];
 
 function view(id) {
@@ -464,6 +483,28 @@ function blocksIntro() {
     add(box, "name", "div", "Блоки");
     add(box, "sub", "div", "60 уровней");
   }, gameSound);
+}
+// открытие гонки: солнце встаёт, корабль врывается на трассу, название, рывок за горизонт
+function racerSound() {
+  try {
+    if (JSON.parse(get("rey-racer") || "{}").mute || !audioReady()) return;
+    tone(55, 0, 1.4, "sawtooth", 0.07, 190);
+    tone(70, 2.2, 0.9, "sawtooth", 0.09, 900);
+    [330, 494, 659, 988].forEach((f, i) => tone(f, 1.35 + i * 0.06, 0.9, "square", 0.035));
+  } catch {}
+}
+function racerIntro() {
+  showIntro("racer", 2750, 3300, (box, add) => {
+    const stage = add(box, "stage");
+    add(stage, "sun");
+    add(stage, "road").innerHTML = `<svg viewBox="0 0 100 50" preserveAspectRatio="none"><path d="M47 0L-8 50H108L53 0Z" fill="#150b30"/><path d="M47 0L-8 50" stroke="#ff3f86" stroke-width="1.1"/><path d="M53 0L108 50" stroke="#3fe4ff" stroke-width="1.1"/></svg>`;
+    for (let i = 0; i < 5; i++) add(stage, "dash").style.animationDelay = i * 0.15 + "s";
+    for (let i = 0; i < 14; i++) add(stage, "wind").style.cssText = `--a:${i * 26 + 7}deg;animation-delay:${(1.9 + (i % 5) * 0.08).toFixed(2)}s`;
+    add(stage, "ship").innerHTML = `<svg viewBox="0 0 200 110" width="100%"><path d="M100 8L132 66L190 82L186 94L128 88L116 96H84L72 88L14 94L10 82L68 66Z" fill="#e8ecff" stroke="#8d6bff" stroke-width="4" stroke-linejoin="round"/><path d="M100 30L116 66H84Z" fill="#1b9ac4"/><path d="M14 94L10 62L26 80ZM186 94L190 62L174 80Z" fill="#ff3f86"/><path d="M78 96H94L86 110ZM106 96H122L114 110Z" fill="#3fe4ff"/></svg>`;
+    add(stage, "name", "div", "НЕОН-ТРАССА");
+    add(stage, "sub", "div", "держись крепче");
+    add(stage, "flash");
+  }, racerSound);
 }
 // вход в игровой режим: лучи сходятся в центр, рисуется эмблема с геймпадом, вспышка, название
 const EMBLEM = `

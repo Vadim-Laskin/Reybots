@@ -3,7 +3,7 @@
    вторая — отрисовка, управление и экраны. */
 (function (root) {
   "use strict";
-  var TOTAL = 15, HALF = 5, LIMIT = 4.2, SIDE = 12, JUMP = 11, GRAVITY = 30, SHIP_W = 0.75;
+  var TOTAL = 15, HALF = 5, LIMIT = 4.2, SIDE = 12, JUMP = 11, GRAVITY = 30, SHIP_W = 0.75, RUSH = 5, BONUS = 9;
 
   /* ================= правила ================= */
   function rng(seed) {
@@ -53,6 +53,11 @@
       });
       if (R() < 0.45) g.objects.push({ type: "gem", z: z, x: safe, y: 0.7 });
     }
+    // золотой портал стоит в безопасном коридоре, после обычного (не прыжкового) ряда
+    if (!jumpRow && z >= g.portalAt) {
+      g.objects.push({ type: "portal", z: z + 2, x: safe, w: 3.8, d: 0.8 });
+      g.portalAt = g.n ? Infinity : z + 900 + R() * 700;
+    }
     g.path.push({ z: z, x: safe, jump: jumpRow });
     g.lastJump = jumpRow;
     g.nextZ += jumpRow || R() < 0.01 ? Math.max(gap, s.speed * 0.85) : gap;
@@ -62,16 +67,36 @@
     while (g.nextZ < Math.min(g.dist + 220, end - 30)) addRow(g);
   }
   function newGame(n, seed) {
-    var g = { n: n, R: rng(n ? 4099 * n + 7 : seed), dist: 0, x: 0, y: 0, vy: 0, roll: 0, lives: 3, gems: 0, safeTime: 0, safe: 0, nextZ: 55, lastJump: false, objects: [], path: [], t: 0, over: null };
+    var g = { n: n, R: rng(n ? 4099 * n + 7 : seed), dist: 0, x: 0, y: 0, vy: 0, roll: 0, lives: 3, gems: 0, safeTime: 0, safe: 0, nextZ: 55, lastJump: false, objects: [], path: [], t: 0, over: null,
+      score: 0, combo: 0, charge: 0, rush: 0, bonus: 0, portals: 0 };
+    // где на трассе спрятан портал (на бесконечном заезде они повторяются)
+    g.portalAt = n ? spec(n).length * (0.35 + g.R() * 0.2) : 350 + g.R() * 300;
     fill(g);
     return g;
   }
   function objectX(o, t) { return o.type === "mover" ? o.base + o.amp * Math.sin(t * o.rate + o.phase) : o.x; }
+  function charge(g, amount, events) {
+    if (g.rush || g.bonus) return;
+    g.charge = Math.min(1, g.charge + amount);
+    if (g.charge >= 1) { g.rush = RUSH; g.charge = 0; events.push("rush"); }
+  }
+  // «Котомир»: препятствия исчезают, впереди змейкой летят кристаллы
+  function enterBonus(g, speed) {
+    g.bonus = BONUS; g.rush = 0; g.portals++;
+    var end = g.dist + speed * BONUS, i = 0;
+    g.objects = []; g.path = []; g.safe = Math.max(-3.6, Math.min(3.6, g.x));
+    for (var z = g.dist + 14; z < end - 8; z += 3.2, i++) {
+      var x = g.x * Math.max(0, 1 - i / 8) + Math.sin(i * 0.32) * 3;
+      g.objects.push({ type: "gem", z: z, x: x, y: 0.7, gold: true });
+      g.path.push({ z: z, x: x, jump: false });
+    }
+    g.nextZ = end + 35; g.lastJump = false;
+  }
   // input: {steer: -1..1, jump: bool}; возвращает список событий
   function step(g, input, dt) {
     var events = [];
     if (g.over) return events;
-    var s = spec(g.n, g.dist), from = g.dist;
+    var s = spec(g.n, g.dist), from = g.dist, speed = s.speed * (g.rush ? 1.6 : 1);
     g.t += dt;
     g.x = Math.max(-LIMIT, Math.min(LIMIT, g.x + input.steer * SIDE * dt));
     g.roll += (input.steer * 0.35 - g.roll) * Math.min(1, dt * 10);
@@ -80,24 +105,46 @@
       g.y += g.vy * dt; g.vy -= GRAVITY * dt;
       if (g.y <= 0) { g.y = 0; g.vy = 0; }
     }
-    g.dist += s.speed * dt;
+    g.dist += speed * dt;
+    g.score += speed * dt * (g.rush ? 3 : 1);
     g.safeTime = Math.max(0, g.safeTime - dt);
+    // после форсажа и бонуса даётся немного неуязвимости, чтобы не влететь сразу в стену
+    if (g.rush) { g.rush = Math.max(0, g.rush - dt); if (!g.rush) { g.safeTime = 1.4; events.push("rushEnd"); } }
+    if (g.bonus) { g.bonus = Math.max(0, g.bonus - dt); if (!g.bonus) { g.safeTime = 1.4; events.push("bonusEnd"); } }
     for (var i = 0; i < g.objects.length; i++) {
       var o = g.objects[i];
-      if (o.done) continue;
       var half = (o.d || 0.8) / 2 + 0.6;
       if (o.z - half > g.dist) continue;
-      if (o.z + half < from) continue;
-      var x = objectX(o, g.t);
+      var x = objectX(o, g.t), solid = o.type !== "gem" && o.type !== "portal";
+      if (o.z + half < from) {
+        // препятствие позади: пролетели впритирку или перепрыгнули — это комбо
+        if (solid && !o.done) {
+          o.done = true;
+          var edge = Math.abs(g.x - x) - o.w / 2 - SHIP_W;
+          if (!g.rush && !g.safeTime && (o.type === "bar" ? g.y > 0 : edge >= 0 && edge < 0.8)) {
+            g.combo++; g.score += 50 * Math.min(g.combo, 10); events.push("near"); charge(g, 0.17, events);
+          }
+        }
+        continue;
+      }
+      if (o.done) continue;
       if (o.type === "gem") {
-        if (Math.abs(g.x - x) < 1.1 && Math.abs(g.y + 0.5 - o.y) < 1.1) { o.done = o.taken = true; g.gems++; events.push("gem"); }
-      } else if (Math.abs(g.x - x) < o.w / 2 + SHIP_W && g.y < o.h && !g.safeTime) {
-        o.done = true; g.lives--; g.safeTime = 1.4; events.push("hit");
-        if (g.lives <= 0) { g.over = { win: false }; events.push("lose"); return events; }
+        // на форсаже кристаллы притягиваются издалека
+        if (Math.abs(g.x - x) < (g.rush ? 3 : g.bonus ? 1.5 : 1.1) && Math.abs(g.y + 0.5 - o.y) < (g.rush ? 3 : 1.1)) {
+          o.done = o.taken = true; g.gems++; g.score += o.gold ? 150 : 100; events.push("gem"); charge(g, 0.07, events);
+        }
+      } else if (o.type === "portal") {
+        if (Math.abs(g.x - x) < o.w / 2) { o.done = o.taken = true; g.score += 500; enterBonus(g, s.speed); events.push("bonus"); break; }
+      } else if (Math.abs(g.x - x) < o.w / 2 + SHIP_W && g.y < o.h) {
+        if (g.rush) { o.done = o.taken = true; g.score += 200; events.push({ smash: o, x: x }); }
+        else if (!g.safeTime) {
+          o.done = true; g.lives--; g.safeTime = 1.4; g.combo = 0; g.charge = 0; events.push("hit");
+          if (g.lives <= 0) { g.over = { win: false }; events.push("lose"); return events; }
+        }
       }
     }
-    if (g.objects.length && g.objects[0].z < g.dist - 20) g.objects.shift();
-    if (g.path.length > 2 && g.path[1].z < g.dist - 5) g.path.shift();
+    while (g.objects.length && g.objects[0].z < g.dist - 20) g.objects.shift();
+    while (g.path.length > 2 && g.path[1].z < g.dist - 5) g.path.shift();
     fill(g);
     if (g.dist >= s.length) { g.over = { win: true, stars: g.lives }; events.push("win"); }
     return events;
@@ -153,10 +200,10 @@
     gl.enable(gl.DEPTH_TEST); gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     return {
       gl: gl,
-      begin: function (cam) {
+      begin: function (cam, wide) {
         gl.viewport(0, 0, canvas.width, canvas.height);
         gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-        var aspect = canvas.width / canvas.height, f = 1 / Math.tan(0.55), near = 0.5, far = 220;
+        var aspect = canvas.width / canvas.height, f = 1 / Math.tan(wide || 0.55), near = 0.5, far = 220;
         // горизонт поднят выше середины (смещение проекции), чтобы было видно дальше
         gl.uniformMatrix4fv(U.proj, false, [f / aspect, 0, 0, 0, 0, f, 0, 0, 0, -0.2, (far + near) / (near - far), -1, 0, 0, (2 * far * near) / (near - far), 0]);
         gl.uniform3fv(U.cam, cam);
@@ -173,11 +220,52 @@
   }
 
   var PINK = [1, 0.25, 0.55], CYAN = [0.2, 0.9, 1], VIOLET = [0.55, 0.4, 1], AMBER = [1, 0.75, 0.2], WHITE = [1, 1, 1];
+  function hue(h) { // цвет радуги, h — любое число
+    var k = function (n) { var t = (n + h * 6) % 6; if (t < 0) t += 6; return 1 - Math.max(0, Math.min(1, Math.min(t, 4 - t))) * 0.85; };
+    return [k(5), k(3), k(1)];
+  }
+  var shards = []; // осколки разбитых на форсаже препятствий
+  // огромный кубический кот, который выглядывает из-за горизонта в «Котомире»
+  function drawCat(r, g) {
+    var up = Math.min(1, (BONUS - g.bonus) / 1.4, g.bonus / 0.9), t = g.t;
+    var K = 2.1, bx = Math.sin(t * 1.1) * 4, by = -30 + 43 * up + Math.sin(t * 5) * 0.8, z = -75;
+    var fur = [1, 0.62, 0.18], dark = [0.75, 0.35, 0.08], white = [1, 0.95, 0.88], black = [0.08, 0.03, 0.1], pink = [1, 0.45, 0.65];
+    var tilt = Math.sin(t * 2.5) * 0.14, pv = [bx, by];
+    var box = function (x, y, dz, w, h, c, o) { o = o || {}; o.roll = tilt; o.pivot = pv; o.glow = o.glow == null ? 0.55 : o.glow; r.box([bx + x * K, by + y * K, z + dz], [w * K, h * K, 1.5], c, o); };
+    box(0, 0, 0, 17, 13, fur, { edge: dark });
+    [-1, 1].forEach(function (s) {
+      box(s * 6, 7.8, 0, 4.6, 3, fur, { edge: dark }); box(s * 6.5, 10, 0, 2.6, 2, fur, { edge: dark }); box(s * 6, 7.8, 0.9, 2.2, 1.8, pink);
+      var blink = t % 2.6 < 0.14;
+      box(s * 4, 1.8, 1, 3.6, blink ? 0.4 : 3.8, white, { glow: 1 });
+      if (!blink) { box(s * 4 + Math.sin(t * 1.7), 1.6, 1.9, 1.5, 2.6, black); box(s * 4 + Math.sin(t * 1.7) + 0.4, 2.4, 2.7, 0.5, 0.6, white, { glow: 1 }); }
+      for (var w = -1; w <= 1; w++) box(s * 9.6, -2.4 + w * 1.5, 1, 5, 0.25, white, { glow: 1 });
+      // лапы машут по очереди
+      var wave = Math.max(0, Math.sin(t * 6 + (s > 0 ? Math.PI : 0))) * 3;
+      box(s * 11, -7 + wave, 3, 4.4, 3.6, white, { edge: dark });
+      box(s * 11, -7 + wave, 4, 1.8, 1.4, pink);
+    });
+    box(0, 5.2, 1, 1.2, 2.4, dark); box(-2.4, 5.4, 1, 1, 1.8, dark); box(2.4, 5.4, 1, 1, 1.8, dark);
+    box(0, -3, 1, 8, 4.2, white, { edge: white });
+    box(0, -1.6, 2, 2, 1.1, pink);
+    box(0, -4.1, 2, 3.4, 1 + Math.abs(Math.sin(t * 7)) * 1.4, black); box(0, -4.6, 2.9, 1.8, 0.7, pink);
+  }
   function draw(r, g) {
-    r.begin([g.x * 0.55, 3.2 + g.y * 0.35, 7]);
-    var d = g.dist, i, z;
+    var fast = g.rush ? Math.min(1, g.rush, (RUSH - g.rush) * 4) : 0;
+    var shake = fast * 0.07;
+    r.begin([g.x * 0.55 + (Math.random() - 0.5) * shake, 3.2 + g.y * 0.35 + (Math.random() - 0.5) * shake, 7], 0.55 + fast * 0.17);
+    var d = g.dist, i, z, party = g.bonus > 0, wild = party || fast > 0;
+    if (party) drawCat(r, g);
     r.box([0, -0.55, -90], [HALF * 2 + 0.6, 0.1, 200], [0.07, 0.05, 0.14], { glow: 1 });
-    [-1, 1].forEach(function (s) { r.box([s * (HALF + 0.35), -0.35, -90], [0.18, 0.3, 200], s < 0 ? PINK : CYAN, { glow: 1 }); });
+    [-1, 1].forEach(function (s) { r.box([s * (HALF + 0.35), -0.35, -90], [0.18, 0.3, 200], wild ? hue(g.t * 0.8 + s * 0.25) : s < 0 ? PINK : CYAN, { glow: 1 }); });
+    if (party) for (i = 0; i < 36; i++) { // радужная дорога
+      z = -(i * 5 - (d % 5)) + 6;
+      r.box([0, -0.49, z], [HALF * 2, 0.02, 5], hue((Math.floor(d / 5) + i) / 7), { glow: 1, alpha: 0.55 });
+    }
+    if (fast) for (i = 0; i < 26; i++) { // полосы скорости
+      var side = i % 2 ? 1 : -1;
+      z = -((i * 29 - d * 2.2) % 90 + 90) % 90 + 5;
+      r.box([side * (5.5 + (i * 7) % 6), 0.3 + (i * 13) % 6, z], [0.07, 0.07, 5], hue(i / 9 + g.t), { glow: 1, alpha: 0.8 * fast });
+    }
     // разметка и «города» по бокам бегут навстречу
     for (i = 0; i < 28; i++) {
       z = -(i * 7 - (d % 7)) + 6;
@@ -189,7 +277,8 @@
       z = -(i * 11 - d);
       [-1, 1].forEach(function (s) {
         var h = 2 + ((i * 37 + (s > 0 ? 11 : 0)) % 9), x = s * (10 + ((i * 53) % 7));
-        r.box([x, h / 2 - 2, z], [2.6, h, 2.6], [0.1, 0.06, 0.22], { edge: (i + (s > 0 ? 1 : 0)) % 3 ? VIOLET : PINK });
+        if (party) h *= 0.7 + Math.abs(Math.sin(g.t * 6 + i)) * 0.7; // дома пляшут
+        r.box([x, h / 2 - 2, z], [2.6, h, 2.6], [0.1, 0.06, 0.22], { edge: party ? hue(i / 5 + g.t) : (i + (s > 0 ? 1 : 0)) % 3 ? VIOLET : PINK });
       });
       if (i % 3 === 0) [-1, 1].forEach(function (s) { r.box([s * (HALF + 1.4), 0.5, z], [0.15, 2.2, 0.15], s < 0 ? PINK : CYAN, { glow: 1 }); });
     }
@@ -205,16 +294,28 @@
       z = -(o.z - d);
       if (o.taken || z < -190 || z > 6) continue;
       var x = objectX(o, g.t), a = z > 1.5 ? 0.25 : 1;
-      if (o.type === "gem") r.box([x, o.y - 0.35 + Math.sin(g.t * 4 + o.z) * 0.12, z], [0.55, 0.55, 0.55], [0.5, 1, 0.9], { edge: WHITE, glow: 0.6, spin: g.t * 3 });
+      if (o.type === "gem") r.box([x, o.y - 0.35 + Math.sin(g.t * 4 + o.z) * 0.12, z], [0.55, 0.55, 0.55], o.gold ? hue(o.z / 20) : [0.5, 1, 0.9], { edge: o.gold ? hue(o.z / 20 + 0.12) : WHITE, glow: o.gold ? 1 : 0.6, spin: g.t * 3 });
+      else if (o.type === "portal") for (var k = 0; k < 14; k++) { // кольцо из вращающихся кубиков
+        var an = (k / 14) * 6.283 + g.t * 2.5;
+        r.box([x + Math.cos(an) * 1.7, 1.2 + Math.sin(an) * 1.7, z], [0.5, 0.5, 0.5], k % 2 ? AMBER : [1, 0.95, 0.6], { glow: 1, edge: WHITE, spin: an });
+        if (k % 2) r.box([x + Math.cos(-an * 1.6) * 0.8, 1.2 + Math.sin(-an * 1.6) * 0.8, z], [0.28, 0.28, 0.28], hue(k / 14 + g.t), { glow: 1, spin: -an });
+      }
       else if (o.type === "bar") r.box([x, o.h / 2 - 0.5, z], [o.w, o.h, o.d], [0.45, 0.28, 0.05], { edge: AMBER, alpha: a });
       else r.box([x, o.h / 2 - 0.5, z], [o.w, o.h, o.d], o.type === "mover" ? [0.08, 0.3, 0.42] : [0.38, 0.07, 0.25], { edge: o.type === "mover" ? CYAN : PINK, alpha: a });
     }
+    for (i = shards.length - 1; i >= 0; i--) {
+      var p = shards[i], age = g.t - p.born;
+      if (age > 0.9 || age < 0) { shards.splice(i, 1); continue; }
+      r.box([p.x + p.vx * age, p.y + p.vy * age - 9 * age * age, p.z + p.vz * age], [p.s, p.s, p.s], p.c, { glow: 0.8, edge: WHITE, spin: age * p.rate, alpha: 1 - age });
+    }
+    if (wild) for (i = 1; i <= 9; i++) // радужный шлейф
+      r.box([g.x - g.roll * i * 0.25 + Math.sin(g.t * 14 - i) * 0.08, g.y - 0.05, 1 + i * 0.42], [0.75 - i * 0.06, 0.1, 0.4], hue(i / 7 - g.t * 2), { glow: 1, alpha: 0.9 - i * 0.085 });
     // корабль (после удара мигает)
-    if (g.safeTime && Math.floor(g.t * 12) % 2) return;
+    if (g.safeTime && !wild && Math.floor(g.t * 12) % 2) return;
     var y = g.y + Math.sin(g.t * 9) * 0.04, roll = g.roll, pv = [g.x, y];
     r.box([g.x, -0.48, 0], [1.5 / (1 + g.y), 0.02, 1.8 / (1 + g.y)], [0, 0, 0], { glow: 1, alpha: 0.5 });
     var part = function (px, py, pz, size, color, o) { o = o || {}; o.roll = roll; o.pivot = pv; r.box([g.x + px, y + py, pz], size, color, o); };
-    part(0, 0, 0, [0.8, 0.32, 1.7], [0.75, 0.78, 0.95], { edge: VIOLET });
+    part(0, 0, 0, [0.8, 0.32, 1.7], fast ? hue(g.t * 3) : [0.75, 0.78, 0.95], { edge: VIOLET, glow: fast * 0.7 });
     part(0, -0.02, -1.15, [0.42, 0.2, 0.65], [0.9, 0.92, 1], { edge: CYAN });
     part(0, 0.27, 0.1, [0.46, 0.26, 0.7], [0.1, 0.45, 0.65], { edge: CYAN });
     [-1, 1].forEach(function (s) {
@@ -256,12 +357,27 @@
     ".rc-flash{position:absolute;inset:0;background:#ff2255;opacity:0;pointer-events:none}",
     ".rc-flash.on{animation:rc-flash .4s}",
     "@keyframes rc-flash{20%{opacity:.5}}",
+    ".rc.rush{background:linear-gradient(#020a2b,#10357a 34%,#4ff7ff 40%,#152a6b 41%,#05081f)}",
+    ".rc.party{background:linear-gradient(#26004d,#c5189a 30%,#ffe45c 40%,#7a1fa8 41%,#12002b)}",
+    ".rc.party .rc-sun{display:none}",
+    ".rc-score{font-variant-numeric:tabular-nums;color:#ffd66b}",
+    ".rc-charge{position:absolute;left:50%;top:calc(var(--t) + 44px);width:min(38%,260px);height:9px;transform:translateX(-50%);border-radius:9px;background:rgba(255,255,255,.18);overflow:hidden}",
+    ".rc-charge i{display:block;height:100%;width:100%;transform-origin:left;transform:scaleX(0);background:linear-gradient(90deg,#ffc54d,#ff3f86)}",
+    ".rc.rush .rc-charge i{background:linear-gradient(90deg,#fff,#4ff7ff)}",
+    ".rc-pop{position:absolute;left:0;right:0;top:33%;text-align:center;font-size:calc(var(--h)*.065);font-weight:900;font-style:italic;color:#ffe36e;text-shadow:0 0 14px #ff3f86,0 3px 6px #000;pointer-events:none;animation:rc-pop .75s forwards}",
+    ".rc-banner{position:absolute;left:0;right:0;top:22%;text-align:center;font-weight:900;font-style:italic;font-size:calc(var(--h)*.15);line-height:1.05;text-shadow:0 0 20px #ff3f86,0 0 50px #7a52ff,0 5px 0 #3a0f5c;pointer-events:none;animation:rc-banner 1.8s forwards}",
+    ".rc-banner small{display:block;font-size:.34em;color:#ffe36e}",
+    // при входе в портал весь мир делает «бочку»
+    ".rc.flip canvas{animation:rc-flip 1.1s cubic-bezier(.5,0,.3,1)}",
+    "@keyframes rc-flip{0%{transform:rotate(0) scale(1)}50%{transform:rotate(180deg) scale(2.3)}100%{transform:rotate(360deg) scale(1)}}",
+    "@keyframes rc-pop{0%{opacity:0;transform:scale(.4)}25%{opacity:1;transform:scale(1.15)}100%{opacity:0;transform:translateY(-40px)}}",
+    "@keyframes rc-banner{0%{opacity:0;transform:scale(3) rotate(-8deg)}18%{opacity:1;transform:scale(.92) rotate(2deg)}28%{transform:none}80%{opacity:1}100%{opacity:0;transform:scale(1.2)}}",
     ".rc-count{position:absolute;left:0;right:0;top:30%;text-align:center;font-size:calc(var(--h)*.18);font-weight:900;font-style:italic;text-shadow:0 0 24px #ff3f86;pointer-events:none}",
   ].join("\n");
 
   var host, box, canvas, renderer, layer, G = null, screen = "menu", raf = 0, prev = 0, countdown = 0, paused = false, audio = null, hud = {}, level = 1;
   var keys = {}, pads = { left: 0, right: 0 }, jumpWanted = 0;
-  var SAVE = "rey-racer", save = { stars: {}, best: 0, all: false, mute: false };
+  var SAVE = "rey-racer", save = { stars: {}, best: 0, top: {}, all: false, mute: false };
   try { Object.assign(save, JSON.parse(root.localStorage.getItem(SAVE) || "{}")); } catch (e) {}
   function persist() { try { root.localStorage.setItem(SAVE, JSON.stringify(save)); } catch (e) {} }
 
@@ -279,6 +395,44 @@
         o.connect(g); g.connect(audio.destination); o.start(t); o.stop(t + step_ * 2.3);
       });
     } catch (e) {}
+  }
+  // скользящий тон: «мяу», рёв форсажа
+  function slide(points, len, type, vol, delay) {
+    if (save.mute) return;
+    try {
+      audio = audio || new (root.AudioContext || root.webkitAudioContext)();
+      var o = audio.createOscillator(), g = audio.createGain(), t = audio.currentTime + (delay || 0);
+      o.type = type; o.frequency.setValueAtTime(points[0], t);
+      points.slice(1).forEach(function (f, i) { o.frequency.exponentialRampToValueAtTime(f, t + (len * (i + 1)) / (points.length - 1)); });
+      g.gain.setValueAtTime(0.001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.05); g.gain.exponentialRampToValueAtTime(0.001, t + len);
+      o.connect(g); g.connect(audio.destination); o.start(t); o.stop(t + len);
+    } catch (e) {}
+  }
+  function meow(delay) { slide([520, 980, 880, 430], 0.55, "sawtooth", 0.09, delay); }
+  function flash(cls, text, sub) {
+    var b = el("div", cls, text);
+    if (sub) b.append(el("small", null, sub));
+    layer.append(b);
+    setTimeout(function () { b.remove(); }, cls === "rc-pop" ? 780 : 1850);
+  }
+  function effect(e) {
+    if (e.smash) {
+      for (var i = 0; i < 18; i++) shards.push({ born: G.t, x: e.x + (Math.random() - 0.5) * e.smash.w, y: Math.random() * e.smash.h, z: -1, vx: (Math.random() - 0.5) * 16, vy: Math.random() * 12, vz: -Math.random() * 22, s: 0.2 + Math.random() * 0.45, rate: Math.random() * 14, c: i % 3 ? PINK : CYAN });
+      beep([120, 70], 0.05, "square", 0.12); haptic("medium");
+    } else if (e === "jump") { jumpWanted = 0; beep([300, 480], 0.05, "square", 0.05); }
+    else if (e === "gem") { var up = Math.pow(1.06, G.bonus ? Math.min(24, G.gems % 25) : 0); beep([990 * up, 1320 * up], 0.05); }
+    else if (e === "near") {
+      if (hud.pop) hud.pop.remove();
+      hud.pop = el("div", "rc-pop", (G.combo > 1 ? "Впритирку ×" + G.combo : "Впритирку!") + " +" + 50 * Math.min(G.combo, 10));
+      layer.append(hud.pop);
+      beep([600 + Math.min(G.combo, 12) * 90], 0.07, "square", 0.06); haptic("light");
+    } else if (e === "rush") { flash("rc-banner", "ФОРСАЖ!", "круши всё на пути"); slide([90, 900], 0.8, "sawtooth", 0.11); haptic("heavy"); }
+    else if (e === "bonus") {
+      box.classList.remove("flip"); void box.offsetWidth; box.classList.add("flip");
+      flash("rc-banner", "КОТОМИР!", "мяу?!");
+      meow(0.15); meow(0.85); beep([523, 659, 784, 1047, 784, 1047, 1319], 0.1); haptic("win");
+    } else if (e === "bonusEnd") { flash("rc-pop", "Кот помахал лапой 🐾"); meow(0); }
+    else if (e === "hit") { beep([150, 90], 0.1, "sawtooth", 0.14); haptic("heavy"); hud.flash.classList.remove("on"); void hud.flash.offsetWidth; hud.flash.classList.add("on"); }
   }
   function haptic(kind) {
     try {
@@ -305,7 +459,7 @@
   var stars = function (n) { return save.stars[n] || 0; };
   var unlocked = function (n) { return save.all || n === 1 || stars(n - 1) > 0 || stars(n) > 0; };
   function showMenu() {
-    screen = "menu"; stopLoop(); clearInput();
+    screen = "menu"; stopLoop(); clearInput(); shards = []; box.classList.remove("rush", "party", "flip");
     G = newGame(1, 1); G.objects = []; // фон меню — пустая трасса
     if (renderer) draw(renderer, G);
     clearLayer();
@@ -333,14 +487,17 @@
 
   function start(n) {
     if (!renderer) return;
-    level = n; screen = "race"; paused = false; stopLoop(); clearInput(); clearLayer();
+    level = n; screen = "race"; paused = false; stopLoop(); clearInput(); clearLayer(); shards = []; box.classList.remove("rush", "party", "flip");
     G = newGame(n, (Date.now() % 1e9) | 0);
     var top = el("div", "rc-hud");
     hud.lives = el("span"); hud.info = el("span"); hud.gems = el("span");
     var prog = el("div", "rc-prog"); hud.bar = el("i"); prog.append(hud.bar);
     if (!n) prog.style.visibility = "hidden";
     var pause = btn("⏸", function () { setPause(true); }); pause.setAttribute("aria-label", "Пауза");
-    top.append(pause, hud.lives, el("span", null, n ? "Ур. " + n : "∞"), prog, hud.info, hud.gems);
+    hud.score = el("span", "rc-score"); hud.pop = null;
+    var meter = el("div", "rc-charge"); hud.charge = el("i"); meter.append(hud.charge);
+    top.append(pause, hud.lives, el("span", null, n ? "Ур. " + n : "∞"), prog, hud.info, hud.gems, hud.score);
+    layer.append(meter);
     layer.append(top, pad("◀", "left", "left:var(--l)"), pad("▶", "right", "left:calc(var(--l) + clamp(74px,calc(var(--h)*.25),128px))"), pad("▲", "jump", "right:var(--r)"));
     hud.flash = el("div", "rc-flash"); hud.count = el("div", "rc-count");
     layer.append(hud.flash, hud.count);
@@ -370,6 +527,9 @@
     hud.lives.textContent = "❤".repeat(Math.max(0, G.lives)) + "♡".repeat(3 - Math.max(0, G.lives));
     hud.info.textContent = G.n ? Math.min(100, Math.floor((G.dist / s.length) * 100)) + "%" : Math.floor(G.dist) + " м";
     hud.gems.textContent = "💎 " + G.gems;
+    hud.score.textContent = Math.floor(G.score);
+    hud.charge.style.transform = "scaleX(" + (G.rush ? G.rush / RUSH : G.charge) + ")";
+    box.classList.toggle("rush", G.rush > 0); box.classList.toggle("party", G.bonus > 0);
     if (G.n) hud.bar.style.width = Math.min(100, (G.dist / s.length) * 100) + "%";
   }
   function stopLoop() { if (raf) root.cancelAnimationFrame(raf); raf = 0; }
@@ -391,11 +551,7 @@
       jumpWanted = Math.max(0, jumpWanted - dt); // нажатие чуть раньше приземления тоже засчитывается
       var left_ = dt, events = [];
       while (left_ > 0) { var d = Math.min(left_, 1 / 120); events = events.concat(step(G, input, d)); left_ -= d; }
-      events.forEach(function (e) {
-        if (e === "jump") { jumpWanted = 0; beep([300, 480], 0.05, "square", 0.05); }
-        if (e === "gem") beep([990, 1320], 0.05);
-        if (e === "hit") { beep([150, 90], 0.1, "sawtooth", 0.14); haptic("heavy"); hud.flash.classList.remove("on"); void hud.flash.offsetWidth; hud.flash.classList.add("on"); }
-      });
+      events.forEach(effect);
       updateHud();
     }
     draw(renderer, G);
@@ -422,7 +578,9 @@
   function finish() {
     var o = G.over, n = G.n, meters = Math.floor(G.dist);
     screen = "result"; clearInput();
-    var buttons = [], title, text = "Кристаллов: " + G.gems, extra = null;
+    var score = Math.floor(G.score), top = save.top[n] || 0;
+    if (score > top) { save.top[n] = score; persist(); }
+    var buttons = [], title, text = "Очки: " + score + (score > top && top ? " — рекорд!" : top ? " (рекорд " + top + ")" : "") + " · 💎 " + G.gems, extra = null;
     if (o.win) {
       if (o.stars > stars(n)) { save.stars[n] = o.stars; persist(); }
       title = n === TOTAL ? "Все трассы пройдены!" : "Финиш!";

@@ -63,7 +63,7 @@ kbd{font:inherit;font-weight:700;color:var(--text);background:var(--card);border
 @keyframes rise{from{opacity:0;transform:translateY(40px)}}
 @keyframes float{50%{transform:translateY(-6px)}}
 /* заставка входа в игровой режим */
-#intro{position:fixed;inset:0;z-index:300;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;overflow:hidden;background:#05060c;cursor:pointer;animation:in-out .55s 2.65s ease-in forwards}
+#intro{position:fixed;inset:0;z-index:300;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;overflow:hidden;background:#05060c;touch-action:none;animation:in-out .55s 2.65s ease-in forwards}
 #intro .glow{position:absolute;width:140vmax;height:140vmax;left:50%;top:50%;margin:-70vmax 0 0 -70vmax;background:radial-gradient(circle,rgba(139,123,255,.55),rgba(56,168,245,.18) 25%,transparent 55%);animation:in-glow 2.6s ease-out backwards}
 #intro .ring{position:absolute;left:50%;top:50%;width:40vmin;height:40vmin;margin:-20vmin 0 0 -20vmin;border:2px solid rgba(190,180,255,.8);border-radius:50%;opacity:0;animation:in-ring 1.5s 1s ease-out}
 #intro .ring+.ring{animation-delay:1.25s;border-color:rgba(100,200,255,.7)}
@@ -72,7 +72,8 @@ kbd{font:inherit;font-weight:700;color:var(--text);background:var(--card);border
 #intro .logo i{border-radius:22%;background:var(--k);box-shadow:inset 0 4px 0 rgba(255,255,255,.4),inset 0 -5px 0 rgba(0,0,0,.25),0 0 18px var(--k);animation:in-fly .8s cubic-bezier(.2,1.25,.35,1) backwards}
 #intro .name{position:relative;font-size:clamp(28px,7vmin,68px);font-weight:900;white-space:nowrap;animation:in-name .9s 1.15s cubic-bezier(.2,.8,.2,1) backwards}
 #intro .sub{position:relative;margin-top:-16px;color:var(--muted);font-size:clamp(12px,2.2vmin,20px);letter-spacing:.35em;text-transform:uppercase;animation:in-sub .7s 1.6s backwards}
-#intro .skip{position:absolute;bottom:calc(env(safe-area-inset-bottom,0px) + 22px);color:var(--muted);font-size:13px;opacity:.6;animation:in-sub .5s 1.2s backwards}
+/* пока Telegram готовит окно, заставка стоит на первом кадре */
+#intro.wait,#intro.wait *,#intro.wait *::after{animation-play-state:paused !important}
 body.intro #lib .game,body.intro header,body.intro h2.sec{animation-play-state:paused}
 /* пока идёт заставка, всё под ней стоит на месте и не отнимает кадры */
 body.intro::before,body.intro .game .art i{animation-play-state:paused}
@@ -186,7 +187,7 @@ function loadTelegram() {
     safe(() => tg.disableVerticalSwipes()); // чтобы перетаскивание фигур не сворачивало окно
     safe(() => tg.setHeaderColor("#0b0d16"));
     safe(() => tg.setBackgroundColor("#0b0d16"));
-    safe(() => tg.BackButton.onClick(() => { if (current && !current.api().back()) library(); }));
+    safe(() => tg.BackButton.onClick(() => { if ($("#intro").hidden && current && !current.api().back()) library(); }));
     safe(() => tg.onEvent("fullscreenChanged", () => { modeLabel(); setTimeout(() => dispatchEvent(new Event("resize")), 100); }));
   });
 }
@@ -337,7 +338,7 @@ async function launch(game) {
 }
 
 /* ---------- заставки: вход в игровой режим и открытие игры ---------- */
-let introTimer = 0, revealTimer = 0, audio = null;
+let introTimer = 0, revealTimer = 0, introRun = 0, audio = null;
 function audioReady() {
   if (JSON.parse(get("rey-blocks") || "{}").mute) return false;
   audio = audio || new (window.AudioContext || window.webkitAudioContext)();
@@ -372,6 +373,7 @@ function modeSound() {
   } catch {}
 }
 function endIntro() {
+  introRun++; // отменяет ещё не начавшуюся заставку
   clearTimeout(introTimer);
   clearTimeout(revealTimer);
   // звук обрываем вместе с заставкой, чтобы он не «доигрывал» позже
@@ -391,12 +393,34 @@ function showIntro(kind, outAt, total, build, sound) {
   };
   box.className = kind;
   build(box, add);
-  add(box, "skip", "div", "нажмите, чтобы пропустить");
+  box.classList.add("wait");
   box.hidden = false;
   document.body.classList.add("intro");
-  sound();
-  introTimer = setTimeout(endIntro, total);
-  revealTimer = setTimeout(() => document.body.classList.remove("intro"), outAt);
+  const run = introRun;
+  settled().then(() => {
+    if (run !== introRun) return;
+    box.classList.remove("wait");
+    sound();
+    introTimer = setTimeout(endIntro, total);
+    revealTimer = setTimeout(() => document.body.classList.remove("intro"), outAt);
+  });
+}
+// В Telegram анимацию начинаем, когда его скрипт загружен и окно перестало менять размер
+// (разворачивание на весь экран посреди анимации и вызывает рывки). Долго не ждём.
+function settled() {
+  if (!/tgWebApp/.test(location.hash)) return Promise.resolve();
+  return telegramReady.then(() => new Promise((done) => {
+    let quiet = 0;
+    const finish = () => {
+      clearTimeout(quiet); clearTimeout(limit);
+      removeEventListener("resize", wait);
+      requestAnimationFrame(() => requestAnimationFrame(done));
+    };
+    const wait = () => { clearTimeout(quiet); quiet = setTimeout(finish, 350); };
+    const limit = setTimeout(finish, 1500);
+    addEventListener("resize", wait);
+    wait();
+  }));
 }
 // открытие игры «Блоки»
 function blocksIntro() {
@@ -445,12 +469,10 @@ function modeIntro() {
     add(box, "flash");
   }, modeSound);
 }
-$("#intro").onclick = endIntro;
-// любая клавиша пропускает заставку и не срабатывает в меню под ней
+// заставку нельзя пропустить: касания ловит сам слой, а клавиши не доходят до меню и игры под ним
 window.addEventListener("keydown", (e) => {
   if ($("#intro").hidden || e.ctrlKey || e.metaKey || e.altKey) return;
   e.preventDefault(); e.stopImmediatePropagation();
-  endIntro();
 }, true);
 
 /* ---------- игровой режим: весь экран и экран не гаснет ---------- */
@@ -504,8 +526,9 @@ const tick = () => ($("#clock").textContent = new Date().toLocaleTimeString("ru-
 tick(); setInterval(tick, 10000);
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("/games/sw.js").catch(() => {});
 gate("Проверяю вход…");
+const telegramReady = loadTelegram();
 modeIntro();
-loadTelegram().then(() => {
+telegramReady.then(() => {
   $("#logout").hidden = !!(tg || appSession());
   $("#mode").hidden = !canFull();
   modeLabel();

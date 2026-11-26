@@ -83,6 +83,36 @@ header,h2.sec{animation:rise .5s backwards}
 @keyframes in-thump{35%{transform:scale(1.18);filter:brightness(1.7)}}
 @keyframes in-name{from{opacity:0;letter-spacing:.5em;filter:blur(14px)}}
 @keyframes in-sub{from{opacity:0;transform:translateY(14px)}}
+/* вход в игровой режим: своя заставка, не связанная с играми */
+#intro.mode{gap:3.5vmin;background:radial-gradient(120% 90% at 50% 110%,#12376b 0,#081634 38%,#02040c 75%);animation:m-out .7s 3.4s cubic-bezier(.6,0,.8,.4) forwards}
+#intro.mode .aurora{position:absolute;left:-30vw;width:160vw;height:34vh;border-radius:50%;filter:blur(40px);opacity:0;background:linear-gradient(90deg,transparent 8%,var(--c) 50%,transparent 92%);animation:m-aurora 3.6s ease-in-out forwards}
+#intro.mode .dot{position:absolute;left:50%;top:50%;width:5px;height:5px;margin:-2.5px;border-radius:50%;background:#bfe3ff;box-shadow:0 0 10px 2px #5cb6ff;opacity:0;animation:m-dot 1.15s cubic-bezier(.55,0,.9,.5) forwards}
+#intro.mode .emblem{position:relative;width:min(46vmin,360px);height:min(46vmin,360px);overflow:visible;filter:drop-shadow(0 0 18px rgba(92,182,255,.75));animation:m-emblem 1s 1.35s cubic-bezier(.2,.9,.3,1)}
+#intro.mode .emblem *{fill:none;stroke:#eaf6ff;stroke-linecap:round;stroke-linejoin:round}
+#intro.mode .draw{stroke-dasharray:1;stroke-dashoffset:1;animation:m-draw 1.1s .35s cubic-bezier(.6,0,.2,1) forwards}
+#intro.mode .pad{stroke-width:4;animation-delay:.75s}
+#intro.mode .pad.fine{animation-delay:1.15s;animation-duration:.5s}
+#intro.mode .orbit{stroke:#5cb6ff;stroke-width:1.5;stroke-dasharray:70 40 12 40;opacity:0;transform-origin:100px 100px;animation:m-orbit 3s .9s linear forwards}
+#intro.mode .orbit.back{stroke:#8b7bff;stroke-dasharray:3 14;animation-direction:reverse}
+#intro.mode .flash{position:absolute;inset:0;background:radial-gradient(circle,#fff,rgba(140,200,255,.5) 18%,transparent 55%);opacity:0;pointer-events:none;animation:m-flash .8s 1.4s ease-out}
+#intro.mode .ring{width:46vmin;height:46vmin;margin:-23vmin 0 0 -23vmin;border-color:rgba(150,210,255,.85);animation:in-ring 1.6s 1.42s ease-out}
+#intro.mode .ring+.ring{animation-delay:1.65s;border-color:rgba(139,123,255,.7)}
+#intro.mode .title{position:relative;display:flex;font-size:clamp(20px,5.6vmin,56px);font-weight:800;letter-spacing:.22em;white-space:pre;overflow:hidden;padding:.1em 0}
+#intro.mode .title span{animation:m-letter .6s cubic-bezier(.2,1.2,.35,1) backwards;background:linear-gradient(100deg,#dcecff 40%,#fff 50%,#dcecff 60%) 0 0/100vw 100% fixed;-webkit-background-clip:text;background-clip:text;color:transparent}
+#intro.mode .bar{position:relative;width:min(52vmin,420px);height:3px;border-radius:3px;background:rgba(255,255,255,.12);overflow:hidden;animation:in-sub .4s 1.9s backwards}
+#intro.mode .bar::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,#8b7bff,#5cb6ff,#fff);transform-origin:left;animation:m-load 1.35s 2s cubic-bezier(.5,.1,.3,1) both}
+/* лучи, кольца и вспышка сходятся ровно в центре эмблемы (она выше середины из-за подписи) */
+#intro.mode .dot,#intro.mode .ring{top:calc(50% - 7.7vmin)}
+#intro.mode .flash{transform:translateY(-7.7vmin)}
+@keyframes m-aurora{0%{opacity:0;transform:translateX(-35vw) rotate(var(--a)) scaleY(.2)}45%{opacity:.55}100%{opacity:.2;transform:translateX(25vw) rotate(calc(var(--a) * -.4)) scaleY(1.2)}}
+@keyframes m-dot{0%{opacity:0;transform:rotate(var(--r)) translateX(75vmax) scaleX(14)}25%{opacity:1}100%{opacity:0;transform:rotate(var(--r)) translateX(0) scaleX(1)}}
+@keyframes m-draw{to{stroke-dashoffset:0}}
+@keyframes m-orbit{0%{opacity:0;transform:rotate(0) scale(.7)}25%{opacity:.9;transform:rotate(80deg) scale(1)}100%{opacity:.7;transform:rotate(330deg) scale(1)}}
+@keyframes m-emblem{20%{transform:scale(1.16);filter:drop-shadow(0 0 50px #bfe3ff) brightness(1.6)}}
+@keyframes m-flash{20%{opacity:.9}}
+@keyframes m-letter{from{opacity:0;transform:translateY(110%)}}
+@keyframes m-load{from{transform:scaleX(0)}}
+@keyframes m-out{to{opacity:0;transform:scale(3.2);filter:blur(10px);visibility:hidden}}
 @media (prefers-reduced-motion:reduce){#intro{display:none}}
 @media (prefers-reduced-motion:reduce){*,body::before{animation:none !important;transition:none !important}}
 </style>
@@ -161,7 +191,7 @@ function loadTelegram() {
 
 /* ---------- каталог игр: новую игру достаточно добавить сюда ---------- */
 const GAMES = [
-  { title: "Блоки", desc: "60 уровней · головоломка", src: "/cabinet/blocks.js", api: () => window.ReyBlocks, root: "#blocks" },
+  { title: "Блоки", desc: "60 уровней · головоломка", src: "/cabinet/blocks.js", api: () => window.ReyBlocks, root: "#blocks", intro: () => blocksIntro() },
 ];
 
 function view(id) {
@@ -298,67 +328,120 @@ async function launch(game) {
     if ($("#home").hidden) return;
     fullscreen(true);
     current = game;
+    game.intro?.();
     view("play");
     game.api().open($(game.root), library);
   } catch (e) { toast(e.message); }
 }
 
-/* ---------- заставка: блоки слетаются в значок, вспышка, название ---------- */
-let introTimer = 0, audio = null;
-function introSound() {
+/* ---------- заставки: вход в игровой режим и открытие игры ---------- */
+let introTimer = 0, revealTimer = 0, audio = null;
+function audioReady() {
+  if (JSON.parse(get("rey-blocks") || "{}").mute) return false;
+  audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+  audio.resume?.().catch(() => {});
+  return audio.state === "running"; // до первого касания браузер звук не разрешает
+}
+function tone(f, at, len, type, vol, to) {
+  const o = audio.createOscillator(), g = audio.createGain(), t = audio.currentTime + at;
+  o.type = type; o.frequency.setValueAtTime(f, t);
+  if (to) o.frequency.exponentialRampToValueAtTime(to, t + len);
+  g.gain.setValueAtTime(0.001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + 0.08);
+  g.gain.exponentialRampToValueAtTime(0.001, t + len);
+  o.connect(g); g.connect(audio.destination); o.start(t); o.stop(t + len);
+}
+// звук открытия игры: нарастание и аккорд
+function gameSound() {
   try {
-    if (JSON.parse(get("rey-blocks") || "{}").mute) return;
-    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
-    audio.resume?.().catch(() => {});
-    if (audio.state !== "running") return; // до первого касания браузер звук не разрешает
-    const note = (f, at, len, type, vol, to) => {
-      const o = audio.createOscillator(), g = audio.createGain(), t = audio.currentTime + at;
-      o.type = type; o.frequency.setValueAtTime(f, t);
-      if (to) o.frequency.exponentialRampToValueAtTime(to, t + len);
-      g.gain.setValueAtTime(0.001, t);
-      g.gain.exponentialRampToValueAtTime(vol, t + 0.08);
-      g.gain.exponentialRampToValueAtTime(0.001, t + len);
-      o.connect(g); g.connect(audio.destination); o.start(t); o.stop(t + len);
-    };
-    note(55, 0, 1.2, "sawtooth", 0.05, 220); // нарастание
-    [262, 392, 523, 659, 784].forEach((f, i) => note(f, 1 + i * 0.05, 1.7, "triangle", 0.07)); // аккорд
+    if (!audioReady()) return;
+    tone(55, 0, 1.2, "sawtooth", 0.05, 220);
+    [262, 392, 523, 659, 784].forEach((f, i) => tone(f, 1 + i * 0.05, 1.7, "triangle", 0.07));
+  } catch {}
+}
+// звук входа в режим: глубокий гул, удар и светлый перелив
+function modeSound() {
+  try {
+    if (!audioReady()) return;
+    tone(38, 0, 2.2, "sine", 0.22, 76);
+    tone(90, 0.35, 1.1, "sawtooth", 0.035, 720);
+    tone(130, 1.4, 0.7, "sine", 0.25, 45);
+    [587, 880, 1175, 1760].forEach((f, i) => tone(f, 1.45 + i * 0.12, 1.8, "sine", 0.05));
   } catch {}
 }
 function endIntro() {
   clearTimeout(introTimer);
-  audio?.suspend?.().catch(() => {});
+  clearTimeout(revealTimer);
+  // звук обрываем вместе с заставкой, чтобы он не «доигрывал» позже
+  audio?.close?.().catch(() => {});
+  audio = null;
   $("#intro").hidden = true;
   $("#intro").replaceChildren();
   document.body.classList.remove("intro");
 }
-function intro() {
+// общая часть: показать заставку на заданное время; библиотека под ней начинает выезжать к началу растворения
+function showIntro(kind, outAt, total, build, sound) {
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   endIntro();
   const box = $("#intro");
   const add = (parent, cls, tag = "div", text = "") => {
     const e = document.createElement(tag); e.className = cls; e.textContent = text; parent.append(e); return e;
   };
-  add(box, "glow"); add(box, "ring"); add(box, "ring");
-  for (let i = 0; i < 7; i++) {
-    const s = add(box, "streak");
-    s.style.top = 8 + i * 13 + "%"; s.style.animationDelay = ((i * 5) % 7) * 0.09 + "s";
-  }
-  const logo = add(box, "logo");
-  // клетки значка: [столбец, строка, цвет, откуда прилетает]
-  [[1, 1, 1, "-60vw", "-30vh"], [2, 1, 5, "10vw", "-60vh"], [2, 2, 4, "-20vw", "60vh"], [3, 2, 3, "60vw", "25vh"], [3, 3, 0, "40vw", "50vh"], [1, 3, 2, "-55vw", "35vh"]]
-    .forEach(([c, r, k, x, y], i) => {
-      const t = add(logo, "", "i");
-      t.style.cssText = `grid-column:${c};grid-row:${r};--k:${COLORS[k]};--x:${x};--y:${y};--r:${i % 2 ? 220 : -220}deg;animation-delay:${0.15 + i * 0.09}s`;
-    });
-  add(box, "name", "div", "РЭУ Игры");
-  add(box, "sub", "div", "игровой режим");
+  box.className = kind;
+  build(box, add);
   add(box, "skip", "div", "нажмите, чтобы пропустить");
   box.hidden = false;
   document.body.classList.add("intro");
-  introSound();
-  introTimer = setTimeout(endIntro, 3200);
-  // библиотека начинает выезжать, пока заставка растворяется
-  setTimeout(() => { if (!box.hidden) document.body.classList.remove("intro"); }, 2650);
+  sound();
+  introTimer = setTimeout(endIntro, total);
+  revealTimer = setTimeout(() => document.body.classList.remove("intro"), outAt);
+}
+// открытие игры «Блоки»
+function blocksIntro() {
+  showIntro("blocks", 2650, 3200, (box, add) => {
+    add(box, "glow"); add(box, "ring"); add(box, "ring");
+    for (let i = 0; i < 7; i++) {
+      const s = add(box, "streak");
+      s.style.top = 8 + i * 13 + "%"; s.style.animationDelay = ((i * 5) % 7) * 0.09 + "s";
+    }
+    const logo = add(box, "logo");
+    // клетки значка: [столбец, строка, цвет, откуда прилетает]
+    [[1, 1, 1, "-60vw", "-30vh"], [2, 1, 5, "10vw", "-60vh"], [2, 2, 4, "-20vw", "60vh"], [3, 2, 3, "60vw", "25vh"], [3, 3, 0, "40vw", "50vh"], [1, 3, 2, "-55vw", "35vh"]]
+      .forEach(([c, r, k, x, y], i) => {
+        const t = add(logo, "", "i");
+        t.style.cssText = `grid-column:${c};grid-row:${r};--k:${COLORS[k]};--x:${x};--y:${y};--r:${i % 2 ? 220 : -220}deg;animation-delay:${0.15 + i * 0.09}s`;
+      });
+    add(box, "name", "div", "Блоки");
+    add(box, "sub", "div", "60 уровней");
+  }, gameSound);
+}
+// вход в игровой режим: лучи сходятся в центр, рисуется эмблема с геймпадом, вспышка, название
+const EMBLEM = `
+<circle class="draw" pathLength="1" cx="100" cy="100" r="82" stroke-width="3" transform="rotate(-90 100 100)"/>
+<circle class="orbit" cx="100" cy="100" r="94"/>
+<circle class="orbit back" cx="100" cy="100" r="106"/>
+<path class="draw pad" pathLength="1" d="M72 74H128C146 74 154 92 156 112C158 128 153 138 143 138C133 138 128 124 117 120H83C72 124 67 138 57 138C47 138 42 128 44 112C46 92 54 74 72 74Z"/>
+<path class="draw pad fine" pathLength="1" d="M70 90V108M61 99H79"/>
+<circle class="draw pad fine" pathLength="1" cx="130" cy="92" r="4"/>
+<circle class="draw pad fine" pathLength="1" cx="139" cy="104" r="4"/>`;
+function modeIntro() {
+  showIntro("mode", 3500, 4150, (box, add) => {
+    [["#1f6fd6", "18vh", "-14deg", "0s"], ["#6a4bd8", "44vh", "9deg", ".25s"], ["#1aa6c9", "66vh", "-6deg", ".5s"]].forEach(([c, top, a, delay]) => {
+      add(box, "aurora").style.cssText = `--c:${c};--a:${a};top:${top};animation-delay:${delay}`;
+    });
+    for (let i = 0; i < 36; i++) {
+      add(box, "dot").style.cssText = `--r:${i * 10 + ((i * 7) % 9)}deg;animation-delay:${(((i * 13) % 36) / 100).toFixed(2)}s`;
+    }
+    add(box, "ring"); add(box, "ring");
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "emblem"); svg.setAttribute("viewBox", "0 0 200 200");
+    svg.innerHTML = EMBLEM;
+    box.append(svg);
+    const title = add(box, "title");
+    [..."ИГРОВОЙ РЕЖИМ"].forEach((ch, i) => (add(title, "", "span", ch).style.animationDelay = 1.5 + i * 0.045 + "s"));
+    add(box, "bar");
+    add(box, "flash");
+  }, modeSound);
 }
 $("#intro").onclick = endIntro;
 // любая клавиша пропускает заставку и не срабатывает в меню под ней
@@ -391,7 +474,7 @@ const modeLabel = () => ($("#mode").textContent = isFull() ? "✕ Выйти и�
 function toggleMode() {
   const on = !isFull();
   fullscreen(on);
-  if (on && !$("#home").hidden) intro();
+  if (on && !$("#home").hidden) modeIntro();
 }
 $("#mode").onclick = toggleMode;
 for (const ev of ["fullscreenchange", "webkitfullscreenchange"])
@@ -419,7 +502,7 @@ const tick = () => ($("#clock").textContent = new Date().toLocaleTimeString("ru-
 tick(); setInterval(tick, 10000);
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("/games/sw.js").catch(() => {});
 gate("Проверяю вход…");
-intro();
+modeIntro();
 loadTelegram().then(() => {
   $("#logout").hidden = !!(tg || appSession());
   $("#mode").hidden = !canFull();

@@ -940,7 +940,7 @@ async function main(event) {
         const day = s.days.find((d) => d.date === (what === "schedule_today" ? n.date : n.tomorrow));
         if (!day) return out(400, { error: "Этого дня нет в расписании на сайте" });
         const prefix = what === "schedule_today" ? "Сегодня" : "Завтра";
-        await sendDayTo({ ...day, title: `${prefix}, ${day.label}` }, `${prefix}, ${day.label}`, chat, null);
+        await sendDayTo({ ...day, title: `${prefix}, ${day.label}` }, `${prefix}, ${day.label}`, chat, null, event);
       } else if (what === "birthday") {
         const nm = String(user.first_name || "именинник").replace(/&/g, "&amp;").replace(/</g, "&lt;");
         await tgSend({ text: `🎉 Сегодня день рождения у <a href="tg://user?id=${user.id}">${nm}</a>!\nПоздравляем и желаем всего самого лучшего! 🎂`, parse_mode: "HTML" });

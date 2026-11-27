@@ -9,6 +9,10 @@
 [functions."schedule"]
   schedule = "0 11 * * *"
 
+# 00:00 по Новосибирску (17:00 UTC): «Завтра» в сообщениях меняется на «Сегодня»; повторы через 15 минут на случай сбоя
+[functions."midnight"]
+  schedule = "*/15 17 * * *"
+
 [functions."watch"]
   schedule = "*/15 * * * *"
 

@@ -17,7 +17,7 @@
   schedule = "*/15 * * * *"
 
 [functions."homework"]
-  schedule = "1 11 * * *"
+  schedule = "0 11 * * *"
 
 [functions."birthday"]
   schedule = "0 2 * * *"

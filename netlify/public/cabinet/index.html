@@ -3047,7 +3047,8 @@ function renderMat() {
     const c = el("div", "card idea");
     c.style.cursor = "pointer";
     c.append(el("b", null, m.title));
-    c.append(el("div", "muted", `${m.name}${m.size ? " · " + fmtSize(m.size) : ""} · ${fmtDate(m.ts)}`));
+    // имя файла не показываем: сверху уже есть название (если своё не задали, названием служит само имя)
+    c.append(el("div", "muted", [m.size ? fmtSize(m.size) : "", fmtDate(m.ts)].filter(Boolean).join(" · ")));
     c.onclick = async () => {
       if (c.dataset.busy) return;
       c.dataset.busy = "1";

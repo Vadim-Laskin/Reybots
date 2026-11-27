@@ -661,10 +661,6 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
   <div id="blocks"></div>
 </div>
 
-<div id="secret" class="screen" hidden>
-  <div id="pocket"></div>
-</div>
-
 <button id="cat" hidden aria-label="Мурзик — ИИ-помощник">
   <svg viewBox="0 0 64 64" width="64" height="64" aria-hidden="true">
     <g class="ear-l"><path d="M10 30 L12 6 L30 18 Z" fill="#f0a24a"/><path d="M14 24 L15 12 L24 18 Z" fill="#ffb7c5"/></g>
@@ -937,19 +933,18 @@ const PARENT = { newsv: "news", ned: "news", news: "home", hw: "hwlist", add: "m
 function show(id) {
   stopAudio();
   if (id !== "game") window.ReyBlocks?.close();
-  if (id !== "secret") window.ReyPocket?.close();
   document.querySelectorAll(".screen").forEach((s) => (s.hidden = s.id !== id));
   if (tg) id === "home" ? tg.BackButton.hide() : tg.BackButton.show();
   window.scrollTo(0, 0);
 }
 function back() {
+  if (window.ReyEgg?.back()) return;
   if (!$("#vchat").hidden) return vClose();
   if (!$("#aichat").hidden) return closeAi();
   if (!$("#imgv").hidden) { $("#imgv").hidden = true; return; }
   if (!$("#modal").hidden) return closeModal();
   const cur = document.querySelector(".screen:not([hidden])")?.id;
   if (cur === "game" && window.ReyBlocks?.back()) return;
-  if (cur === "secret" && window.ReyPocket?.back()) return;
   show(PARENT[cur] || "home");
 }
 
@@ -2593,20 +2588,21 @@ async function openGame() {
   } catch (e) { fail(e); }
 }
 
-/* ---------- «Тайный карман»: открывается пятью быстрыми тапами по заголовку ---------- */
-let pocketLoad = null, taps = 0, tapAt = 0;
-async function openPocket() {
+/* ---------- пасхалка: долгая анимация после пяти быстрых тапов по заголовку ---------- */
+let eggLoad = null, taps = 0, tapAt = 0;
+async function openEgg() {
   try {
-    await (pocketLoad ||= new Promise((ok, no) => {
+    await (eggLoad ||= new Promise((ok, no) => {
       const s = document.createElement("script");
-      s.src = "/cabinet/secret.js";
+      s.src = "/cabinet/easter.js";
       s.onload = ok;
-      s.onerror = () => { pocketLoad = null; s.remove(); no(new Error("Не удалось открыть, проверь связь")); };
+      s.onerror = () => { eggLoad = null; s.remove(); no(new Error("Не удалось открыть, проверь связь")); };
       document.head.append(s);
     }));
     if (curScreen() !== "home") return;
-    show("secret");
-    window.ReyPocket.open($("#pocket"), () => show("home"));
+    stopAudio();
+    window.ReyEgg.play(() => tg?.BackButton.hide());
+    tg?.BackButton.show();
   } catch (e) { fail(e); }
 }
 $("#home h1").style.touchAction = "manipulation"; // быстрые тапы не должны увеличивать страницу
@@ -2615,7 +2611,7 @@ $("#home h1").addEventListener("click", () => {
   taps = now - tapAt < 700 ? taps + 1 : 1;
   tapAt = now;
   if (taps >= 3) try { tg?.HapticFeedback?.impactOccurred(taps >= 5 ? "heavy" : "light"); } catch {}
-  if (taps === 5) { taps = 0; openPocket(); }
+  if (taps === 5) { taps = 0; openEgg(); }
 });
 
 // отдельное приложение «Игры»: из Telegram открываем его мини-приложение и закрываем кабинет (как переход в расписание)
@@ -3244,7 +3240,7 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) { lo
 /* ---------- живое обновление: данные и новая версия без ручной перезагрузки ---------- */
 const curScreen = () => document.querySelector(".screen:not([hidden])")?.id;
 // не трогаем экран, пока человек что-то вводит или смотрит диалог
-const userBusy = () => !$("#aichat").hidden || !$("#imgv").hidden || !$("#modal").hidden || ["add", "hw", "upd", "ned", "game", "secret"].includes(curScreen());
+const userBusy = () => !$("#aichat").hidden || !$("#imgv").hidden || !$("#modal").hidden || ["add", "hw", "upd", "ned", "game"].includes(curScreen()) || !!window.ReyEgg?.isOpen();
 let liveAt = 0, liveBusy = false;
 async function liveRefresh(force) {
   if (document.hidden || liveBusy || !INFO) return;

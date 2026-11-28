@@ -7,6 +7,7 @@
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script src="/app-offline.js"></script>
 <script src="/festive.js" defer></script>
+<script src="/plane.js" defer></script>
 <script>
 // тема берётся из Telegram (светлая или тёмная), вне Telegram — из настроек системы
 function applyTheme() {
@@ -1284,18 +1285,21 @@ $("#idea-text").oninput = () => {
   $("#idea-cnt").textContent = `${$("#idea-text").value.length}/300`;
 };
 $("#idea-send").onclick = async () => {
-  const btn = $("#idea-send");
+  const btn = $("#idea-send"), field = $("#idea-text"), text = field.value.trim();
   btn.disabled = true;
+  // самолётик только для текста, который сервер примет
+  const fly = text.length >= 5 && text.length <= 300 ? window.ReyPlane?.start({ from: field.closest(".card"), text, fields: [field] }) : null;
   try {
-    const r = await api("idea_add", { text: $("#idea-text").value });
+    const r = await api("idea_add", { text: field.value });
     IDEAS = [r.item, ...IDEAS];
     $("#idea-text").value = "";
     $("#idea-cnt").textContent = "0/300";
     IFILTER = "all";
     renderIdeas();
     renderRequests();
+    await fly?.send(r.queued ? "Отправится позже" : "");
     note("#ok", "Идея отправлена. Статус смотри в этом разделе.", 4000);
-  } catch (e) { fail(e); }
+  } catch (e) { await fly?.cancel(); fail(e); }
   btn.disabled = false;
 };
 

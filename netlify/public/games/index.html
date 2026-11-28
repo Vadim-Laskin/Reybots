@@ -213,6 +213,7 @@ header,h2.sec{animation:rise .5s backwards}
 
 <div id="toast" hidden></div>
 
+<script src="/plane.js"></script>
 <script>
 "use strict";
 const $ = (s) => document.querySelector(s);
@@ -433,13 +434,15 @@ $("#idea-form").onsubmit = async (e) => {
   if (title.length < 2) return toast("Напиши название игры");
   if (text.length < 10) return toast("Опиши игру подробнее (минимум 10 символов)");
   $("#idea-send").disabled = true;
+  const fly = window.ReyPlane?.start({ from: $("#idea-form"), title, text, fields: [$("#idea-title"), $("#idea-text")] });
   try {
     const r = await cabinet("gidea_add", { title, text });
     IDEAS = [r.item, ...(IDEAS || [])]; renderIdeas();
     $("#idea-form").reset(); $("#idea-text").oninput();
     document.activeElement?.blur();
+    await fly?.send();
     toast("🎮 Игра отправлена на разработку!");
-  } catch (err) { toast(err.message); } // текст остаётся в форме, можно отправить ещё раз
+  } catch (err) { await fly?.cancel(); toast(err.message); } // текст остаётся в форме, можно отправить ещё раз
   $("#idea-send").disabled = false;
 };
 

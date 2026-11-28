@@ -393,8 +393,12 @@ function ideaCard(i) {
     // второе нажатие подтверждает удаление
     const b = c.querySelector(".del");
     if (!b.dataset.sure) { b.dataset.sure = "1"; b.textContent = "Точно удалить?"; return; }
-    await cabinet("gidea_del", { id: i.id });
-    IDEAS = IDEAS.filter((x) => x.id !== i.id); renderIdeas();
+    // своя идея сминается в комок и летит в корзину
+    const fly = i.mine ? window.ReyPlane?.trash({ from: c, title: i.title, text: i.text, hide: c }) : null;
+    try { await cabinet("gidea_del", { id: i.id }); } catch (e) { await fly?.cancel(); throw e; }
+    IDEAS = IDEAS.filter((x) => x.id !== i.id);
+    await fly?.send();
+    renderIdeas();
   });
   if (ideasAdmin) {
     const adm = make("div", "adm"), row = make("div", "row"), note = make("input");

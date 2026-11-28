@@ -1194,6 +1194,17 @@ async function refreshIdeas() {
   renderIdeas();
   renderRequests();
 }
+// удаление заявки; своя перед этим сминается в комок и летит в корзину
+async function removeIdea(i, card) {
+  const fly = i.mine ? window.ReyPlane?.trash({ from: card, text: i.text, hide: card }) : null;
+  try {
+    await api("idea_del", { id: i.id });
+    IDEAS = IDEAS.filter((x) => x.id !== i.id);
+    await fly?.send();
+    renderIdeas();
+    renderRequests();
+  } catch (e) { await fly?.cancel(); fail(e); }
+}
 function ideaCard(i, adminMode) {
   const c = el("div", "card idea");
   const top = el("div", "row");
@@ -1203,15 +1214,7 @@ function ideaCard(i, adminMode) {
   if (!adminMode && i.mine && i.status === "review") {
     const del = el("button", "btn ghost");
     del.append(ico("trash"), document.createTextNode("Удалить"));
-    del.onclick = () =>
-      ask("Удалить свою идею?", async () => {
-        try {
-          await api("idea_del", { id: i.id });
-          IDEAS = IDEAS.filter((x) => x.id !== i.id);
-          renderIdeas();
-          renderRequests();
-        } catch (e) { fail(e); }
-      });
+    del.onclick = () => ask("Удалить свою идею?", () => removeIdea(i, c));
     c.append(del);
   }
   return c;
@@ -1267,15 +1270,7 @@ function renderRequests() {
           note("#ok", "Сохранено, автору отправлено уведомление", 3000);
         } catch (e) { fail(e); }
       };
-      del.onclick = () =>
-        ask("Удалить заявку?", async () => {
-          try {
-            await api("idea_del", { id: i.id });
-            IDEAS = IDEAS.filter((x) => x.id !== i.id);
-            renderIdeas();
-            renderRequests();
-          } catch (e) { fail(e); }
-        });
+      del.onclick = () => ask("Удалить заявку?", () => removeIdea(i, c));
       acts.append(save, del);
       c.append(sel, cm, acts);
       box.append(c);

@@ -2,11 +2,13 @@
    const fly = ReyPlane.start({ from: элемент, title, text, fields: [поля, чей текст «уехал» на листок] });
    fly.send()   — сервер принял: самолётик улетает (можно передать свою подпись вместо «Отправлено!»);
    fly.cancel() — ошибка: листок разворачивается обратно на место.
-   Пока ответа нет, сложенный самолётик покачивается и ждёт. */
+   Пока ответа нет, сложенный самолётик покачивается и ждёт.
+   Так же работает удаление: ReyPlane.trash({ from, title, text, hide: карточка }) —
+   лист сминается в комок и летит в корзину. */
 (function () {
   // этапы складывания, мс: лист поднимается, два сгиба, превращение в самолётик
   var LIFT = 450, F1 = 480, F2 = 480, MORPH = 380, FOLD = LIFT + F1 + F2 + MORPH;
-  var WIND = 420, FLY = 1500, BYE = 750, OUT = WIND + FLY + BYE;
+  var WIND = 420, FLY = 1500, BYE = 750;
 
   var clamp = function (v) { return v < 0 ? 0 : v > 1 ? 1 : v; };
   var ease = function (t) { t = clamp(t); return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; };
@@ -185,95 +187,45 @@
     };
   }
 
-  /* ---------- проигрывание ---------- */
-  var nothing = { send: function () { return Promise.resolve(); }, cancel: function () { return Promise.resolve(); } };
+  /* ---------- галочка и подпись в конце; e: 0…1 ---------- */
+  function drawDone(g, x, y, e, label, color) {
+    var grow = ease(e * 2.6), fade = 1 - clamp((e - 0.75) * 4);
+    g.save();
+    g.translate(x, y); g.globalAlpha = fade;
+    g.beginPath(); g.arc(0, -22, 38 * grow, 0, Math.PI * 2); g.fillStyle = color; g.fill();
+    g.strokeStyle = "#fff"; g.lineWidth = 7; g.lineCap = g.lineJoin = "round";
+    g.setLineDash([70, 70]); g.lineDashOffset = 70 * (1 - clamp(e * 2.4 - 0.25));
+    if (e > 0.11) { g.beginPath(); g.moveTo(-17, -22); g.lineTo(-5, -10); g.lineTo(19, -34); g.stroke(); }
+    g.fillStyle = "#fff"; g.textAlign = "center";
+    g.font = "800 24px system-ui,-apple-system,Segoe UI,Roboto,sans-serif";
+    g.globalAlpha = fade * clamp(e * 3);
+    g.fillText(label, 0, 52);
+    g.restore();
+  }
 
-  function start(opts) {
-    var from = opts.from;
-    if (!from || !window.DOMMatrix || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return nothing;
-    var cv = document.createElement("canvas");
-    cv.id = "rey-plane";
-    cv.setAttribute("aria-hidden", "true");
-    cv.style.cssText = "position:fixed;left:0;top:0;width:100%;height:100%;z-index:1000;touch-action:none";
-    document.body.appendChild(cv);
-    var g = cv.getContext("2d"), dpr = Math.min(window.devicePixelRatio || 1, 2);
-    document.activeElement?.blur?.(); // прячем клавиатуру
-    var fields = opts.fields || [];
-    fields.forEach(function (f) { f.style.color = "transparent"; });
-
-    var pw = Math.min(250, innerWidth * 0.62, innerHeight * 0.42), ph = pw * 1.36;
-    var tex = sheet(pw, ph, opts.title, opts.text, dpr);
-    var born = performance.now(), mode = "wait", since = 0, backFrom = 0, done = null, over = false, frame = 0, timer = 0;
-    var way = null, sparks = [], buzzed = {}, label = "Отправлено!";
-
-    function end() {
-      if (over) return;
-      over = true;
-      cancelAnimationFrame(frame); clearTimeout(timer);
-      document.removeEventListener("visibilitychange", hidden);
-      cv.remove();
-      fields.forEach(function (f) { f.style.color = ""; });
-      done?.();
-    }
-    var hidden = function () { if (document.hidden && mode !== "wait") end(); };
-    document.addEventListener("visibilitychange", hidden);
-    cv.addEventListener("pointerdown", function (e) { e.preventDefault(); if (mode === "send") end(); }); // касание пропускает полёт
-
-    function once(key, kind) { if (!buzzed[key]) { buzzed[key] = 1; haptic(kind); } }
-
-    function draw() {
-      if (over) return;
-      var now = performance.now(), age = now - born, W = innerWidth, H = innerHeight;
-      if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) {
-        cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); way = null;
-      }
-      g.setTransform(dpr, 0, 0, dpr, 0, 0);
-      g.clearRect(0, 0, W, H);
-      var cx = W / 2, cy = H * 0.5;
-      // ответ пришёл раньше, чем лист сложился: сначала доскладываем
-      if (mode === "send" && !since && age >= FOLD) since = now;
-      var out = mode === "send" && since ? now - since : -1;
-      var f = age;
-      if (mode === "cancel") {
-        f = backFrom * (1 - clamp((now - since) / 600));
-        if (now - since >= 600) return end();
-      }
-      var dim = mode === "cancel" ? clamp(f / LIFT) : clamp(age / 300);
-      if (out >= 0) dim *= 1 - clamp((out - WIND - FLY - BYE * 0.5) / (BYE * 0.5));
-      var shade = g.createRadialGradient(cx, cy, 0, cx, cy, Math.max(W, H) * 0.75);
-      shade.addColorStop(0, "rgba(38,30,92," + 0.86 * dim + ")");
-      shade.addColorStop(1, "rgba(6,8,22," + 0.92 * dim + ")");
-      g.fillStyle = shade; g.fillRect(0, 0, W, H);
-
-      if (out < 0) {
-        if (f < LIFT) { // лист отрывается от формы и встаёт по центру
-          var k = ease(f / LIFT), r = from.getBoundingClientRect();
-          var x = mix(r.left + r.width / 2, cx, k), y = mix(r.top + r.height / 2, cy, k);
-          var w = mix(r.width, pw, k), h = mix(r.height, ph, k);
-          g.save();
-          g.translate(x, y); g.rotate(Math.sin(Math.PI * k) * -0.07);
-          g.globalAlpha = clamp(f / 120);
-          g.shadowColor = "rgba(0,0,0,.35)"; g.shadowBlur = 26; g.shadowOffsetY = 10;
-          g.fillStyle = "#f6f7ff"; g.fillRect(-w / 2, -h / 2, w, h);
-          g.shadowColor = "transparent";
-          var fit = Math.min(w / pw, h / ph);
-          g.globalAlpha *= clamp(k * 1.6);
-          g.drawImage(tex, -pw * fit / 2, -ph * fit / 2, pw * fit, ph * fit);
-          g.restore();
-        } else {
-          var t1 = ease((f - LIFT) / F1), t2 = ease((f - LIFT - F1) / F2), m = ease((f - LIFT - F1 - F2) / MORPH);
-          var bob = f >= FOLD ? Math.sin((age - FOLD) / 260) * 7 : 0;
-          if (t1 >= 1) once("f1", "light");
-          if (t2 >= 1) once("f2", "light");
-          g.save();
-          g.translate(cx, cy + bob);
-          var pop = 1 + Math.sin(Math.PI * m) * 0.12;
-          g.scale(pop, pop);
-          if (m < 1) { g.save(); g.globalAlpha = 1 - m * m; drawFolding(g, tex, pw, ph, t1, t2); g.restore(); }
-          if (m > 0) { g.globalAlpha = m; drawPlane(g, pw, ph); }
-          g.restore();
-        }
-      } else {
+  /* ---------- сцена «отправка»: самолётик ----------
+     hold — сколько длится превращение листа, out — финал после ответа сервера */
+  function planeScene(tex, pw, ph) {
+    var way = null, sparks = [];
+    return {
+      hold: FOLD, out: WIND + FLY + BYE, label: "Отправлено!", y: 0.5,
+      resize: function () { way = null; },
+      shape: function (g, f, age, c) {
+        var cx = c.cx, cy = c.cy, once = c.once;
+        var t1 = ease((f - LIFT) / F1), t2 = ease((f - LIFT - F1) / F2), m = ease((f - LIFT - F1 - F2) / MORPH);
+        var bob = f >= FOLD ? Math.sin((age - FOLD) / 260) * 7 : 0;
+        if (t1 >= 1) once("f1", "light");
+        if (t2 >= 1) once("f2", "light");
+        g.save();
+        g.translate(cx, cy + bob);
+        var pop = 1 + Math.sin(Math.PI * m) * 0.12;
+        g.scale(pop, pop);
+        if (m < 1) { g.save(); g.globalAlpha = 1 - m * m; drawFolding(g, tex, pw, ph, t1, t2); g.restore(); }
+        if (m > 0) { g.globalAlpha = m; drawPlane(g, pw, ph); }
+        g.restore();
+      },
+      finale: function (g, out, c, label) {
+        var cx = c.cx, cy = c.cy, once = c.once, now = c.now, W = c.W, H = c.H;
         if (!way) way = route(W, H, cx, cy);
         var first = way.at(0), heading = Math.atan2(Math.sin(first.angle + Math.PI / 2), Math.cos(first.angle + Math.PI / 2));
         var pos, rot, scale, travelled = 0;
@@ -311,20 +263,206 @@
           g.save(); g.translate(pos.x, pos.y); g.rotate(rot); g.scale(scale, scale); drawPlane(g, pw, ph); g.restore();
         } else { // «Отправлено» с галочкой
           once("ok", "success");
-          var e = (out - WIND - FLY) / BYE, grow = ease(e * 2.6), fade = 1 - clamp((e - 0.75) * 4);
+          drawDone(g, cx, cy, (out - WIND - FLY) / BYE, label, "#34d17a");
+        }
+      },
+    };
+  }
+
+  /* ---------- сцена «удаление»: лист сминается в комок и летит в корзину ---------- */
+  var CRUMPLE = 750, BIN = 380, THROW = 720, SHUT = 520, GONE = 750;
+
+  function trashScene(tex, pw, ph) {
+    var N = 26, R = pw * 0.27, dust = null;
+    var rnd = function (a, b) { return a + Math.random() * (b - a); };
+    var edge = [], inner = [];
+    for (var i = 0; i < N; i++) { // точки по краю листа и куда каждая уедет в комке
+      var a = i / N * Math.PI * 2, cos = Math.cos(a), sin = Math.sin(a);
+      var reach = 1 / Math.max(Math.abs(cos) / (pw / 2), Math.abs(sin) / (ph / 2));
+      edge.push({ flat: [cos * reach, sin * reach], ball: rnd(0.8, 1.18), dent: rnd(-0.14, 0.1), late: rnd(0, 0.35), a: a, tone: rnd(0, 1) });
+    }
+    for (var j = 0; j < N / 2; j++) inner.push({ a: (j + 0.5) / (N / 2) * Math.PI * 2 + rnd(-0.25, 0.25), r: rnd(0.35, 0.68), tone: rnd(0, 1) });
+
+    function ball(g, k) { // k: 0 — ровный лист, 1 — комок
+      var rim = edge.map(function (p) {
+        var t = ease((k - p.late) / (1 - p.late)), squeeze = Math.sin(Math.PI * k) * p.dent * pw;
+        return [mix(p.flat[0], Math.cos(p.a) * R * p.ball, t) + Math.cos(p.a) * squeeze,
+          mix(p.flat[1], Math.sin(p.a) * R * p.ball, t) + Math.sin(p.a) * squeeze];
+      });
+      var w = mix(pw, R * 2, ease(k)), h = mix(ph, R * 2, ease(k));
+      g.save();
+      g.shadowColor = "rgba(5,6,25,.45)"; g.shadowBlur = 16; g.shadowOffsetY = 7;
+      path(g, rim); g.fillStyle = "#eceefc"; g.fill();
+      g.shadowColor = "transparent";
+      g.clip();
+      g.globalAlpha *= 1 - ease(k) * 0.55;
+      g.drawImage(tex, -w / 2, -h / 2, w, h);
+      g.restore();
+      if (k <= 0) return;
+      var mid = inner.map(function (p) {
+        return [Math.cos(p.a) * p.r * w / 2, Math.sin(p.a) * p.r * h / 2];
+      });
+      var facet = function (pts, tone) { // грани смятой бумаги: где тень, где блик
+        path(g, pts);
+        g.fillStyle = tone > 0.5 ? "rgba(70,76,140," + (tone - 0.5) * 0.72 * k + ")" : "rgba(255,255,255," + (0.5 - tone) * 1.1 * k + ")";
+        g.fill();
+        g.strokeStyle = "rgba(90,96,160," + 0.45 * k + ")"; g.lineWidth = 1; g.lineJoin = "round"; g.stroke();
+      };
+      for (var i = 0; i < N; i++) {
+        var m = Math.floor(i / 2), next = (i + 1) % N;
+        facet([rim[i], rim[next], mid[m]], edge[i].tone);
+        if (i % 2) facet([mid[m], rim[next], mid[(m + 1) % mid.length]], 1 - edge[next].tone);
+      }
+      for (var n = 0; n < mid.length; n++) facet([[0, 0], mid[n], mid[(n + 1) % mid.length]], inner[n].tone);
+    }
+
+    function bin(g, x, y, size, open, squash) { // y — низ корзины
+      var w = size * 0.8, h = size;
+      g.save();
+      g.translate(x, y); g.scale(1 + squash * 0.14, 1 - squash * 0.12);
+      var body = g.createLinearGradient(-w / 2, 0, w / 2, 0);
+      body.addColorStop(0, "#ff8a96"); body.addColorStop(0.45, "#ff5d6c"); body.addColorStop(1, "#b93248");
+      g.fillStyle = body; g.lineJoin = "round";
+      path(g, [[-w / 2, -h], [w / 2, -h], [w * 0.38, 0], [-w * 0.38, 0]]); g.fill();
+      g.strokeStyle = "rgba(255,255,255,.55)"; g.lineWidth = size * 0.05; g.lineCap = "round";
+      [-0.2, 0, 0.2].forEach(function (k) { g.beginPath(); g.moveTo(w * k, -h * 0.8); g.lineTo(w * k * 0.82, -h * 0.16); g.stroke(); });
+      // крышка откидывается на левой петле
+      g.translate(-w * 0.58, -h); g.rotate(-open * 1.9);
+      g.fillStyle = "#ff7381";
+      g.fillRect(0, -h * 0.12, w * 1.16, h * 0.12);
+      g.fillRect(w * 0.4, -h * 0.21, w * 0.36, h * 0.1);
+      g.restore();
+    }
+
+    return {
+      hold: LIFT + CRUMPLE, out: BIN + THROW + SHUT + GONE, label: "Удалено", y: 0.4,
+      resize: function () {},
+      shape: function (g, f, age, c) {
+        var k = clamp((f - LIFT) / CRUMPLE), waiting = f >= LIFT + CRUMPLE;
+        [0.25, 0.55, 0.9].forEach(function (at, n) { if (k >= at) c.once("squeeze" + n, "light"); });
+        g.save();
+        g.translate(c.cx, c.cy + (waiting ? Math.sin((age - LIFT - CRUMPLE) / 240) * 6 : 0));
+        g.rotate(Math.sin(k * Math.PI * 6) * 0.09 * (1 - k)); // лист трясёт, пока его мнут
+        ball(g, k);
+        g.restore();
+      },
+      finale: function (g, out, c, label) {
+        var size = Math.min(130, c.H * 0.2), floor = c.H * 0.83, mouth = floor - size;
+        var gone = clamp((out - BIN - THROW - SHUT) / GONE);
+        var inT = clamp(out / BIN), flyT = clamp((out - BIN) / THROW), shutT = clamp((out - BIN - THROW) / SHUT);
+        var by = mix(c.H + size * 1.6, floor, 1 - Math.pow(1 - inT, 3));
+        var open = ease(out / BIN * 1.2) * (1 - ease(shutT * 3));
+        var squash = shutT > 0 ? Math.sin(shutT * Math.PI * 3) * (1 - shutT) : 0;
+        g.save();
+        g.globalAlpha = 1 - clamp((gone - 0.55) * 2.5);
+        if (flyT < 1) { // бросок по дуге с кувырком
+          var t = flyT, scale = mix(1, size * 0.27 / R, ease(t));
+          var x = c.cx + Math.sin(Math.PI * t) * Math.min(c.W * 0.22, 130);
+          var y = mix(c.cy, mouth + size * 0.3, t * t) - Math.sin(Math.PI * t) * c.H * 0.2;
           g.save();
-          g.translate(cx, cy); g.globalAlpha = fade;
-          g.beginPath(); g.arc(0, -22, 38 * grow, 0, Math.PI * 2); g.fillStyle = "#34d17a"; g.fill();
-          g.strokeStyle = "#fff"; g.lineWidth = 7; g.lineCap = g.lineJoin = "round";
-          g.setLineDash([70, 70]); g.lineDashOffset = 70 * (1 - clamp(e * 2.4 - 0.25));
-          if (e > 0.11) { g.beginPath(); g.moveTo(-17, -22); g.lineTo(-5, -10); g.lineTo(19, -34); g.stroke(); }
-          g.fillStyle = "#fff"; g.textAlign = "center";
-          g.font = "800 24px system-ui,-apple-system,Segoe UI,Roboto,sans-serif";
-          g.globalAlpha = fade * clamp(e * 3);
-          g.fillText(label, 0, 52);
+          if (t > 0.8) { g.beginPath(); g.rect(0, 0, c.W, mouth + (1 - t) * size); g.clip(); } // ныряет внутрь
+          g.translate(x, y); g.rotate(t * t * 11); g.scale(scale, scale); ball(g, 1);
           g.restore();
         }
-        if (out >= OUT) return end();
+        bin(g, c.cx, by, size, open, squash);
+        if (shutT > 0) {
+          c.once("shut", "medium");
+          if (!dust) dust = Array.from({ length: 22 }, function () { return { a: rnd(-Math.PI, 0), v: rnd(0.4, 1.3), r: rnd(2, 6) }; });
+          dust.forEach(function (p) {
+            var life = 1 - shutT;
+            g.fillStyle = "rgba(215,218,245," + life * 0.8 + ")";
+            g.beginPath(); g.arc(c.cx + Math.cos(p.a) * p.v * size * shutT * 1.3, mouth + Math.sin(p.a) * p.v * size * shutT * 0.8, p.r * (0.5 + life), 0, Math.PI * 2); g.fill();
+          });
+        }
+        g.restore();
+        if (gone > 0) { c.once("ok", "success"); drawDone(g, c.cx, c.cy, gone, label, "#ff5d6c"); }
+      },
+    };
+  }
+
+  /* ---------- проигрывание ---------- */
+  var nothing = { send: function () { return Promise.resolve(); }, cancel: function () { return Promise.resolve(); } };
+
+  function play(opts, makeScene) {
+    var from = opts.from;
+    if (!from || !window.DOMMatrix || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return nothing;
+    var rect = from.getBoundingClientRect();
+    var cv = document.createElement("canvas");
+    cv.id = "rey-plane";
+    cv.setAttribute("aria-hidden", "true");
+    cv.style.cssText = "position:fixed;left:0;top:0;width:100%;height:100%;z-index:1000;touch-action:none";
+    document.body.appendChild(cv);
+    var g = cv.getContext("2d"), dpr = Math.min(window.devicePixelRatio || 1, 2);
+    document.activeElement?.blur?.(); // прячем клавиатуру
+    var fields = opts.fields || [], hide = opts.hide;
+    fields.forEach(function (f) { f.style.color = "transparent"; });
+    if (hide) hide.style.visibility = "hidden";
+
+    var pw = Math.min(250, innerWidth * 0.62, innerHeight * 0.42), ph = pw * 1.36;
+    var tex = sheet(pw, ph, opts.title, opts.text, dpr), scene = makeScene(tex, pw, ph);
+    var born = performance.now(), mode = "wait", since = 0, backFrom = 0, done = null, over = false, frame = 0, timer = 0;
+    var buzzed = {}, label = scene.label;
+
+    function end() {
+      if (over) return;
+      over = true;
+      cancelAnimationFrame(frame); clearTimeout(timer);
+      document.removeEventListener("visibilitychange", hidden);
+      cv.remove();
+      fields.forEach(function (f) { f.style.color = ""; });
+      if (hide) hide.style.visibility = "";
+      done?.();
+    }
+    var hidden = function () { if (document.hidden && mode !== "wait") end(); };
+    document.addEventListener("visibilitychange", hidden);
+    cv.addEventListener("pointerdown", function (e) { e.preventDefault(); if (mode === "send") end(); }); // касание пропускает финал
+
+    function once(key, kind) { if (!buzzed[key]) { buzzed[key] = 1; haptic(kind); } }
+
+    function draw() {
+      if (over) return;
+      var now = performance.now(), age = now - born, W = innerWidth, H = innerHeight;
+      if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) {
+        cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); scene.resize();
+      }
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      g.clearRect(0, 0, W, H);
+      var c = { W: W, H: H, cx: W / 2, cy: H * scene.y, now: now, once: once };
+      // ответ пришёл раньше, чем лист сложился: сначала доделываем
+      if (mode === "send" && !since && age >= scene.hold) since = now;
+      var out = mode === "send" && since ? now - since : -1;
+      var f = age;
+      if (mode === "cancel") {
+        f = backFrom * (1 - clamp((now - since) / 600));
+        if (now - since >= 600) return end();
+      }
+      var dim = mode === "cancel" ? clamp(f / LIFT) : clamp(age / 300);
+      if (out >= 0) dim *= 1 - clamp((out - scene.out + 375) / 375);
+      var shade = g.createRadialGradient(c.cx, c.cy, 0, c.cx, c.cy, Math.max(W, H) * 0.75);
+      shade.addColorStop(0, "rgba(38,30,92," + 0.86 * dim + ")");
+      shade.addColorStop(1, "rgba(6,8,22," + 0.92 * dim + ")");
+      g.fillStyle = shade; g.fillRect(0, 0, W, H);
+
+      if (out >= 0) {
+        scene.finale(g, out, c, label);
+        if (out >= scene.out) return end();
+      } else if (f < LIFT) { // лист отрывается от страницы и встаёт по центру
+        if (from.isConnected) rect = from.getBoundingClientRect();
+        var k = ease(f / LIFT);
+        var x = mix(rect.left + rect.width / 2, c.cx, k), y = mix(rect.top + rect.height / 2, c.cy, k);
+        var w = mix(rect.width, pw, k), h = mix(rect.height, ph, k);
+        g.save();
+        g.translate(x, y); g.rotate(Math.sin(Math.PI * k) * -0.07);
+        g.globalAlpha = clamp(f / 120);
+        g.shadowColor = "rgba(0,0,0,.35)"; g.shadowBlur = 26; g.shadowOffsetY = 10;
+        g.fillStyle = "#f6f7ff"; g.fillRect(-w / 2, -h / 2, w, h);
+        g.shadowColor = "transparent";
+        var fit = Math.min(w / pw, h / ph);
+        g.globalAlpha *= clamp(k * 1.6);
+        g.drawImage(tex, -pw * fit / 2, -ph * fit / 2, pw * fit, ph * fit);
+        g.restore();
+      } else {
+        scene.shape(g, f, age, c);
       }
       frame = requestAnimationFrame(draw);
     }
@@ -335,13 +473,19 @@
         if (over || mode !== "wait") return resolve();
         done = resolve;
         mode = next;
-        if (next === "cancel") { since = performance.now(); backFrom = Math.min(since - born, FOLD); }
+        if (next === "cancel") { since = performance.now(); backFrom = Math.min(since - born, scene.hold); }
         if (document.hidden) return end();
-        timer = setTimeout(end, FOLD + OUT + 1000); // страховка, если кадры не рисуются
+        timer = setTimeout(end, scene.hold + scene.out + 1000); // страховка, если кадры не рисуются
       });
     }
-    return { send: function (text) { label = text || label; return finish("send"); }, cancel: function () { return finish("cancel"); } };
+    return {
+      send: function (text) { label = text || label; return finish("send"); },
+      cancel: function () { return finish("cancel"); },
+    };
   }
 
-  window.ReyPlane = { start: start };
+  window.ReyPlane = {
+    start: function (opts) { return play(opts, planeScene); },
+    trash: function (opts) { return play(opts, trashScene); },
+  };
 })();

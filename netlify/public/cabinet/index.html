@@ -39,12 +39,15 @@ h1{font-size:26px}
 .hi{color:var(--muted);margin:4px 0 20px}
 .crumbs{color:var(--muted);font-size:13px;margin:-6px 0 10px}
 
-.menu{display:grid;gap:12px}
-.item{display:flex;align-items:center;gap:14px;width:100%;text-align:left;background:var(--card);color:var(--text);border:0;border-radius:20px;padding:16px;font:inherit}
-.item .ic{width:48px;height:48px;flex:none;border-radius:14px;background:rgba(139,123,255,.15);color:var(--accent);display:flex;align-items:center;justify-content:center}
-.item .ic .i{width:26px;height:26px}
-.item b{display:block;font-size:18px}
-.item b+span{font-size:13px;color:var(--muted)}
+/* главное меню: квадратные плитки по две в ряд */
+.menu{display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:520px;margin:0 auto}
+.item{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;min-width:0;width:100%;aspect-ratio:1;overflow:hidden;text-align:center;background:linear-gradient(155deg,rgba(var(--c),.2),rgba(var(--c),.04) 65%),var(--card);color:var(--text);border:1px solid rgba(var(--c),.28);border-radius:26px;padding:12px;font:inherit;cursor:pointer;--c:139,123,255}
+.item.wide{grid-column:1/-1;aspect-ratio:2/1}
+.item .ic{position:relative;width:clamp(58px,19vw,78px);height:clamp(58px,19vw,78px);flex:none;border-radius:36%;background:rgba(var(--c),.18);color:rgb(var(--c));display:flex;align-items:center;justify-content:center}
+.item .ic .i{width:52%;height:52%}
+.item b{display:block;max-width:100%;font-size:clamp(14px,4.3vw,17px);line-height:1.2}
+#go-schedule{--c:139,123,255}#go-news{--c:56,168,245}#go-bells{--c:245,176,40}#go-mine{--c:236,90,180}#go-ideas{--c:230,196,30}#go-hw{--c:46,196,120}#go-mat{--c:32,196,200}#go-bd{--c:255,100,112}#go-apanel{--c:150,160,190}
+.tbadge{position:absolute;top:10px;right:10px;min-width:24px;height:24px;padding:0 7px;box-sizing:border-box;border-radius:12px;background:#ff5d6c;color:#fff;font:700 13px/24px sans-serif;font-style:normal;animation:t-beat 1.6s ease-in-out infinite}
 
 .cat{margin:18px 0 8px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 .forum{background:var(--card);border-radius:20px;overflow:hidden}
@@ -326,8 +329,41 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
 .screen:not([hidden]):not(#vchat){animation:scrIn .28s cubic-bezier(.2,.8,.25,1)}
 #err,#ok{animation:popIn .25s cubic-bezier(.2,.8,.25,1)}
 #upd-banner:not([hidden]){animation:popIn .35s cubic-bezier(.2,.85,.25,1)}
-#home>.item,#home .item{animation:rise .4s cubic-bezier(.2,.8,.25,1) backwards}
-#home .item:nth-of-type(1){animation-delay:.04s}#home .item:nth-of-type(2){animation-delay:.09s}#home .item:nth-of-type(3){animation-delay:.14s}#home .item:nth-of-type(4){animation-delay:.19s}#home .item:nth-of-type(5){animation-delay:.24s}#home .item:nth-of-type(6){animation-delay:.29s}
+/* плитки выпрыгивают по очереди: левые слева, правые справа */
+#home .item{animation:t-in .55s cubic-bezier(.22,1.35,.36,1) backwards;animation-delay:calc(var(--n,0) * 60ms)}
+#home .item:before{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 38%,rgba(255,255,255,.16) 50%,transparent 62%);transform:translateX(-110%);animation:t-shine 7s ease-in-out infinite;animation-delay:calc(1s + var(--n,0) * 130ms);pointer-events:none}
+#home .item .ic{animation:t-pop .6s cubic-bezier(.22,1.6,.36,1) backwards;animation-delay:calc(.15s + var(--n,0) * 60ms)}
+#home .item .ic:after{content:"";position:absolute;inset:0;border-radius:inherit;border:2px solid rgb(var(--c));opacity:0;animation:t-ring 5s ease-out infinite;animation-delay:calc(1.4s + var(--n,0) * 450ms)}
+/* у каждого значка своё движение */
+#home .item .ic .i{animation:5s ease-in-out infinite;animation-delay:calc(1.4s + var(--n,0) * 450ms)}
+#go-schedule .ic .i{animation-name:t-flip!important}
+#go-news .ic .i{animation-name:t-slide!important}
+#go-bells .ic .i{animation-name:t-swing!important;transform-origin:50% 8%}
+#go-mine .ic .i{animation-name:t-bounce!important}
+#go-ideas .ic .i{animation-name:t-glow!important}
+#go-hw .ic .i{animation-name:t-write!important;transform-origin:20% 90%}
+#go-mat .ic .i{animation-name:t-open!important;transform-origin:50% 100%}
+#go-bd .ic .i{animation-name:t-gift!important;transform-origin:50% 90%}
+#go-apanel .ic .i{animation-name:t-pulse!important}
+/* нажатие: плитка вдавливается, от пальца расходится волна */
+#home .item:active{transform:scale(.93)}
+#home .item:active .ic{background:rgba(var(--c),.34)}
+.item .wave{position:absolute;width:24px;height:24px;margin:-12px 0 0 -12px;border-radius:50%;background:rgba(var(--c),.45);pointer-events:none;animation:t-wave .6s ease-out forwards}
+@keyframes t-in{from{opacity:0;transform:translate(calc(var(--side,-1) * 40px),26px) scale(.7) rotate(calc(var(--side,-1) * 7deg))}}
+@keyframes t-pop{from{transform:scale(0) rotate(-60deg)}}
+@keyframes t-shine{0%{transform:translateX(-110%)}16%,100%{transform:translateX(110%)}}
+@keyframes t-ring{0%{opacity:.7;transform:scale(1)}22%,100%{opacity:0;transform:scale(1.5)}}
+@keyframes t-wave{from{opacity:1;transform:scale(0)}to{opacity:0;transform:scale(14)}}
+@keyframes t-flip{0%,22%,100%{transform:none}11%{transform:rotateY(180deg)}}
+@keyframes t-slide{0%,24%,100%{transform:none}6%{transform:translateX(-6px) rotate(-8deg)}14%{transform:translateX(6px) rotate(8deg)}}
+@keyframes t-swing{0%,34%,100%{transform:rotate(0)}5%{transform:rotate(24deg)}10%{transform:rotate(-20deg)}15%{transform:rotate(15deg)}20%{transform:rotate(-10deg)}26%{transform:rotate(5deg)}}
+@keyframes t-bounce{0%,32%,100%{transform:none}6%{transform:scale(1.2,.85)}12%{transform:translateY(-9px) scale(.92,1.08)}18%{transform:scale(1.12,.9)}24%{transform:translateY(-4px)}}
+@keyframes t-glow{0%,30%,100%{transform:none;filter:none}8%{transform:scale(1.18);filter:drop-shadow(0 0 9px rgb(255,220,60))}14%{filter:none}20%{transform:scale(1.1);filter:drop-shadow(0 0 12px rgb(255,220,60))}}
+@keyframes t-write{0%,30%,100%{transform:none}6%{transform:rotate(-14deg)}11%{transform:rotate(8deg)}16%{transform:rotate(-10deg)}21%{transform:rotate(6deg)}}
+@keyframes t-open{0%,28%,100%{transform:none}10%{transform:scale(1.14,.82)}18%{transform:scale(.92,1.16)}}
+@keyframes t-gift{0%,36%,100%{transform:none}6%{transform:rotate(-16deg) scale(1.1)}12%{transform:rotate(14deg) scale(1.15)}18%{transform:rotate(-10deg) scale(1.1)}24%{transform:translateY(-8px) scale(1.2)}30%{transform:none}}
+@keyframes t-pulse{0%,26%,100%{transform:none}8%,18%{transform:scale(1.22)}13%{transform:scale(1)}}
+@keyframes t-beat{50%{transform:scale(1.18)}}
 #now:not([hidden]),.bdn:not([hidden]){animation:rise .4s cubic-bezier(.2,.8,.25,1)}
 .tstb:not([hidden]){animation:popIn .35s cubic-bezier(.2,.85,.25,1)}
 .item,.frow,.btn,.card,.chips button,.link,.v-mic{transition:transform .15s ease,background-color .2s,opacity .2s}
@@ -365,15 +401,15 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
   </div>
 
   <div class="menu">
-    <button class="item" id="go-schedule"><div class="ic"><span class="i" data-i="calendar"></span></div><div><b>Расписание</b><span>Открыть приложение с расписанием</span></div></button>
-    <button class="item" id="go-news"><div class="ic"><span class="i" data-i="news"></span></div><div><b>Новости</b><span>Что нового в боте</span></div><i class="ndot" id="news-dot" hidden></i></button>
-    <button class="item" id="go-bells"><div class="ic"><span class="i" data-i="bell"></span></div><div><b>Расписание звонков</b><span>Время начала и конца пар</span></div></button>
-    <button class="item" id="go-mine"><div class="ic"><span class="i" data-i="headphones"></span></div><div><b>Мои звуки</b><span>Звуки на стикеры, которые добавил ты</span></div></button>
-    <button class="item" id="go-ideas"><div class="ic"><span class="i" data-i="bulb"></span></div><div><b>Улучшения</b><span>Предложи идею для бота</span></div></button>
-    <button class="item" id="go-hw"><div class="ic"><span class="i" data-i="homework"></span></div><div><b>Домашка</b><span>Вся домашка группы</span></div></button>
-    <button class="item" id="go-mat"><div class="ic"><span class="i" data-i="folder"></span></div><div><b>Информатика</b><span>Файлы по ИТПД и ИНФиВТ</span></div></button>
-    <button class="item" id="go-bd"><div class="ic"><span class="i" data-i="gift"></span></div><div><b>День рождения</b><span id="bd-sub">Укажи свою дату</span></div></button>
-    <button class="item" id="go-apanel" hidden><div class="ic"><span class="i" data-i="shield"></span></div><div><b>Админ-панель</b><span id="ap-sub">Управление ботом</span></div></button>
+    <button class="item" id="go-schedule"><div class="ic"><span class="i" data-i="calendar"></span></div><b>Расписание</b></button>
+    <button class="item" id="go-news"><div class="ic"><span class="i" data-i="news"></span></div><b>Новости</b><i class="ndot" id="news-dot" hidden></i></button>
+    <button class="item" id="go-bells"><div class="ic"><span class="i" data-i="bell"></span></div><b>Расписание звонков</b></button>
+    <button class="item" id="go-mine"><div class="ic"><span class="i" data-i="headphones"></span></div><b>Мои звуки</b></button>
+    <button class="item" id="go-ideas"><div class="ic"><span class="i" data-i="bulb"></span></div><b>Улучшения</b></button>
+    <button class="item" id="go-hw"><div class="ic"><span class="i" data-i="homework"></span></div><b>Домашка</b></button>
+    <button class="item" id="go-mat"><div class="ic"><span class="i" data-i="folder"></span></div><b>Информатика</b></button>
+    <button class="item" id="go-bd"><div class="ic"><span class="i" data-i="gift"></span></div><b>День рождения</b></button>
+    <button class="item" id="go-apanel" hidden><div class="ic"><span class="i" data-i="shield"></span></div><b>Админ-панель</b><i class="tbadge" id="ap-badge" hidden></i></button>
   </div>
 </div>
 
@@ -1791,7 +1827,6 @@ function renderBd() {
   }
   $("#bd-cur").textContent = bd ? `Сейчас указано: ${bdLabel(bd)}` : "Дата пока не указана.";
   $("#bd-clear").hidden = !bd;
-  $("#bd-sub").textContent = bd ? `Указано: ${bdLabel(bd)}` : "Укажи свою дату";
   // напоминание на главной, пока дата не указана
   if (INFO) {
     $("#bdn").hidden = !!bd;
@@ -3022,7 +3057,8 @@ function renderApanel() {
     });
     box.append(forum);
   });
-  $("#ap-sub").textContent = attention ? `Требуют внимания: ${attention}` : "Всё спокойно";
+  $("#ap-badge").textContent = attention > 99 ? "99+" : attention;
+  $("#ap-badge").hidden = !attention;
 }
 
 /* ---------- Информатика: материалы ---------- */
@@ -3143,6 +3179,29 @@ $("#go-bells").onclick = () => show("bells");
 $("#go-ideas").onclick = () => { renderIdeas(); show("ideas"); };
 $("#go-hw").onclick = openHwList;
 $("#go-apanel").onclick = () => { if (INFO?.isAdmin) { renderApanel(); show("apanel"); } };
+
+// плитки меню: очерёдность появления, а последняя нечётная растягивается на всю ширину
+function layoutMenu() {
+  const shown = [...document.querySelectorAll("#home .menu .item")].filter((b) => !b.hidden);
+  document.querySelectorAll("#home .menu .item").forEach((b) => b.classList.remove("wide"));
+  shown.forEach((b, n) => {
+    b.style.setProperty("--n", n);
+    b.style.setProperty("--side", n % 2 ? 1 : -1);
+  });
+  if (shown.length % 2) shown[shown.length - 1].classList.add("wide");
+}
+layoutMenu();
+new MutationObserver(layoutMenu).observe($("#go-apanel"), { attributes: true, attributeFilter: ["hidden"] });
+$("#home .menu").addEventListener("pointerdown", (e) => {
+  const tile = e.target.closest(".item");
+  if (!tile) return;
+  const r = tile.getBoundingClientRect(), wave = el("i", "wave");
+  // плитка в этот момент может быть уменьшена нажатием, поэтому координаты переводим в её собственные
+  wave.style.left = ((e.clientX - r.left) * tile.offsetWidth) / r.width + "px";
+  wave.style.top = ((e.clientY - r.top) * tile.offsetHeight) / r.height + "px";
+  tile.append(wave);
+  setTimeout(() => wave.remove(), 650);
+});
 
 $("#go-schedule").onclick = () => {
   if (!INFO?.appLink) return fail(new Error("Не задана ссылка на расписание (APP_LINK)"));

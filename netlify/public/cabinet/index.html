@@ -47,6 +47,7 @@ h1{font-size:26px}
 .item .ic .i{width:52%;height:52%}
 .item b{display:block;max-width:100%;font-size:clamp(14px,4.3vw,17px);line-height:1.2}
 #go-schedule{--c:139,123,255}#go-news{--c:56,168,245}#go-bells{--c:245,176,40}#go-mine{--c:236,90,180}#go-ideas{--c:230,196,30}#go-hw{--c:46,196,120}#go-mat{--c:32,196,200}#go-bd{--c:255,100,112}#go-apanel{--c:150,160,190}
+.tbadge.soft{background:rgba(var(--c),.3);color:var(--text);animation:none}
 .tbadge{position:absolute;top:10px;right:10px;min-width:24px;height:24px;padding:0 7px;box-sizing:border-box;border-radius:12px;background:#ff5d6c;color:#fff;font:700 13px/24px sans-serif;font-style:normal;animation:t-beat 1.6s ease-in-out infinite}
 
 .cat{margin:18px 0 8px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
@@ -330,12 +331,12 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
 #err,#ok{animation:popIn .25s cubic-bezier(.2,.8,.25,1)}
 #upd-banner:not([hidden]){animation:popIn .35s cubic-bezier(.2,.85,.25,1)}
 /* плитки выпрыгивают по очереди: левые слева, правые справа */
-#home .item{animation:t-in .55s cubic-bezier(.22,1.35,.36,1) backwards;animation-delay:calc(var(--n,0) * 60ms)}
-#home .item:before{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 38%,rgba(255,255,255,.16) 50%,transparent 62%);transform:translateX(-110%);animation:t-shine 7s ease-in-out infinite;animation-delay:calc(1s + var(--n,0) * 130ms);pointer-events:none}
-#home .item .ic{animation:t-pop .6s cubic-bezier(.22,1.6,.36,1) backwards;animation-delay:calc(.15s + var(--n,0) * 60ms)}
-#home .item .ic:after{content:"";position:absolute;inset:0;border-radius:inherit;border:2px solid rgb(var(--c));opacity:0;animation:t-ring 5s ease-out infinite;animation-delay:calc(1.4s + var(--n,0) * 450ms)}
+.tiles .item{animation:t-in .55s cubic-bezier(.22,1.35,.36,1) backwards;animation-delay:calc(var(--n,0) * 60ms)}
+.tiles .item:before{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 38%,rgba(255,255,255,.16) 50%,transparent 62%);transform:translateX(-110%);animation:t-shine 7s ease-in-out infinite;animation-delay:calc(1s + var(--n,0) * 130ms);pointer-events:none}
+.tiles .item .ic{animation:t-pop .6s cubic-bezier(.22,1.6,.36,1) backwards;animation-delay:calc(.15s + var(--n,0) * 60ms)}
+.tiles .item .ic:after{content:"";position:absolute;inset:0;border-radius:inherit;border:2px solid rgb(var(--c));opacity:0;animation:t-ring 5s ease-out infinite;animation-delay:calc(1.4s + var(--n,0) * 450ms)}
 /* у каждого значка своё движение */
-#home .item .ic .i{animation:5s ease-in-out infinite;animation-delay:calc(1.4s + var(--n,0) * 450ms)}
+.tiles .item .ic .i{animation:5s ease-in-out infinite;animation-delay:calc(1.4s + var(--n,0) * 450ms)}
 #go-schedule .ic .i{animation-name:t-flip!important}
 #go-news .ic .i{animation-name:t-slide!important}
 #go-bells .ic .i{animation-name:t-swing!important;transform-origin:50% 8%}
@@ -345,15 +346,27 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
 #go-mat .ic .i{animation-name:t-open!important;transform-origin:50% 100%}
 #go-bd .ic .i{animation-name:t-gift!important;transform-origin:50% 90%}
 #go-apanel .ic .i{animation-name:t-pulse!important}
+/* значки админ-панели */
+.tiles .item[data-ic="headphones"] .ic .i{animation-name:t-bounce}
+.tiles .item[data-ic="homework"] .ic .i{animation-name:t-write;transform-origin:20% 90%}
+.tiles .item[data-ic="users"] .ic .i{animation-name:t-open;transform-origin:50% 100%}
+.tiles .item[data-ic="calendar"] .ic .i{animation-name:t-flip}
+.tiles .item[data-ic="send"] .ic .i{animation-name:t-fly}
+.tiles .item[data-ic="alert"] .ic .i{animation-name:t-gift;transform-origin:50% 90%}
+.tiles .item[data-ic="play"] .ic .i{animation-name:t-pulse}
+.tiles .item[data-ic="clipboard"] .ic .i{animation-name:t-slide}
+/* при обновлении цифр на открытой панели плитки не должны выпрыгивать заново */
+.tiles.calm .item,.tiles.calm .item .ic{animation:none}
 /* нажатие: плитка вдавливается, от пальца расходится волна */
-#home .item:active{transform:scale(.93)}
-#home .item:active .ic{background:rgba(var(--c),.34)}
+.tiles .item:active{transform:scale(.93)}
+.tiles .item:active .ic{background:rgba(var(--c),.34)}
 .item .wave{position:absolute;width:24px;height:24px;margin:-12px 0 0 -12px;border-radius:50%;background:rgba(var(--c),.45);pointer-events:none;animation:t-wave .6s ease-out forwards}
 @keyframes t-in{from{opacity:0;transform:translate(calc(var(--side,-1) * 40px),26px) scale(.7) rotate(calc(var(--side,-1) * 7deg))}}
 @keyframes t-pop{from{transform:scale(0) rotate(-60deg)}}
 @keyframes t-shine{0%{transform:translateX(-110%)}16%,100%{transform:translateX(110%)}}
 @keyframes t-ring{0%{opacity:.7;transform:scale(1)}22%,100%{opacity:0;transform:scale(1.5)}}
 @keyframes t-wave{from{opacity:1;transform:scale(0)}to{opacity:0;transform:scale(14)}}
+@keyframes t-fly{0%,30%,100%{transform:none;opacity:1}10%{transform:translate(16px,-16px) scale(.7);opacity:0}11%{transform:translate(-16px,16px) scale(.7);opacity:0}22%{transform:none;opacity:1}}
 @keyframes t-flip{0%,22%,100%{transform:none}11%{transform:rotateY(180deg)}}
 @keyframes t-slide{0%,24%,100%{transform:none}6%{transform:translateX(-6px) rotate(-8deg)}14%{transform:translateX(6px) rotate(8deg)}}
 @keyframes t-swing{0%,34%,100%{transform:rotate(0)}5%{transform:rotate(24deg)}10%{transform:rotate(-20deg)}15%{transform:rotate(15deg)}20%{transform:rotate(-10deg)}26%{transform:rotate(5deg)}}
@@ -366,8 +379,8 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
 @keyframes t-beat{50%{transform:scale(1.18)}}
 #now:not([hidden]),.bdn:not([hidden]){animation:rise .4s cubic-bezier(.2,.8,.25,1)}
 .tstb:not([hidden]){animation:popIn .35s cubic-bezier(.2,.85,.25,1)}
-.item,.frow,.btn,.card,.chips button,.link,.v-mic{transition:transform .15s ease,background-color .2s,opacity .2s}
-.item:active,.frow:active,.btn:active,.card:active,.chips button:active{transform:scale(.97)}
+.item,.btn,.card,.chips button,.link,.v-mic{transition:transform .15s ease,background-color .2s,opacity .2s}
+.item:active,.btn:active,.card:active,.chips button:active{transform:scale(.97)}
 .dmd>div{animation:fadeIn .25s ease}
 .ai-msgs>*{animation:rise .25s ease}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
@@ -400,7 +413,7 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
     <div class="row"><button id="bdn-add">Добавить</button><button class="g" id="bdn-ai" hidden>Через Мурзика</button></div>
   </div>
 
-  <div class="menu">
+  <div class="menu tiles">
     <button class="item" id="go-schedule"><div class="ic"><span class="i" data-i="calendar"></span></div><b>Расписание</b></button>
     <button class="item" id="go-news"><div class="ic"><span class="i" data-i="news"></span></div><b>Новости</b><i class="ndot" id="news-dot" hidden></i></button>
     <button class="item" id="go-bells"><div class="ic"><span class="i" data-i="bell"></span></div><b>Расписание звонков</b></button>
@@ -582,7 +595,7 @@ select{width:100%;background:var(--line);color:var(--text);border:0;border-radiu
   <button class="link" data-back><span class="i" data-i="back"></span>Назад</button>
   <h1>Админ-панель</h1>
   <div class="hi">Разделы управления ботом</div>
-  <div id="ap-tree"></div>
+  <div id="ap-tree" class="tiles"></div>
 </div>
 
 <div id="admin" class="screen" hidden>
@@ -969,6 +982,7 @@ const PARENT = { newsv: "news", ned: "news", news: "home", hw: "hwlist", add: "m
 function show(id) {
   stopAudio();
   if (id !== "game") window.ReyBlocks?.close();
+  if (id !== "apanel") $("#ap-tree").classList.remove("calm"); // при возвращении плитки снова выпрыгивают
   document.querySelectorAll(".screen").forEach((s) => (s.hidden = s.id !== id));
   if (tg) id === "home" ? tg.BackButton.hide() : tg.BackButton.show();
   window.scrollTo(0, 0);
@@ -3031,31 +3045,36 @@ $("#dm-send").onclick = () => {
   });
 };
 
+// цвета плиток админ-панели, по порядку
+const TILE_COLORS = ["236,90,180", "46,196,120", "56,168,245", "139,123,255", "245,176,40", "32,196,200", "255,100,112", "230,196,30", "150,160,190", "90,130,255", "255,140,70"];
 function renderApanel() {
   if (!INFO?.isAdmin) return;
   const box = $("#ap-tree");
+  box.classList.toggle("calm", curScreen() === "apanel" && box.childElementCount > 0);
   box.replaceChildren();
-  let attention = 0;
+  let attention = 0, num = 0;
   ADMIN_TREE.forEach((cat) => {
     box.append(el("div", "cat", cat.title));
-    const forum = el("div", "forum");
-    cat.rows.forEach((r) => {
-      const b = el("button", "frow");
+    const grid = el("div", "menu");
+    cat.rows.forEach((r, i) => {
+      const b = el("button", "item" + (cat.rows.length % 2 && i === cat.rows.length - 1 ? " wide" : ""));
+      b.dataset.ic = r.icon;
+      b.style.setProperty("--c", TILE_COLORS[num % TILE_COLORS.length]);
+      b.style.setProperty("--n", num++);
+      b.style.setProperty("--side", i % 2 ? 1 : -1);
       const ic = el("div", "ic");
       ic.append(ico(r.icon));
-      const t = el("div", "ft");
-      t.append(el("b", null, r.title), el("span", null, r.desc));
-      b.append(ic, t);
+      b.append(ic, el("b", null, r.title));
       const n = r.count ? r.count() : 0;
       if (n) {
-        b.append(el("span", "cnt" + (r.hot ? " hot" : ""), String(n)));
+        // красный кружок — требует внимания, спокойный — просто количество
+        b.append(el("i", "tbadge" + (r.hot ? "" : " soft"), n > 99 ? "99+" : String(n)));
         if (r.hot) attention += n;
       }
-      b.append(ico("chevron"));
       b.onclick = r.open;
-      forum.append(b);
+      grid.append(b);
     });
-    box.append(forum);
+    box.append(grid);
   });
   $("#ap-badge").textContent = attention > 99 ? "99+" : attention;
   $("#ap-badge").hidden = !attention;
@@ -3192,8 +3211,8 @@ function layoutMenu() {
 }
 layoutMenu();
 new MutationObserver(layoutMenu).observe($("#go-apanel"), { attributes: true, attributeFilter: ["hidden"] });
-$("#home .menu").addEventListener("pointerdown", (e) => {
-  const tile = e.target.closest(".item");
+document.addEventListener("pointerdown", (e) => {
+  const tile = e.target.closest(".tiles .item");
   if (!tile) return;
   const r = tile.getBoundingClientRect(), wave = el("i", "wave");
   // плитка в этот момент может быть уменьшена нажатием, поэтому координаты переводим в её собственные

@@ -335,6 +335,63 @@ async function loadIdeas(st) {
     return {};
   }
 }
+/* ---------- предложения игр (игровой режим); кто сюда доходит, уже проверен: админ или участник группы ---------- */
+const gameIdeaView = (i, uid) => ({
+  id: i.id, title: i.title, text: i.text, author: i.authorName, mine: i.author === uid,
+  status: i.status, comment: i.comment || "", ts: i.ts,
+});
+async function gameIdeas({ st, body, user, admin }) {
+  // ошибку чтения не глотаем: иначе следующая запись стёрла бы все предложения
+  const all = (await st.get("game-ideas", { type: "json" })) || {};
+  const save = () => st.setJSON("game-ideas", all);
+  if (body.action === "gidea_list") {
+    const items = Object.values(all).sort((a, b) => b.ts - a.ts).map((i) => gameIdeaView(i, user.id));
+    return out(200, { items, admin });
+  }
+  if (body.action === "gidea_add") {
+    const title = String(body.title || "").replace(/\s+/g, " ").trim();
+    const text = String(body.text || "").trim().replace(/\n{3,}/g, "\n\n");
+    if (title.length < 2 || title.length > 40) return out(400, { error: "Название: от 2 до 40 символов" });
+    if (text.length < 10) return out(400, { error: "Опиши игру подробнее (минимум 10 символов)" });
+    if (text.length > 600) return out(400, { error: "Слишком длинно, максимум 600 символов" });
+    if (!admin && Object.values(all).filter((i) => i.author === user.id && i.status === "review").length >= 5) {
+      return out(400, { error: "У тебя уже 5 игр на проверке. Дождись ответа" });
+    }
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const item = { id, title, text, author: user.id, authorName: user.first_name || "?", status: "review", comment: "", ts: Date.now() };
+    all[id] = item;
+    await save();
+    for (const a of adminList()) {
+      if (a !== String(user.id)) await dm(a, `🎮 Предложили игру (${item.authorName}):\n${title}\n\n${text}`);
+    }
+    return out(200, { item: gameIdeaView(item, user.id) });
+  }
+  const i = Object.prototype.hasOwnProperty.call(all, body.id) ? all[body.id] : null;
+  if (body.action === "gidea_del") {
+    if (!i) return out(404, { error: "Предложение не найдено" });
+    if (!admin && !(i.author === user.id && i.status === "review")) {
+      return out(403, { error: "Удалить можно только свою игру, пока она на проверке" });
+    }
+    delete all[i.id];
+    await save();
+    return out(200, { ok: true });
+  }
+  if (body.action === "gidea_set") {
+    if (!admin) return out(403, { error: "Только для админа" });
+    if (!STATUS[body.status]) return out(400, { error: "Неизвестный статус" });
+    if (!i) return out(404, { error: "Предложение не найдено" });
+    const comment = String(body.comment || "").trim().slice(0, 200);
+    const changed = i.status !== body.status || (i.comment || "") !== comment;
+    Object.assign(i, { status: body.status, comment });
+    await save();
+    if (changed && i.author !== user.id) {
+      await dm(i.author, `Твоя игра «${i.title}»\nСтатус: ${STATUS[i.status]}` + (comment ? `\nКомментарий: ${comment}` : ""));
+    }
+    return out(200, { item: gameIdeaView(i, user.id) });
+  }
+  return out(400, { error: "Неизвестное действие" });
+}
+
 const ideaView = (i, uid) => ({
   id: i.id,
   text: i.text,
@@ -760,6 +817,8 @@ async function main(event) {
     return out(200, { item: ideaView(i, user.id) });
   }
   
+  if (String(body.action || "").startsWith("gidea_")) return gameIdeas({ st, body, user, admin });
+
     /* ---------- домашка ---------- */
   if (body.action === "hw_file") {
     const uid = String(body.uid || "");

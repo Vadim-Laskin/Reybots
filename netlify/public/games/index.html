@@ -53,6 +53,32 @@ kbd{font:inherit;font-weight:700;color:var(--text);background:var(--card);border
 @media (pointer:coarse){#hint{display:none}}
 @media (max-width:520px){header h1{flex-basis:100%}#clock{margin-right:auto}}
 
+/* предложения игр */
+#ideas{max-width:560px;margin:0 auto}
+#ideas h1{font-size:26px;margin:14px 0 4px}
+#ideas .note{color:var(--muted);margin-bottom:16px}
+#ideas input,#ideas textarea{display:block;width:100%;font:inherit;font-size:16px;color:var(--text);background:var(--card);border:2px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:10px;-webkit-user-select:text;user-select:text}
+#ideas input:focus,#ideas textarea:focus{outline:none;border-color:var(--accent)}
+#ideas textarea{min-height:120px;resize:vertical}
+#ideas .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+#ideas .count{color:var(--muted);font-size:13px}
+.idea{background:var(--card);border-radius:18px;padding:15px 16px;margin-top:12px;animation:rise .35s backwards}
+.idea b{display:block;font-size:18px;overflow-wrap:anywhere}
+.idea p{margin:6px 0 10px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.4;-webkit-user-select:text;user-select:text}
+.idea small{color:var(--muted)}
+.idea .st{display:inline-block;font-size:12px;font-weight:800;border-radius:999px;padding:4px 11px;margin-bottom:8px;background:rgba(139,123,255,.2);color:#c3b9ff}
+.idea .st.planned{background:rgba(56,168,245,.2);color:#8fd0ff}
+.idea .st.dev{background:rgba(245,185,66,.2);color:var(--amber)}
+.idea .st.done{background:rgba(74,222,128,.18);color:var(--green)}
+.idea .st.rejected{background:rgba(255,93,108,.18);color:var(--red)}
+.idea .answer{border-left:3px solid var(--accent);padding-left:10px;margin:0 0 10px}
+.idea .adm{border-top:1px solid var(--line);margin-top:12px;padding-top:12px}
+#ideas .adm .row{justify-content:flex-start;margin-bottom:10px}
+#ideas h2.sec{margin-top:26px}
+.idea .adm .btn,.idea .del{padding:8px 12px;font-size:13px;background:var(--line)}
+.idea .adm .btn.main{background:var(--accent)}
+.idea .del{margin-top:10px}
+
 /* игра */
 #play{margin:0 auto;width:100%}
 #blocks{margin:0 auto}
@@ -166,6 +192,19 @@ header,h2.sec{animation:rise .5s backwards}
   <div id="hint"><span><kbd>←</kbd> <kbd>→</kbd> выбор</span><span><kbd>Enter</kbd> запуск</span><span><kbd>F</kbd> игровой режим</span></div>
 </div>
 
+<div id="ideas" hidden>
+  <button id="ideas-back" class="btn">← К играм</button>
+  <h1>Предложить игру</h1>
+  <div class="note">Напиши, во что хочется поиграть. Лучшие идеи пойдут в разработку.</div>
+  <form id="idea-form">
+    <input id="idea-title" maxlength="40" placeholder="Название игры" autocomplete="off">
+    <textarea id="idea-text" maxlength="600" placeholder="Что в ней делать? На что похожа? Как играть: горизонтально или вертикально?"></textarea>
+    <div class="row"><span class="count" id="idea-count">0/600</span><button id="idea-send" class="btn main" type="submit">Отправить на разработку</button></div>
+  </form>
+  <h2 class="sec">Предложения</h2>
+  <div id="idea-list"></div>
+</div>
+
 <div id="play" hidden>
   <div id="racer" hidden></div>
   <div id="blocks"></div>
@@ -209,7 +248,7 @@ function loadTelegram() {
     fullscreen(true); // игры всегда на весь экран, как бы их ни открыли
     safe(() => tg.setHeaderColor("#0b0d16"));
     safe(() => tg.setBackgroundColor("#0b0d16"));
-    safe(() => tg.BackButton.onClick(() => { if ($("#intro").hidden && current && !current.api().back()) library(); }));
+    safe(() => tg.BackButton.onClick(() => { if (!$("#intro").hidden) return; if (!$("#ideas").hidden) library(); else if (current && !current.api().back()) library(); }));
     safe(() => tg.onEvent("fullscreenChanged", () => { modeLabel(); setTimeout(() => dispatchEvent(new Event("resize")), 100); }));
   });
 }
@@ -221,8 +260,8 @@ const GAMES = [
 ];
 
 function view(id) {
-  for (const v of ["gate", "home", "play"]) $("#" + v).hidden = v !== id;
-  try { id === "play" ? tg?.BackButton.show() : tg?.BackButton.hide(); } catch {}
+  for (const v of ["gate", "home", "ideas", "play"]) $("#" + v).hidden = v !== id;
+  try { id === "play" || id === "ideas" ? tg?.BackButton.show() : tg?.BackButton.hide(); } catch {}
   window.scrollTo(0, 0);
 }
 let toastTimer = 0;
@@ -321,6 +360,89 @@ async function drawSkin(kind, wish) {
   }
 }
 
+/* ---------- предложения игр ---------- */
+const IDEA_STATUS = { review: "На проверке", planned: "Принято", dev: "Разрабатывается", done: "Разработано", rejected: "Отказано" };
+let IDEAS = null, ideasAdmin = false;
+async function cabinet(action, data = {}) {
+  const initData = tg?.initData || "";
+  try {
+    return await post("cabinet", { ...data, action, initData, session: initData ? "" : appSession() || get(SESSION) });
+  } catch (e) {
+    throw e.status ? e : new Error("Нет связи с сервером");
+  }
+}
+const make = (tag, cls = "", text = "") => {
+  const e = document.createElement(tag); e.className = cls; e.textContent = text; return e;
+};
+function ideaButton(cls, text, fn) {
+  const b = make("button", cls, text); b.type = "button";
+  b.onclick = async () => {
+    b.disabled = true;
+    try { await fn(); } catch (e) { toast(e.message); }
+    b.disabled = false;
+  };
+  return b;
+}
+function ideaCard(i) {
+  const c = make("div", "idea");
+  c.append(make("span", "st " + i.status, IDEA_STATUS[i.status] || i.status), make("b", "", i.title), make("p", "", i.text));
+  if (i.comment) c.append(make("p", "answer", i.comment));
+  c.append(make("small", "", `${i.mine ? "Твоя идея" : i.author} · ${new Date(i.ts).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" })}`));
+  const remove = () => ideaButton("btn del", "Удалить", async () => {
+    // второе нажатие подтверждает удаление
+    const b = c.querySelector(".del");
+    if (!b.dataset.sure) { b.dataset.sure = "1"; b.textContent = "Точно удалить?"; return; }
+    await cabinet("gidea_del", { id: i.id });
+    IDEAS = IDEAS.filter((x) => x.id !== i.id); renderIdeas();
+  });
+  if (ideasAdmin) {
+    const adm = make("div", "adm"), row = make("div", "row"), note = make("input");
+    note.maxLength = 200; note.placeholder = "Комментарий автору (необязательно)"; note.value = i.comment;
+    for (const [key, label] of Object.entries(IDEA_STATUS)) {
+      row.append(ideaButton("btn" + (key === i.status ? " main" : ""), label, async () => {
+        const r = await cabinet("gidea_set", { id: i.id, status: key, comment: note.value });
+        IDEAS = IDEAS.map((x) => (x.id === i.id ? r.item : x)); renderIdeas(); toast("Сохранено");
+      }));
+    }
+    adm.append(row, note, remove()); c.append(adm);
+  } else if (i.mine && i.status === "review") c.append(remove());
+  return c;
+}
+function renderIdeas() {
+  const list = $("#idea-list");
+  if (!IDEAS) return list.replaceChildren(make("div", "note", "Загружаю…"));
+  list.replaceChildren(...(IDEAS.length ? IDEAS.map(ideaCard) : [make("div", "note", "Пока никто ничего не предложил. Будь первым!")]));
+}
+async function loadIdeas() {
+  renderIdeas();
+  try {
+    const r = await cabinet("gidea_list");
+    IDEAS = r.items; ideasAdmin = !!r.admin; renderIdeas();
+  } catch (e) {
+    if (IDEAS) return toast(e.message);
+    $("#idea-list").replaceChildren(make("div", "note", e.message), ideaButton("btn", "Повторить", loadIdeas));
+  }
+}
+function openIdeas() { view("ideas"); loadIdeas(); }
+$("#ideas-back").onclick = () => library();
+$("#idea-text").oninput = () => ($("#idea-count").textContent = `${$("#idea-text").value.length}/600`);
+$("#idea-title").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); $("#idea-text").focus(); } };
+$("#idea-form").onsubmit = async (e) => {
+  e.preventDefault();
+  const title = $("#idea-title").value.trim(), text = $("#idea-text").value.trim();
+  if (title.length < 2) return toast("Напиши название игры");
+  if (text.length < 10) return toast("Опиши игру подробнее (минимум 10 символов)");
+  $("#idea-send").disabled = true;
+  try {
+    const r = await cabinet("gidea_add", { title, text });
+    IDEAS = [r.item, ...(IDEAS || [])]; renderIdeas();
+    $("#idea-form").reset(); $("#idea-text").oninput();
+    document.activeElement?.blur();
+    toast("🎮 Игра отправлена на разработку!");
+  } catch (err) { toast(err.message); } // текст остаётся в форме, можно отправить ещё раз
+  $("#idea-send").disabled = false;
+};
+
 /* ---------- библиотека ---------- */
 let current = null, last = 0;
 const COLORS = ["#ff5d6c", "#ff9f43", "#f5c542", "#35c97a", "#38a8f5", "#9b7bff"];
@@ -363,9 +485,11 @@ function card(game, i) {
 function library() {
   if (current) { current.api().close(); current = null; }
   view("home");
-  const soon = document.createElement("div");
+  const soon = document.createElement("button");
   soon.className = "game soon";
-  soon.innerHTML = "<u>+</u>Скоро новые игры";
+  soon.type = "button";
+  soon.innerHTML = "<u>+</u>Предложить игру";
+  soon.onclick = () => { last = GAMES.length; openIdeas(); };
   $("#lib").replaceChildren(...GAMES.map(card), soon);
   $("#lib").children[last]?.focus({ preventScroll: true });
 }
@@ -582,7 +706,7 @@ $("#mode").onclick = enterMode;
 // касании или нажатии клавиши (и снова, если из полного экрана вышли). Кнопка и F включают режим сами.
 for (const ev of ["pointerup", "keydown"])
   window.addEventListener(ev, (e) => {
-    if (isFull() || e.target.closest?.("#mode, #botlink, input") || e.code === "KeyF" || e.code === "Escape") return;
+    if (isFull() || e.target.closest?.("#mode, #botlink, input, textarea") || e.code === "KeyF" || e.code === "Escape") return;
     fullscreen(true);
   }, true);
 for (const ev of ["fullscreenchange", "webkitfullscreenchange"])
@@ -591,8 +715,9 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden && !$
 
 /* ---------- клавиатура (внутри игры клавиши обрабатывает сама игра) ---------- */
 document.addEventListener("keydown", (e) => {
-  if (e.ctrlKey || e.metaKey || e.altKey || e.target.matches?.("input")) return;
+  if (e.ctrlKey || e.metaKey || e.altKey || e.target.matches?.("input, textarea")) return;
   if (e.code === "KeyF" && !e.repeat) { e.preventDefault(); return enterMode(); }
+  if (!$("#ideas").hidden && (e.code === "Escape" || e.code === "Backspace")) { e.preventDefault(); return library(); }
   if ($("#home").hidden) return;
   const dir = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: "top", ArrowDown: "cards" }[e.code];
   if (!dir) return;
